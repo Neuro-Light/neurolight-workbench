@@ -1,22 +1,20 @@
 from __future__ import annotations
 
-import os
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 import numpy as np
-from PIL import Image
-
 from core.experiment_manager import Experiment
+from PIL import Image
 
 
 class ImageStackHandler:
     def __init__(self) -> None:
-        self.files: List[str] = []
+        self.files: list[str] = []
         self._experiment: Optional[Experiment] = None
 
-    def load_image_stack(self, directory_or_files) -> List[str]:
-        paths: List[str] = []
+    def load_image_stack(self, directory_or_files) -> list[str]:
+        paths: list[str] = []
         if isinstance(directory_or_files, (list, tuple)):
             for p in directory_or_files:
                 if str(p).lower().endswith((".tif", ".tiff")):
@@ -31,7 +29,7 @@ class ImageStackHandler:
         self.files = paths
         return self.files
 
-    def validate_tif_files(self, file_paths: List[str]) -> bool:
+    def validate_tif_files(self, file_paths: list[str]) -> bool:
         return all(str(p).lower().endswith((".tif", ".tiff")) for p in file_paths)
 
     def get_image_count(self) -> int:
@@ -55,7 +53,7 @@ class ImageStackHandler:
             with Image.open(file_path) as img:
                 # Use np.array(img) directly to preserve dtype (consistent with get_image_at_index)
                 pixels = np.array(img)
-                
+
                 # Handle different image modes
                 if pixels.ndim == 2:  # Grayscale (mode 'L')
                     # Already in correct shape (height, width)
@@ -66,15 +64,15 @@ class ImageStackHandler:
                     pixels = pixels.mean(axis=2)
                 else:
                     # Fallback: try to reshape if needed
-                    if img.mode == 'L':  # Grayscale
+                    if img.mode == "L":  # Grayscale
                         pixels = pixels.reshape(img.size[1], img.size[0])
-                
+
                 frame_list.append(pixels)
         return np.array(frame_list)
 
     def associate_with_experiment(self, experiment: Experiment) -> None:
         self._experiment = experiment
-        #keeps that path and loads the path to images when loading an expirement
+        # keeps that path and loads the path to images when loading an expirement
         experiment.image_count = len(self.files)
         if self.files:
             experiment.image_stack_path = str(Path(self.files[0]).parent)

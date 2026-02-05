@@ -25,6 +25,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-extras
 
+      # CI only checks; it does not run --fix. Fix locally with: ruff check . --fix
       - name: Run ruff check
         run: uv run ruff check .
 

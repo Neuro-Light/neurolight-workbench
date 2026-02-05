@@ -35,11 +35,11 @@ repos:
         args: [--ignore-missing-imports]
         exclude: ^(tests/|\.github/)
 
-  # Security checks
+  # Security checks (pass_filenames: false so bandit only gets -r src/, not file list)
   - repo: https://github.com/PyCQA/bandit
     rev: 1.7.6
     hooks:
       - id: bandit
         args: [-r, src/, --skip, B110]
-        exclude: ^(tests/|docs/|\.github/)
+        pass_filenames: false
         # B110 = try_except_pass; skipped for intentional silent error handling in UI
