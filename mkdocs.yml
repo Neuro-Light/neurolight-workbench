@@ -1,0 +1,69 @@
+site_name: Neurolight Prototype Documentation
+site_description: Documentation for the Neurolight Prototype desktop application
+site_author: Neuro-Light Team
+
+repo_name: Neuro-Light/neurolight-prototype
+repo_url: https://github.com/Neuro-Light/neurolight-prototype
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.annotate
+
+plugins:
+  - search
+  - gen-files:
+      scripts:
+        - docs/gen_ref_pages.py
+  - mkdocstrings:
+      handlers:
+        python:
+          paths: [src]
+          options:
+            show_source: true
+            show_root_heading: true
+            show_root_toc_entry: true
+
+nav:
+  - Home: index.md
+  - User Guide:
+      - Getting Started: user-guide/getting-started.md
+      - Experiment Workflow: user-guide/experiment-workflow.md
+  - API Reference:
+      - Core: api/core.md
+      - UI: api/ui.md
+      - Utils: api/utils.md
+  - Development:
+      - Setup: development/setup.md
+      - Contributing: development/contributing.md
+      - Testing: development/testing.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format

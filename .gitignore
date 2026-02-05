@@ -26,3 +26,16 @@ experiments/*
 logs/
 *.log
 
+# Documentation
+site/
+.mkdocs_cache/
+
+# Coverage
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# Benchmark results
+benchmark.json

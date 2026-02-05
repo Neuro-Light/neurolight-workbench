@@ -1,0 +1,64 @@
+name: Generate Changelog
+
+on:
+  push:
+    branches: [main, master]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  changelog:
+    name: Generate Changelog
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install git-cliff
+        uses: orhun/git-cliff-action@v2
+        with:
+          config: cliff.toml
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          git-cliff --output CHANGELOG.md
+          echo "changelog<<EOF" >> $GITHUB_OUTPUT
+          cat CHANGELOG.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Commit changelog
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add CHANGELOG.md
+          git diff --staged --quiet || git commit -m "chore: update changelog [skip ci]"
+          git push
+
+      - name: Create Release Notes
+        if: github.event_name == 'release'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
+            const version = process.env.GITHUB_REF.replace('refs/tags/', '');
+
+            // Extract the changelog entry for this version
+            const versionRegex = new RegExp(`## \\[${version.replace('v', '')}\\][\\s\\S]*?(?=## |$)`);
+            const match = changelog.match(versionRegex);
+            const releaseNotes = match ? match[0] : changelog;
+
+            github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: context.payload.release.id,
+              body: releaseNotes
+            });
