@@ -1,35 +1,61 @@
 name: CD
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
 
 jobs:
   release:
     runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion == 'success'
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout commit that passed CI
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - name: Fetch tags
+        run: git fetch origin 'refs/tags/v*:refs/tags/v*'
+
+      - name: Get release tag
+        id: get_tag
+        run: |
+          TAG=$(git tag --points-at ${{ github.event.workflow_run.head_sha }} | grep -E '^v[0-9]' | head -1)
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Checkout tag
+        if: steps.get_tag.outputs.tag != ''
+        uses: actions/checkout@v4
+        with:
+          ref: refs/tags/${{ steps.get_tag.outputs.tag }}
 
       - name: Install uv
+        if: steps.get_tag.outputs.tag != ''
         uses: astral-sh/setup-uv@v4
         with:
           version: "latest"
 
       - name: Set up Python
+        if: steps.get_tag.outputs.tag != ''
         run: uv python install 3.9
 
       - name: Install dependencies
+        if: steps.get_tag.outputs.tag != ''
         run: uv sync
 
       - name: Build package
+        if: steps.get_tag.outputs.tag != ''
         run: uv build
 
       - name: Create GitHub Release and upload artifacts
+        if: steps.get_tag.outputs.tag != ''
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.get_tag.outputs.tag }}
           files: dist/*
           generate_release_notes: true
         env:

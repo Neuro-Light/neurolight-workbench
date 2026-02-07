@@ -32,9 +32,10 @@ packages = ["src"]
 [tool.ruff]
 line-length = 100
 target-version = "py39"
-select = ["F", "E", "I"]
-ignore = []
 exclude = [".venv", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["F", "E", "I"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
