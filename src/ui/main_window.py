@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import logging
 import sys
+import webbrowser
 from pathlib import Path
 from typing import Optional, Dict, Any
-
+from PySide6.QtCore import QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtCore import Qt, QTimer
 from PySide6.QtWidgets import (
     QMainWindow,
@@ -87,7 +89,7 @@ class MainWindow(QMainWindow):
         save_action = QAction("Save Experiment", self)
         save_as_action = QAction("Save Experiment As...", self)
         close_action = QAction("Close Experiment", self)
-        exit_action = QAction("Exit Experiment", self)
+        exit_action = QAction("Exit", self)
         open_stack_action = QAction("Open Image Stack", self)
         export_results_action = QAction("Export Results", self)
 
@@ -122,10 +124,14 @@ class MainWindow(QMainWindow):
         align_action.triggered.connect(self._align_images)
         tools_menu.addAction(align_action)
         
-        tools_menu.addAction("Generate GIF")
+        
         tools_menu.addAction("Run Analysis")
-        menubar.addMenu("Help").addAction("About")
-
+        help_meun = menubar.addMenu("Help")
+        about_action = help_meun.addAction("About")
+        about_action.triggered.connect(self.open_website)
+    def open_website(self):
+        QDesktopServices.openUrl(QUrl("https://sce.nau.edu/capstone/projects/CS/2026/NeuroNauts_F25/project_overview.html"))
+    
     def closeEvent(self, event: QCloseEvent) -> None:
         """
         Handle window close event (when user clicks X button).
