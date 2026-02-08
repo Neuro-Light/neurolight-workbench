@@ -50,69 +50,58 @@ class ImageProcessor:
     ) -> np.ndarray:
         """
         Crop image to ROI region.
-        
+
         Args:
             image: Input image (2D or 3D numpy array)
             roi: ROI object defining the region
-            apply_mask: If True and ROI is ellipse, apply ellipse mask
-                       (pixels outside ellipse are set to 0)
-                       
+            apply_mask: If True, apply shape mask (ellipse or polygon)
+                       (pixels outside ROI are set to 0)
+
         Returns:
-            Cropped image. For ellipse ROI with apply_mask=True,
-            this is the bounding box with mask applied.
+            Cropped image. With apply_mask=True, this is the bounding box with mask applied.
         """
-        # Clamp ROI to image bounds
         if image.ndim == 2:
             height, width = image.shape
         elif image.ndim == 3:
             height, width = image.shape[0], image.shape[1]
         else:
             raise ValueError("Image must be 2D or 3D array")
-        
+
+        # Use bounding box (polygon uses get_bounding_box for crop region)
         x1 = max(0, roi.x)
         y1 = max(0, roi.y)
         x2 = min(width, roi.x + roi.width)
         y2 = min(height, roi.y + roi.height)
-        
-        # Crop to bounding box
+
         if image.ndim == 2:
             cropped = image[y1:y2, x1:x2].copy()
         else:
             cropped = image[y1:y2, x1:x2, :].copy()
-        
-        # Apply ellipse mask if needed
-        if apply_mask and roi.shape == ROIShape.ELLIPSE:
-            # Create mask for the cropped region
+
+        # Apply polygon mask
+        if apply_mask and roi.shape == ROIShape.POLYGON and roi.points and len(roi.points) >= 3:
             mask = np.zeros((y2 - y1, x2 - x1), dtype=np.uint8)
-            
-            # Calculate ellipse center and radii
-            # The ellipse center in original image coordinates
+            pts = np.array(
+                [[p[0] - x1, p[1] - y1] for p in roi.points],
+                dtype=np.int32
+            )
+            cv2.fillPoly(mask, [pts], 255)
+            cropped = cv2.bitwise_and(cropped, cropped, mask=mask)
+        # Apply ellipse mask
+        elif apply_mask and roi.shape == ROIShape.ELLIPSE:
+            mask = np.zeros((y2 - y1, x2 - x1), dtype=np.uint8)
             ellipse_center_x = roi.x + roi.width / 2
             ellipse_center_y = roi.y + roi.height / 2
-            
-            # Convert to coordinates relative to the cropped region
-            # Account for the offset when ROI is clamped to image bounds
             cx = ellipse_center_x - x1
             cy = ellipse_center_y - y1
-            
-            # Radii remain the same (based on full ROI dimensions)
             rx = roi.width / 2
             ry = roi.height / 2
-            
-            # Create coordinate grids
-            y_coords, x_coords = np.ogrid[:y2-y1, :x2-x1]
-            
-            # Ellipse equation
+            y_coords, x_coords = np.ogrid[:y2 - y1, :x2 - x1]
             if rx > 0 and ry > 0:
                 ellipse_mask = ((x_coords - cx) / rx) ** 2 + ((y_coords - cy) / ry) ** 2 <= 1
                 mask[ellipse_mask] = 255
-                
-                # Apply mask
-                if image.ndim == 2:
-                    cropped = cv2.bitwise_and(cropped, cropped, mask=mask)
-                else:
-                    cropped = cv2.bitwise_and(cropped, cropped, mask=mask)
-        
+                cropped = cv2.bitwise_and(cropped, cropped, mask=mask)
+
         self.log_processing_step("crop", {
             "roi": roi.to_dict(),
             "apply_mask": apply_mask

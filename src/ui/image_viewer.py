@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 from pathlib import Path
 import cv2
 import numpy as np
-from PySide6.QtCore import Qt, Signal, QRect, QPoint
-from PySide6.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QBrush, QIcon
+from PySide6.QtCore import Qt, Signal, QRect, QPoint, QPointF, QEvent
+from PySide6.QtGui import QImage, QPixmap, QPainter, QPen, QColor, QBrush, QIcon, QPolygonF
 from PySide6.QtWidgets import (
     QLabel,
     QSlider,
@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from utils.file_handler import ImageStackHandler
-from core.roi import ROI, ROIShape, ROIHandle
+from core.roi import ROI, ROIShape, ROIHandle, HandleResult
 
 
 class _LRUCache:
@@ -53,16 +53,18 @@ class ImageViewer(QWidget):
         self.index = 0
         self.cache = _LRUCache(20)
 
-        # ROI selection state
+        # ROI selection state (polygon mode)
         self.roi_selection_mode = False
         self.roi_adjustment_mode = False  # User must explicitly enable adjustment
         self.roi_start_point = None
         self.roi_end_point = None
+        self.polygon_points: List[QPoint] = []
+        self.polygon_preview_pos: Optional[QPoint] = None  # Mouse position for live preview
         self.current_roi: Optional[ROI] = None
-        self.selected_shape = ROIShape.ELLIPSE  # Only ellipse shape supported
+        self.selected_shape = ROIShape.POLYGON  # Polygon is the primary ROI tool
         
         # ROI adjustment state
-        self.active_handle = ROIHandle.NONE
+        self.active_handle: HandleResult = ROIHandle.NONE
         self.last_mouse_pos = None
         self.can_adjust_roi = False  # Only true when user clicks "Adjust ROI"
 
@@ -79,6 +81,9 @@ class ImageViewer(QWidget):
         self.image_label.mousePressEvent = self._on_mouse_press
         self.image_label.mouseMoveEvent = self._on_mouse_move
         self.image_label.mouseReleaseEvent = self._on_mouse_release
+        self.image_label.mouseDoubleClickEvent = self._on_mouse_double_click
+        self.image_label.setFocusPolicy(Qt.StrongFocus)
+        self.image_label.installEventFilter(self)
         
         # Upload button (visible when no images loaded)
         self.upload_btn = QPushButton("Open Images")
@@ -104,6 +109,9 @@ class ImageViewer(QWidget):
         self.prev_btn = QPushButton("Previous")
         self.next_btn = QPushButton("Next")
         self.roi_btn = QPushButton("Select ROI")
+        self.complete_polygon_btn = QPushButton("Complete Polygon")
+        self.complete_polygon_btn.setVisible(False)  # Visible only in selection mode when >= 3 points
+        self.complete_polygon_btn.clicked.connect(self._complete_polygon)
         self.adjust_roi_btn = QPushButton("Adjust ROI")
         self.adjust_roi_btn.setVisible(False)  # Hidden until ROI exists
         
@@ -143,6 +151,7 @@ class ImageViewer(QWidget):
         nav.addWidget(self.prev_btn)
         nav.addWidget(self.next_btn)
         nav.addWidget(self.roi_btn)
+        nav.addWidget(self.complete_polygon_btn)
         nav.addWidget(self.adjust_roi_btn)
 
         # New box for the exposure and  contrast slider
@@ -170,6 +179,7 @@ class ImageViewer(QWidget):
         self._update_adjustment_labels()
 
         self.setAcceptDrops(True)
+        self.setFocusPolicy(Qt.StrongFocus)
 
     def set_stack(self, files) -> None:
         self.handler.load_image_stack(files)
@@ -208,6 +218,8 @@ class ImageViewer(QWidget):
         self.can_adjust_roi = False
         self.roi_start_point = None
         self.roi_end_point = None
+        self.polygon_points = []
+        self.polygon_preview_pos = None
         self.active_handle = ROIHandle.NONE
         self.last_mouse_pos = None
         # Reset UI labels and slider
@@ -216,6 +228,7 @@ class ImageViewer(QWidget):
         self.slider.setRange(0, 0)
         self._update_roi_button_text()
         self.adjust_roi_btn.setVisible(False)
+        self.complete_polygon_btn.setVisible(False)
         # Re-enable all controls
         self.prev_btn.setEnabled(True)
         self.next_btn.setEnabled(True)
@@ -375,42 +388,43 @@ class ImageViewer(QWidget):
             self.image_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
         )
 
+        if img.ndim >= 2:
+            original_height, original_width = img.shape[0], img.shape[1]
+            label_size = self.image_label.size()
+            label_aspect = label_size.width() / label_size.height()
+            original_aspect = original_width / original_height
+            scale = (
+                scaled_pix.height() / original_height
+                if label_aspect > original_aspect
+                else scaled_pix.width() / original_width
+            )
+        else:
+            scale = 1.0
+
         # ============================================================
-        # ROI: Draw ROI selection during selection mode
+        # ROI: Draw polygon during selection mode
         # ============================================================
-        if (
-            self.roi_selection_mode
-            and self.roi_start_point is not None
-            and self.roi_end_point is not None
-        ):
+        if self.roi_selection_mode and self.polygon_points:
             painter = QPainter(scaled_pix)
             pen = QPen(Qt.red, 2, Qt.DashLine)
             painter.setPen(pen)
+            painter.setBrush(Qt.NoBrush)
 
-            if img.ndim >= 2:
-                original_height, original_width = img.shape[0], img.shape[1]
-                label_size = self.image_label.size()
-
-                label_aspect = label_size.width() / label_size.height()
-                original_aspect = original_width / original_height
-
-                if label_aspect > original_aspect:
-                    scale = scaled_pix.height() / original_height
-                else:
-                    scale = scaled_pix.width() / original_width
-
-                x1 = min(self.roi_start_point.x(), self.roi_end_point.x())
-                y1 = min(self.roi_start_point.y(), self.roi_end_point.y())
-                x2 = max(self.roi_start_point.x(), self.roi_end_point.x())
-                y2 = max(self.roi_start_point.y(), self.roi_end_point.y())
-
-                x1_scaled = int(x1 * scale)
-                y1_scaled = int(y1 * scale)
-                w_scaled = int((x2 - x1 + 1) * scale)
-                h_scaled = int((y2 - y1 + 1) * scale)
-
-                # Draw ellipse shape
-                painter.drawEllipse(x1_scaled, y1_scaled, w_scaled, h_scaled)
+            # Draw polygon edges
+            pts = [QPointF(int(p.x() * scale), int(p.y() * scale)) for p in self.polygon_points]
+            if len(pts) >= 2:
+                for i in range(len(pts) - 1):
+                    painter.drawLine(pts[i], pts[i + 1])
+                # Preview line from last point to cursor
+                if self.polygon_preview_pos is not None:
+                    prev_pt = QPointF(
+                        int(self.polygon_preview_pos.x() * scale),
+                        int(self.polygon_preview_pos.y() * scale),
+                    )
+                    painter.drawLine(pts[-1], prev_pt)
+            # Draw vertex circles
+            for pt in pts:
+                painter.drawEllipse(pt, 4, 4)
             painter.end()
 
         # ============================================================
@@ -420,35 +434,37 @@ class ImageViewer(QWidget):
             painter = QPainter(scaled_pix)
             pen = QPen(Qt.green, 2, Qt.SolidLine)
             painter.setPen(pen)
+            painter.setBrush(Qt.NoBrush)
 
-            if img.ndim >= 2:
-                original_height, original_width = img.shape[0], img.shape[1]
-                label_size = self.image_label.size()
+            if self.current_roi.shape == ROIShape.POLYGON and self.current_roi.points:
+                qpts = [
+                    QPointF(int(p[0] * scale), int(p[1] * scale))
+                    for p in self.current_roi.points
+                ]
+                painter.drawPolygon(QPolygonF(qpts))
 
-                label_aspect = label_size.width() / label_size.height()
-                original_aspect = original_width / original_height
-
-                if label_aspect > original_aspect:
-                    scale = scaled_pix.height() / original_height
-                else:
-                    scale = scaled_pix.width() / original_width
-
+                if self.can_adjust_roi:
+                    handle_size = 10
+                    painter.setPen(QPen(QColor(255, 255, 0), 2))
+                    painter.setBrush(QBrush(QColor(0, 255, 255)))
+                    for pt in qpts:
+                        painter.drawRect(
+                            int(pt.x()) - handle_size // 2,
+                            int(pt.y()) - handle_size // 2,
+                            handle_size,
+                            handle_size,
+                        )
+            else:
                 x_scaled = int(self.current_roi.x * scale)
                 y_scaled = int(self.current_roi.y * scale)
                 w_scaled = int(self.current_roi.width * scale)
                 h_scaled = int(self.current_roi.height * scale)
-
-                # Draw ellipse shape
                 painter.drawEllipse(x_scaled, y_scaled, w_scaled, h_scaled)
-                
-                # Draw adjustment handles only when in adjustment mode
+
                 if self.can_adjust_roi:
                     handle_size = 10
-                    # Use cyan/yellow color for adjustment handles
-                    painter.setPen(QPen(QColor(255, 255, 0), 2))  # Yellow border
-                    painter.setBrush(QBrush(QColor(0, 255, 255)))  # Cyan fill
-                    
-                    # Corner handles
+                    painter.setPen(QPen(QColor(255, 255, 0), 2))
+                    painter.setBrush(QBrush(QColor(0, 255, 255)))
                     corners = [
                         (x_scaled, y_scaled),
                         (x_scaled + w_scaled, y_scaled),
@@ -456,14 +472,18 @@ class ImageViewer(QWidget):
                         (x_scaled + w_scaled, y_scaled + h_scaled),
                     ]
                     for cx, cy in corners:
-                        painter.drawRect(cx - handle_size//2, cy - handle_size//2, 
-                                       handle_size, handle_size)
+                        painter.drawRect(
+                            cx - handle_size // 2, cy - handle_size // 2,
+                            handle_size, handle_size
+                        )
             painter.end()
 
         self.image_label.setPixmap(scaled_pix)
         current_path = Path(self.handler.files[self.index])
-        #label for the image that is been viewed
-        self.filename_label.setText(f"{self.index + 1}/{count}: \n{current_path.name}")
+        base_text = f"{self.index + 1}/{count}: \n{current_path.name}"
+        if self.roi_selection_mode and self.polygon_points:
+            base_text += f" | Polygon: {len(self.polygon_points)} points (dbl-click or Complete to finish)"
+        self.filename_label.setText(base_text)
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         # ROI FIX: Redraw on resize so ROI scale updates correctly
@@ -548,12 +568,17 @@ class ImageViewer(QWidget):
             self.adjust_roi_btn.setVisible(False)
         
         self.roi_selection_mode = not self.roi_selection_mode
+        if self.roi_selection_mode:
+            self.image_label.setFocus()
         self.roi_btn.setText("Cancel ROI" if self.roi_selection_mode else (
             "New ROI" if self.current_roi is not None else "Select ROI"
         ))
         if not self.roi_selection_mode:
             self.roi_start_point = None
             self.roi_end_point = None
+            self.polygon_points = []
+            self.polygon_preview_pos = None
+            self.complete_polygon_btn.setVisible(False)
         self._show_current()
     
     def _toggle_adjustment_mode(self) -> None:
@@ -586,12 +611,81 @@ class ImageViewer(QWidget):
             self.roi_btn.setText("New ROI")
         else:
             self.roi_btn.setText("Select ROI")
-        
+
+        # Show Complete Polygon button when in selection mode with >= 3 points
+        if self.roi_selection_mode and len(self.polygon_points) >= 3:
+            self.complete_polygon_btn.setVisible(True)
+        else:
+            self.complete_polygon_btn.setVisible(False)
+
         # Show/hide adjust button based on ROI existence
         if self.current_roi is not None and not self.roi_selection_mode:
             self.adjust_roi_btn.setVisible(True)
         else:
             self.adjust_roi_btn.setVisible(False)
+
+    def _complete_polygon(self) -> None:
+        """Complete polygon and create ROI."""
+        if not self.roi_selection_mode or len(self.polygon_points) < 3:
+            return
+        self._finish_polygon_roi()
+
+    def _finish_polygon_roi(self) -> None:
+        """Create ROI from polygon_points and exit selection mode."""
+        if len(self.polygon_points) < 3:
+            return
+        pts = list(self.polygon_points)
+        # If last point is very close to first, remove it (user closed by clicking near start)
+        if len(pts) > 3:
+            dx = abs(pts[-1].x() - pts[0].x())
+            dy = abs(pts[-1].y() - pts[0].y())
+            if dx < 10 and dy < 10:
+                pts.pop()
+        points_tuples = [(p.x(), p.y()) for p in pts]
+        self.current_roi = ROI.from_dict({"shape": "polygon", "points": points_tuples})
+        self.roiSelected.emit(self.current_roi)
+        self.roi_selection_mode = False
+        self.polygon_points = []
+        self.polygon_preview_pos = None
+        self.can_adjust_roi = False
+        self._update_roi_button_text()
+        self._show_current()
+
+    def eventFilter(self, obj, event) -> bool:
+        """Handle Backspace on image label to remove last polygon point."""
+        if (
+            obj == self.image_label
+            and event.type() == QEvent.Type.KeyPress
+            and event.key() in (Qt.Key.Backspace, Qt.Key.Delete)
+            and self.roi_selection_mode
+            and self.polygon_points
+        ):
+            self.polygon_points.pop()
+            self._update_roi_button_text()
+            self._show_current()
+            return True
+        return super().eventFilter(obj, event)
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802
+        """Handle Backspace to remove last polygon point when viewer has focus."""
+        if (
+            self.roi_selection_mode
+            and self.polygon_points
+            and event.key() in (Qt.Key.Backspace, Qt.Key.Delete)
+        ):
+            self.polygon_points.pop()
+            self._update_roi_button_text()
+            self._show_current()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    def _on_mouse_double_click(self, event) -> None:
+        """Complete polygon on double-click."""
+        if event.button() != Qt.LeftButton:
+            return
+        if self.roi_selection_mode and len(self.polygon_points) >= 3:
+            self._finish_polygon_roi()
 
     def _get_image_coords_from_mouse(self, event) -> Optional[Tuple[int, int, float]]:
         """Convert mouse coordinates to image coordinates and return scale."""
@@ -638,44 +732,65 @@ class ImageViewer(QWidget):
     
     def _on_mouse_press(self, event) -> None:
         """Handle mouse press for ROI selection and adjustment."""
-        if event.button() != Qt.LeftButton:
-            return
-        
-        # Don't process mouse events if no images loaded
         if self.handler.get_image_count() == 0:
             return
-            
+
         coords = self._get_image_coords_from_mouse(event)
         if coords is None:
             return
         x, y, scale = coords
-        
+
+        # Right-click: remove last polygon point (selection) or delete vertex (adjustment)
+        if event.button() == Qt.RightButton:
+            if self.roi_selection_mode and self.polygon_points:
+                self.polygon_points.pop()
+                self._update_roi_button_text()
+                self._show_current()
+            elif (
+                self.current_roi is not None
+                and self.current_roi.shape == ROIShape.POLYGON
+                and self.current_roi.points
+                and len(self.current_roi.points) > 3
+                and self.can_adjust_roi
+            ):
+                handle_size_image = max(2, int(10 / scale))
+                handle_result = self.current_roi.get_handle_at_point(x, y, handle_size_image)
+                if isinstance(handle_result, tuple) and handle_result[0] == ROIHandle.VERTEX:
+                    _, vidx = handle_result
+                    if self.current_roi.delete_vertex(vidx):
+                        self.roiSelected.emit(self.current_roi)
+                        self._show_current()
+            return
+
+        if event.button() != Qt.LeftButton:
+            return
+
         # Check if adjusting existing ROI (only if adjustment mode is enabled)
         if self.current_roi is not None and not self.roi_selection_mode and self.can_adjust_roi:
-            # Check which handle was clicked
-            handle_size_image = int(10 / scale)  # Convert handle size to image coords
-            self.active_handle = self.current_roi.get_handle_at_point(x, y, handle_size_image)
-            if self.active_handle != ROIHandle.NONE:
+            handle_size_image = max(2, int(10 / scale))
+            handle_result = self.current_roi.get_handle_at_point(x, y, handle_size_image)
+            if handle_result != ROIHandle.NONE:
+                self.active_handle = handle_result
                 self.roi_adjustment_mode = True
                 self.last_mouse_pos = QPoint(x, y)
                 return
-        
-        # Otherwise, start new ROI selection
+
+        # Polygon selection mode: left-click adds point
         if self.roi_selection_mode:
-            self.roi_start_point = QPoint(x, y)
-            self.roi_end_point = QPoint(x, y)
+            self.polygon_points.append(QPoint(x, y))
+            self._update_roi_button_text()
+            self._show_current()
 
     def _on_mouse_move(self, event) -> None:
         """Handle mouse move for ROI selection and adjustment."""
-        # Don't process mouse events if no images loaded
         if self.handler.get_image_count() == 0:
             return
-            
+
         coords = self._get_image_coords_from_mouse(event)
         if coords is None:
             return
         x, y, _ = coords
-        
+
         # Handle ROI adjustment (only if adjustment mode is enabled)
         if self.roi_adjustment_mode and self.last_mouse_pos is not None and self.can_adjust_roi:
             img = self.cache.get(self.index)
@@ -683,74 +798,34 @@ class ImageViewer(QWidget):
                 img = self.handler.get_image_at_index(self.index)
             if img is not None and img.ndim >= 2:
                 original_height, original_width = img.shape[0], img.shape[1]
-                
                 dx = x - self.last_mouse_pos.x()
                 dy = y - self.last_mouse_pos.y()
-                
                 self.current_roi.adjust_with_handle(
                     self.active_handle, dx, dy, original_width, original_height
                 )
-                
                 self.last_mouse_pos = QPoint(x, y)
                 self._show_current()
-                # Emit change signal for live updates
                 self.roiChanged.emit(self.current_roi)
-        
-        # Handle new ROI selection
-        elif self.roi_selection_mode and self.roi_start_point is not None:
-            self.roi_end_point = QPoint(x, y)
+
+        # Polygon selection mode: update preview position
+        elif self.roi_selection_mode:
+            self.polygon_preview_pos = QPoint(x, y)
             self._show_current()
 
     def _on_mouse_release(self, event) -> None:
-        """Handle mouse release for ROI selection and adjustment."""
+        """Handle mouse release for ROI adjustment completion."""
         if event.button() != Qt.LeftButton:
             return
-        
-        # Don't process mouse events if no images loaded
         if self.handler.get_image_count() == 0:
             return
-        
+
         # Handle ROI adjustment completion
         if self.roi_adjustment_mode:
             self.roi_adjustment_mode = False
             self.active_handle = ROIHandle.NONE
             self.last_mouse_pos = None
-            # Emit final ROI after adjustment
             if self.current_roi is not None:
                 self.roiSelected.emit(self.current_roi)
-            return
-        
-        # Handle new ROI selection completion
-        if self.roi_selection_mode and self.roi_start_point is not None:
-            coords = self._get_image_coords_from_mouse(event)
-            if coords is None:
-                return
-            x, y, _ = coords
-            
-            self.roi_end_point = QPoint(x, y)
-
-            # Create ROI in image coordinates
-            x1 = min(self.roi_start_point.x(), self.roi_end_point.x())
-            y1 = min(self.roi_start_point.y(), self.roi_end_point.y())
-            x2 = max(self.roi_start_point.x(), self.roi_end_point.x())
-            y2 = max(self.roi_start_point.y(), self.roi_end_point.y())
-
-            width = max(1, x2 - x1 + 1)
-            height = max(1, y2 - y1 + 1)
-
-            # Create ROI object with selected shape
-            self.current_roi = ROI(x=x1, y=y1, width=width, height=height, shape=self.selected_shape)
-
-            # Emit signal with ROI object
-            self.roiSelected.emit(self.current_roi)
-
-            # Exit selection mode
-            self.roi_selection_mode = False
-            self.roi_start_point = None
-            self.roi_end_point = None
-            self.can_adjust_roi = False  # Start with adjustment disabled
-            self._update_roi_button_text()  # This will show the Adjust ROI button
-            self._show_current()
 
     def get_current_roi(self) -> Optional[ROI]:
         """Get the current ROI object."""

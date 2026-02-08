@@ -590,16 +590,14 @@ class MainWindow(QMainWindow):
                     else frame_data
                 )
 
-            # Extract ROI intensity time series
+            # Extract ROI intensity time series (mask-based for polygon and ellipse)
             intensity_data = self.data_analyzer.extract_roi_intensity_time_series(
-                frame_data, roi.x, roi.y, roi.width, roi.height
+                frame_data, roi=roi
             )
 
             # Plot in the ROI Intensity tab
             roi_plot_widget = self.analysis.get_roi_plot_widget()
-            roi_plot_widget.plot_intensity_time_series(
-                intensity_data, (roi.x, roi.y, roi.width, roi.height)
-            )
+            roi_plot_widget.plot_intensity_time_series(intensity_data, roi=roi)
 
             # Update detection widget with ROI mask
             detection_widget = self.analysis.get_neuron_detection_widget()
@@ -788,9 +786,9 @@ class MainWindow(QMainWindow):
             if not output_dir:
                 return
             
-            # Crop stack
+            # Crop stack (apply mask for both ellipse and polygon)
             cropped_stack = self.image_processor.crop_stack_to_roi(
-                frame_data, current_roi, apply_mask=(current_roi.shape == ROIShape.ELLIPSE)
+                frame_data, current_roi, apply_mask=True
             )
             
             # Save cropped frames

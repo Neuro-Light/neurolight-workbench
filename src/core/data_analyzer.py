@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
 
 from core.experiment_manager import Experiment
+from core.roi import ROI
 
 
 class DataAnalyzer:
@@ -42,50 +43,54 @@ class DataAnalyzer:
         return {}
 
     def extract_roi_intensity_time_series(
-        self, 
-        frame_data: np.ndarray, 
-        roi_x: int, 
-        roi_y: int, 
-        roi_width: int, 
-        roi_height: int
+        self,
+        frame_data: np.ndarray,
+        roi: Optional[ROI] = None,
+        roi_x: Optional[int] = None,
+        roi_y: Optional[int] = None,
+        roi_width: Optional[int] = None,
+        roi_height: Optional[int] = None,
     ) -> np.ndarray:
         """
         Extract mean pixel intensity within an ROI across all frames.
-        Reuses approach from Jupyter notebook (similar to BTS calculation).
-        
+        Uses mask-based extraction for polygon and ellipse ROIs.
+
         Args:
             frame_data: 3D numpy array (frames, height, width)
-            roi_x: X coordinate of ROI top-left corner
-            roi_y: Y coordinate of ROI top-left corner
-            roi_width: Width of ROI
-            roi_height: Height of ROI
-            
+            roi: ROI object (preferred). Uses create_mask() for accurate extraction.
+            roi_x, roi_y, roi_width, roi_height: Legacy rect params if roi is None.
+
         Returns:
             1D numpy array of mean intensities across frames
         """
         if frame_data.ndim != 3:
             raise ValueError("frame_data must be a 3D array (frames, height, width)")
-        
+
         num_frames = frame_data.shape[0]
         frame_height = frame_data.shape[1]
         frame_width = frame_data.shape[2]
-        
-        # Clamp ROI to image bounds
+
+        if roi is not None:
+            mask = roi.create_mask(frame_width, frame_height)
+            roi_intensities = np.zeros(num_frames, dtype=np.float64)
+            for t in range(num_frames):
+                frame = frame_data[t]
+                masked = frame[mask > 0]
+                roi_intensities[t] = np.mean(masked) if len(masked) > 0 else 0.0
+            return roi_intensities
+
+        # Legacy: rectangular ROI
+        if roi_x is None or roi_y is None or roi_width is None or roi_height is None:
+            return np.zeros(num_frames)
         x1 = max(0, int(roi_x))
         y1 = max(0, int(roi_y))
         x2 = min(frame_width, x1 + int(roi_width))
         y2 = min(frame_height, y1 + int(roi_height))
-        
         if x2 <= x1 or y2 <= y1:
-            # Invalid ROI, return zeros
             return np.zeros(num_frames)
-        
-        # Extract ROI region and calculate mean intensity for each frame
-        # Similar to: BTS = frame_data.mean(axis=1).mean(axis=1) but for ROI only
         roi_intensities = np.zeros(num_frames)
         for t in range(num_frames):
             roi_region = frame_data[t, y1:y2, x1:x2]
             roi_intensities[t] = np.mean(roi_region)
-        
         return roi_intensities
 

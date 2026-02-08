@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Optional
 
 import numpy as np
+
+from core.roi import ROI, ROIShape
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PySide6.QtWidgets import (
@@ -23,6 +25,7 @@ class ROIIntensityPlotWidget(QWidget):
         super().__init__(parent)
         self.intensity_data: Optional[np.ndarray] = None
         self.frames_data: Optional[np.ndarray] = None
+        self.roi: Optional[ROI] = None
         self.experiment: Optional["Experiment"] = None
         
         layout = QVBoxLayout(self)
@@ -48,51 +51,41 @@ class ROIIntensityPlotWidget(QWidget):
         layout.addLayout(button_layout)
 
     def plot_intensity_time_series(
-        self, 
+        self,
         intensity_data: np.ndarray,
-        roi_coords: tuple[int, int, int, int]
+        roi: ROI
     ) -> None:
         """
         Plot mean intensity time series for the selected ROI.
-        
+
         Args:
             intensity_data: 1D numpy array of mean intensities across frames
-            roi_coords: Tuple of (x, y, width, height) for the ROI
+            roi: ROI object (polygon or ellipse)
         """
         self.intensity_data = intensity_data
-        self.roi_coords = roi_coords
-        
+        self.roi = roi
+
         # Clear previous plot
         self.figure.clear()
         ax = self.figure.add_subplot(111)
-        
-        # Create frame numbers
+
         frames = np.arange(len(intensity_data))
-        
-        # Plot intensity vs frames
         ax.plot(frames, intensity_data, linewidth=2, color='blue')
         ax.set_xlabel('Frame Number', fontsize=12)
         ax.set_ylabel('Mean Pixel Intensity', fontsize=12)
-        ax.set_title(
-            f'ROI Intensity Over Time\n'
-            f'ROI: ({roi_coords[0]}, {roi_coords[1]}) '
-            f'{roi_coords[2]}x{roi_coords[3]}',
-            fontsize=14
-        )
+
+        if roi.shape == ROIShape.POLYGON and roi.points:
+            roi_desc = f"Polygon ({len(roi.points)} points)"
+        else:
+            roi_desc = f"({roi.x}, {roi.y}) {roi.width}x{roi.height}"
+        ax.set_title(f"ROI Intensity Over Time\n{roi_desc}", fontsize=14)
         ax.grid(True, alpha=0.3)
-        
-        # Update status
+
         self.status_label.setText(
-            f"ROI: ({roi_coords[0]}, {roi_coords[1]}) "
-            f"{roi_coords[2]}x{roi_coords[3]} | "
-            f"Frames: {len(intensity_data)} | "
+            f"{roi_desc} | Frames: {len(intensity_data)} | "
             f"Mean Intensity: {np.mean(intensity_data):.2f}"
         )
-        
-        # Enable export button
         self.export_btn.setEnabled(True)
-        
-        # Refresh canvas
         self.canvas.draw()
 
     def _export_to_csv(self) -> None:
@@ -151,7 +144,7 @@ class ROIIntensityPlotWidget(QWidget):
         self.figure.clear()
         self.canvas.draw()
         self.intensity_data = None
-        self.roi_coords = None
+        self.roi = None
         self.status_label.setText("No ROI selected. Select an ROI in the image viewer.")
         self.export_btn.setEnabled(False)
 
