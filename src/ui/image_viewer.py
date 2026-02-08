@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QHBoxLayout,
     QStyle,
+    QGroupBox,
 )
 
 from utils.file_handler import ImageStackHandler
@@ -82,6 +83,7 @@ class ImageViewer(QWidget):
         
         # Upload button (visible when no images loaded)
         self.upload_btn = QPushButton("Open Images")
+        self.upload_btn.setProperty("class", "primary")
         # Add standard Qt file open icon
         icon = self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon)
         self.upload_btn.setIcon(icon)
@@ -89,9 +91,16 @@ class ImageViewer(QWidget):
         
         # Container for image label with upload button overlay
         self.image_container = QWidget()
+        self.image_container.setObjectName("imageContainer")
         image_layout = QVBoxLayout(self.image_container)
         image_layout.setContentsMargins(0, 0, 0, 0)
         image_layout.addWidget(self.image_label)
+
+        # Preview group: border and title around the image area
+        self.preview_group = QGroupBox("Preview")
+        preview_group_layout = QVBoxLayout(self.preview_group)
+        preview_group_layout.setContentsMargins(8, 16, 8, 8)
+        preview_group_layout.addWidget(self.image_container)
         
         # Overlay upload button on image label
         self.upload_btn.setParent(self.image_label)
@@ -115,8 +124,11 @@ class ImageViewer(QWidget):
         self.slider = QSlider(Qt.Horizontal)
         self.slider.valueChanged.connect(self._on_slider)
 
-        ## Exposure/Contrast slider controls for the exposure
-        # Label text at inital load
+        # Frame slider row: label, slider, frame index (e.g. "1 / 100")
+        self.frame_index_label = QLabel("— / —")
+        self.frame_index_label.setMinimumWidth(48)
+
+        ## Exposure/Contrast: in a collapsible panel, hidden by default
         self.exposure_label = QLabel("Exposure: 0")
         # Adds the slider movement as a horizontal slider "vertical setting also"
         self.exposure_slider = QSlider(Qt.Horizontal)
@@ -145,24 +157,32 @@ class ImageViewer(QWidget):
         nav.addWidget(self.roi_btn)
         nav.addWidget(self.adjust_roi_btn)
 
-        # New box for the exposure and  contrast slider
-        adjustments_layout = QVBoxLayout()
-        # Add the label to the slider
+        # Display options panel (exposure/contrast) - hidden until "Display options" is clicked
+        self.adjustments_panel = QWidget()
+        adjustments_layout = QVBoxLayout(self.adjustments_panel)
+        adjustments_layout.setContentsMargins(0, 4, 0, 0)
         adjustments_layout.addWidget(self.exposure_label)
-        # Add the slider to the container
         adjustments_layout.addWidget(self.exposure_slider)
-        # Added the label to the slider
         adjustments_layout.addWidget(self.contrast_label)
-        # Add the slider to the container
         adjustments_layout.addWidget(self.contrast_slider)
+        self.adjustments_panel.setVisible(False)
+
+        self.display_options_btn = QPushButton("Display options")
+        self.display_options_btn.setCheckable(True)
+        self.display_options_btn.setChecked(False)
+        self.display_options_btn.clicked.connect(self._toggle_display_options)
 
         layout = QVBoxLayout(self)
-        # Image gets most of the space (stretch factor 1)
-        layout.addWidget(self.image_container, 1)
+        layout.addWidget(self.preview_group, 1)
         layout.addLayout(nav)
-        layout.addWidget(self.slider)
-        # Added the layout for the exposure and contrast
-        layout.addLayout(adjustments_layout)
+        # Frame row: label, slider, index
+        frame_row = QHBoxLayout()
+        frame_row.addWidget(QLabel("Frame:"))
+        frame_row.addWidget(self.slider, 1)
+        frame_row.addWidget(self.frame_index_label)
+        layout.addLayout(frame_row)
+        layout.addWidget(self.display_options_btn)
+        layout.addWidget(self.adjustments_panel)
         # Metadata label should be compact (stretch factor 0, max height)
         self.filename_label.setMaximumHeight(50)
         layout.addWidget(self.filename_label, 0)
@@ -173,12 +193,14 @@ class ImageViewer(QWidget):
 
     def set_stack(self, files) -> None:
         self.handler.load_image_stack(files)
-        self.slider.setRange(0, max(0, self.handler.get_image_count() - 1))
+        count = self.handler.get_image_count()
+        self.slider.setRange(0, max(0, count - 1))
         self.index = 0
+        self._update_frame_index_label(count)
         self._show_current()
         
         # Hide upload button when images are loaded
-        if self.handler.get_image_count() > 0:
+        if count > 0:
             self.upload_btn.hide()
         
         # Determine directory path and emit
@@ -213,6 +235,7 @@ class ImageViewer(QWidget):
         # Reset UI labels and slider
         self.image_label.clear()
         self.filename_label.setText("Load image to see data")
+        self.frame_index_label.setText("— / —")
         self.slider.setRange(0, 0)
         self._update_roi_button_text()
         self.adjust_roi_btn.setVisible(False)
@@ -353,6 +376,7 @@ class ImageViewer(QWidget):
         count = self.handler.get_image_count()
         if count == 0:
             self.image_label.clear()
+            self.frame_index_label.setText("— / —")
             self.filename_label.setText("Load image to see data")
             # Make sure upload button is visible and centered
             if not self.upload_btn.isVisible():
@@ -462,7 +486,7 @@ class ImageViewer(QWidget):
 
         self.image_label.setPixmap(scaled_pix)
         current_path = Path(self.handler.files[self.index])
-        #label for the image that is been viewed
+        self._update_frame_index_label(count)
         self.filename_label.setText(f"{self.index + 1}/{count}: \n{current_path.name}")
 
     def resizeEvent(self, event) -> None:  # noqa: N802
@@ -526,6 +550,20 @@ class ImageViewer(QWidget):
     def _on_slider(self, value: int) -> None:
         self.index = value
         self._show_current()
+
+    def _update_frame_index_label(self, count: int) -> None:
+        """Update the frame index label (e.g. '1 / 100' or '— / —')."""
+        if count <= 0:
+            self.frame_index_label.setText("— / —")
+        else:
+            self.frame_index_label.setText(f"{self.index + 1} / {count}")
+
+    def _toggle_display_options(self) -> None:
+        """Show or hide the exposure/contrast panel."""
+        self.adjustments_panel.setVisible(self.display_options_btn.isChecked())
+        self.display_options_btn.setText(
+            "Hide display options" if self.display_options_btn.isChecked() else "Display options"
+        )
 
     def _toggle_roi_mode(self) -> None:
         """Toggle ROI selection mode."""

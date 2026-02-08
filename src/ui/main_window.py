@@ -34,6 +34,7 @@ from ui.startup_dialog import StartupDialog
 from ui.alignment_dialog import AlignmentDialog
 from ui.alignment_progress_dialog import AlignmentProgressDialog
 from ui.loading_dialog import LoadingDialog
+from ui.settings_dialog import SettingsDialog
 
 # Set up logger for main window
 logger = logging.getLogger(__name__)
@@ -111,7 +112,12 @@ class MainWindow(QMainWindow):
         file_menu.addAction(close_action)
         file_menu.addAction(exit_action)
 
-        menubar.addMenu("Edit").addAction("Experiment Settings")
+        edit_menu = menubar.addMenu("Edit")
+        settings_action = QAction("Preferences...", self)
+        settings_action.setShortcut("Ctrl+,")
+        settings_action.triggered.connect(self._open_settings)
+        edit_menu.addAction(settings_action)
+        edit_menu.addAction("Experiment Settings")
         tools_menu = menubar.addMenu("Tools")
         
         # Add crop action
@@ -131,6 +137,14 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self.open_website)
     def open_website(self):
         QDesktopServices.openUrl(QUrl("https://sce.nau.edu/capstone/projects/CS/2026/NeuroNauts_F25/project_overview.html"))
+
+    def _open_settings(self) -> None:
+        """Open the Preferences / Settings dialog."""
+        dlg = SettingsDialog(self)
+        if dlg.exec() == QDialog.Accepted:
+            # Theme was applied by SettingsDialog; redraw plots to match
+            self.analysis.get_neuron_trajectory_plot_widget().refresh_theme()
+            self.analysis.get_roi_plot_widget().refresh_theme()
     
     def closeEvent(self, event: QCloseEvent) -> None:
         """

@@ -5,10 +5,15 @@ from PySide6.QtCore import QTimer
 
 from ui.startup_dialog import StartupDialog
 from ui.main_window import MainWindow
+from ui.styles import get_stylesheet
+from ui.app_settings import load_settings
 
 
 def main() -> int:
     app = QApplication(sys.argv)
+    settings = load_settings()
+    theme = settings.get("theme", "dark")
+    app.setStyleSheet(get_stylesheet(theme))
 
     # Show startup dialog (modal)
     startup = StartupDialog()

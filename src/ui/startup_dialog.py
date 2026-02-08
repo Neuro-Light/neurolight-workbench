@@ -26,6 +26,8 @@ from PySide6.QtWidgets import (
 )
 
 from core.experiment_manager import ExperimentManager, Experiment
+from ui.settings_dialog import SettingsDialog
+from ui.settings_dialog import SettingsDialog
 
 
 EXPERIMENTS_DIR = Path(__file__).resolve().parents[2] / "experiments"
@@ -67,7 +69,9 @@ class NewExperimentDialog(QDialog):
         container.addLayout(path_container)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Cancel | QDialogButtonBox.Ok)
-        buttons.button(QDialogButtonBox.Ok).setText("Create")
+        create_btn = buttons.button(QDialogButtonBox.Ok)
+        create_btn.setText("Create")
+        create_btn.setProperty("class", "primary")
         buttons.rejected.connect(self.reject)
         buttons.accepted.connect(self._accept)
         container.addWidget(buttons)
@@ -117,7 +121,9 @@ class StartupDialog(QDialog):
         title.setAlignment(Qt.AlignCenter)
 
         new_btn = QPushButton("Start New Experiment")
+        new_btn.setProperty("class", "primary")
         load_btn = QPushButton("Load Existing Experiment")
+        load_btn.setProperty("class", "primary")
 
         new_btn.clicked.connect(self._start_new)
         load_btn.clicked.connect(self._load_existing)
@@ -136,8 +142,12 @@ class StartupDialog(QDialog):
         self.export_btn = QPushButton("Export Selected")
         self.export_btn.clicked.connect(self._export_selected)
         self.export_btn.setEnabled(False)
+        self.settings_btn = QPushButton("Preferences...")
+        self.settings_btn.clicked.connect(self._open_settings)
         buttons_layout.addWidget(self.delete_btn)
         buttons_layout.addWidget(self.export_btn)
+        buttons_layout.addStretch()
+        buttons_layout.addWidget(self.settings_btn)
         
         # Connect selection changed to enable/disable buttons
         self.recent_list.itemSelectionChanged.connect(self._on_selection_changed)
@@ -214,6 +224,11 @@ class StartupDialog(QDialog):
         has_selection = len(self.recent_list.selectedItems()) > 0
         self.delete_btn.setEnabled(has_selection)
         self.export_btn.setEnabled(has_selection)
+
+    def _open_settings(self) -> None:
+        """Open the Preferences dialog."""
+        dlg = SettingsDialog(self)
+        dlg.exec()
 
     def _show_context_menu(self, position) -> None:
         """Show context menu for right-click on experiment list."""

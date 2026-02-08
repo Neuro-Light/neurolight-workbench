@@ -3,7 +3,10 @@ from __future__ import annotations
 from typing import Optional
 
 import numpy as np
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qtagg import (
+    FigureCanvasQTAgg as FigureCanvas,
+    NavigationToolbar2QT as NavigationToolbar,
+)
 from matplotlib.figure import Figure
 from PySide6.QtWidgets import (
     QWidget,
@@ -20,6 +23,9 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
+from ui.app_settings import get_theme
+from ui.styles import get_mpl_theme
+
 
 class NeuronTrajectoryPlotWidget(QWidget):
     """Widget for plotting individual neuron intensity trajectories over time."""
@@ -29,6 +35,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
         self.neuron_trajectories: Optional[np.ndarray] = None
         self.quality_mask: Optional[np.ndarray] = None
         self.neuron_locations: Optional[np.ndarray] = None
+        self._hover_cid = None
         
         layout = QVBoxLayout(self)
         
@@ -71,13 +78,28 @@ class NeuronTrajectoryPlotWidget(QWidget):
         options_group.setLayout(options_layout)
         layout.addWidget(options_group)
         
-        # Matplotlib figure and canvas
+        # Matplotlib figure and canvas (theme applied in _update_plot)
         self.figure = Figure(figsize=(10, 8))
         self.canvas = FigureCanvas(self.figure)
+        self.toolbar = NavigationToolbar(self.canvas, self)
+        self.toolbar.setObjectName("mpl_nav_toolbar")
+        layout.addWidget(self.toolbar)
         layout.addWidget(self.canvas)
+        
+        # Hover status: show frame and intensity when moving over plot
+        self.hover_label = QLabel("Hover over plot for frame and intensity.")
+        self.hover_label.setAlignment(Qt.AlignCenter)
+        self.hover_label.setProperty("class", "plot-hover")
+        layout.addWidget(self.hover_label)
         
         # Buttons layout
         buttons_layout = QHBoxLayout()
+        
+        self.export_png_btn = QPushButton("Export PNG...")
+        self.export_png_btn.clicked.connect(self._export_to_png)
+        self.export_png_btn.setEnabled(False)
+        self.export_png_btn.setToolTip("Save the current plot as a PNG image.")
+        buttons_layout.addWidget(self.export_png_btn)
         
         self.export_btn = QPushButton("Export Plot Data (CSV)")
         self.export_btn.clicked.connect(self._export_to_csv)
@@ -124,16 +146,57 @@ class NeuronTrajectoryPlotWidget(QWidget):
                 f"Displaying {num_neurons} neuron trajectories across {num_frames} frames"
             )
         
-        # Enable export button
+        # Enable export buttons
         self.export_btn.setEnabled(True)
+        self.export_png_btn.setEnabled(True)
         
         # Update plot
         self._update_plot()
+
+    def _apply_theme(self, ax) -> None:
+        """Apply current app theme to figure and axes."""
+        theme = get_mpl_theme(get_theme())
+        self.figure.patch.set_facecolor(theme["figure_facecolor"])
+        ax.set_facecolor(theme["axes_facecolor"])
+        ax.tick_params(axis="both", colors=theme["text_color"])
+        ax.xaxis.label.set_color(theme["text_color"])
+        ax.yaxis.label.set_color(theme["text_color"])
+        ax.title.set_color(theme["text_color"])
+        for spine in ax.spines.values():
+            spine.set_color(theme["axes_edgecolor"])
+        ax.grid(True, alpha=0.35, color=theme["grid_color"])
+        leg = ax.get_legend()
+        if leg:
+            leg.get_frame().set_facecolor(theme["legend_facecolor"])
+            leg.get_frame().set_edgecolor(theme["legend_edgecolor"])
+            for t in leg.get_texts():
+                t.set_color(theme["text_color"])
+
+    def _on_motion(self, event) -> None:
+        """Show frame and intensity under cursor in hover label."""
+        if (
+            self.neuron_trajectories is None
+            or event.inaxes is None
+            or event.xdata is None
+            or event.ydata is None
+        ):
+            self.hover_label.setText("Hover over plot for frame and intensity.")
+            return
+        frame_idx = int(round(event.xdata))
+        num_frames = self.neuron_trajectories.shape[1]
+        if frame_idx < 0 or frame_idx >= num_frames:
+            self.hover_label.setText("Hover over plot for frame and intensity.")
+            return
+        # Show mean intensity across displayed neurons at this frame (or nearest)
+        intensity = float(np.mean(self.neuron_trajectories[:, frame_idx]))
+        self.hover_label.setText(f"Frame {frame_idx}  ·  Intensity {intensity:.3f}")
 
     def _update_plot(self) -> None:
         """Update the trajectory plot based on current display options."""
         if self.neuron_trajectories is None or len(self.neuron_trajectories) == 0:
             return
+        
+        theme = get_mpl_theme(get_theme())
         
         # Clear previous plot
         self.figure.clear()
@@ -158,86 +221,109 @@ class NeuronTrajectoryPlotWidget(QWidget):
                 bad_indices = np.where(~self.quality_mask)[0]
                 neurons_to_plot.extend(bad_indices[:max_neurons].tolist())
         else:
-            # No quality mask, show all neurons
             neurons_to_plot = list(range(min(num_neurons, max_neurons)))
         
-        # Limit total number of neurons to display
         if len(neurons_to_plot) > max_neurons:
             neurons_to_plot = neurons_to_plot[:max_neurons]
         
-        # Plot individual neuron trajectories
+        # Plot individual neuron trajectories (theme-aware colors)
         if self.quality_mask is not None:
-            # Plot good neurons in green
             good_to_plot = [i for i in neurons_to_plot if self.quality_mask[i]]
             if good_to_plot and show_good:
                 for idx in good_to_plot:
                     ax.plot(
                         frames,
                         self.neuron_trajectories[idx],
-                        color='green',
-                        alpha=0.3,
+                        color=theme["good_color"],
+                        alpha=0.4,
                         linewidth=0.8,
-                        label='Good Neurons' if idx == good_to_plot[0] else ''
+                        label="Good Neurons" if idx == good_to_plot[0] else "",
                     )
-            
-            # Plot bad neurons in red
             bad_to_plot = [i for i in neurons_to_plot if not self.quality_mask[i]]
             if bad_to_plot and show_bad:
                 for idx in bad_to_plot:
                     ax.plot(
                         frames,
                         self.neuron_trajectories[idx],
-                        color='red',
-                        alpha=0.3,
+                        color=theme["bad_color"],
+                        alpha=0.4,
                         linewidth=0.8,
-                        label='Bad Neurons' if idx == bad_to_plot[0] else ''
+                        label="Bad Neurons" if idx == bad_to_plot[0] else "",
                     )
         else:
-            # No quality mask, plot all in blue
             for idx in neurons_to_plot:
                 ax.plot(
                     frames,
                     self.neuron_trajectories[idx],
-                    color='blue',
-                    alpha=0.3,
+                    color=theme["neutral_color"],
+                    alpha=0.4,
                     linewidth=0.8,
-                    label='Neurons' if idx == neurons_to_plot[0] else ''
+                    label="Neurons" if idx == neurons_to_plot[0] else "",
                 )
         
-        # Plot average trajectory
         if show_average:
             if self.quality_mask is not None and show_good:
-                # Average of good neurons
                 good_indices = np.where(self.quality_mask)[0]
                 if len(good_indices) > 0:
                     avg_trajectory = np.mean(self.neuron_trajectories[good_indices], axis=0)
                     ax.plot(
                         frames,
                         avg_trajectory,
-                        color='darkgreen',
+                        color=theme["average_good_color"],
                         linewidth=2.5,
-                        label='Average (Good Neurons)'
+                        label="Average (Good Neurons)",
                     )
             else:
-                # Average of all displayed neurons
                 if len(neurons_to_plot) > 0:
                     avg_trajectory = np.mean(self.neuron_trajectories[neurons_to_plot], axis=0)
                     ax.plot(
                         frames,
                         avg_trajectory,
-                        color='black',
+                        color=theme["average_color"],
                         linewidth=2.5,
-                        label='Average'
+                        label="Average",
                     )
         
-        ax.set_xlabel('Frame Number', fontsize=12)
-        ax.set_ylabel('Intensity', fontsize=12)
-        ax.set_title('Neuron Intensity Trajectories Over Time', fontsize=14)
-        ax.grid(True, alpha=0.3)
-        ax.legend(loc='best')
+        ax.set_xlabel("Frame Number", fontsize=12)
+        ax.set_ylabel("Intensity", fontsize=12)
+        ax.set_title("Neuron Intensity Trajectories Over Time", fontsize=14)
+        self._apply_theme(ax)
+        ax.legend(loc="best")
         
-        # Refresh canvas
-        self.canvas.draw()
+        if getattr(self, "_hover_cid", None) is not None:
+            self.canvas.mpl_disconnect(self._hover_cid)
+        self._hover_cid = self.canvas.mpl_connect("motion_notify_event", self._on_motion)
+        self.canvas.draw_idle()
+
+    def _export_to_png(self) -> None:
+        """Save the current plot as a PNG image."""
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Plot as PNG",
+            "neuron_trajectories.png",
+            "PNG Files (*.png)",
+        )
+        if not file_path:
+            return
+        try:
+            self.figure.savefig(
+                file_path,
+                dpi=150,
+                facecolor=self.figure.get_facecolor(),
+                edgecolor="none",
+                bbox_inches="tight",
+            )
+            QMessageBox.information(
+                self,
+                "Export Successful",
+                f"Plot saved to:\n{file_path}",
+            )
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Export Failed",
+                f"Failed to save PNG:\n{str(e)}",
+            )
 
     def _export_to_csv(self) -> None:
         """Export trajectory data to CSV file."""
@@ -303,13 +389,23 @@ class NeuronTrajectoryPlotWidget(QWidget):
                 f"Failed to export data:\n{str(e)}"
             )
 
+    def refresh_theme(self) -> None:
+        """Redraw the plot with the current app theme (e.g. after theme change)."""
+        if self.neuron_trajectories is not None and len(self.neuron_trajectories) > 0:
+            self._update_plot()
+
     def clear_plot(self) -> None:
         """Clear the plot and reset state."""
+        if getattr(self, "_hover_cid", None) is not None:
+            self.canvas.mpl_disconnect(self._hover_cid)
+            self._hover_cid = None
         self.figure.clear()
         self.canvas.draw()
         self.neuron_trajectories = None
         self.quality_mask = None
         self.neuron_locations = None
         self.status_label.setText("No neuron trajectories available. Run detection first.")
+        self.hover_label.setText("Hover over plot for frame and intensity.")
         self.export_btn.setEnabled(False)
+        self.export_png_btn.setEnabled(False)
 

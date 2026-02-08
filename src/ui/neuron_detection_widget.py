@@ -59,8 +59,8 @@ class NeuronDetectionWidget(QWidget):
         
         # Number of peaks
         self.num_peaks_spin = QSpinBox()
-        self.num_peaks_spin.setRange(1, 1000)
-        self.num_peaks_spin.setValue(400)
+        self.num_peaks_spin.setRange(1, 2000)
+        self.num_peaks_spin.setValue(800)
         self.num_peaks_spin.setToolTip("Maximum number of neurons to detect")
         params_layout.addRow("Max Neurons:", self.num_peaks_spin)
         
@@ -77,10 +77,34 @@ class NeuronDetectionWidget(QWidget):
         self.threshold_rel_spin = QDoubleSpinBox()
         self.threshold_rel_spin.setRange(0.0, 1.0)
         self.threshold_rel_spin.setSingleStep(0.01)
-        self.threshold_rel_spin.setValue(0.1)
+        self.threshold_rel_spin.setValue(0.03)
         self.threshold_rel_spin.setDecimals(2)
-        self.threshold_rel_spin.setToolTip("Relative threshold for peak detection (0.0-1.0)")
+        self.threshold_rel_spin.setToolTip(
+            "Relative threshold for peak detection (0.0-1.0). "
+            "Lower values find dimmer neurons; raise if you get many false positives."
+        )
         params_layout.addRow("Peak Threshold:", self.threshold_rel_spin)
+        
+        # Max projection checkbox
+        self.max_projection_checkbox = QCheckBox()
+        self.max_projection_checkbox.setChecked(True)
+        self.max_projection_checkbox.setToolTip(
+            "Use max projection across frames for detection. "
+            "Better for calcium imaging where neurons flash; uncheck to use mean."
+        )
+        params_layout.addRow("Max Projection:", self.max_projection_checkbox)
+        
+        # Preprocess sigma
+        self.preprocess_sigma_spin = QDoubleSpinBox()
+        self.preprocess_sigma_spin.setRange(0.0, 3.0)
+        self.preprocess_sigma_spin.setSingleStep(0.25)
+        self.preprocess_sigma_spin.setValue(1.0)
+        self.preprocess_sigma_spin.setDecimals(2)
+        self.preprocess_sigma_spin.setToolTip(
+            "Gaussian blur sigma before peak detection. "
+            "Smooths noise to find dimmer peaks; use 0 to disable."
+        )
+        params_layout.addRow("Smoothing (sigma):", self.preprocess_sigma_spin)
         
         # Detrending checkbox
         self.detrending_checkbox = QCheckBox()
@@ -93,6 +117,7 @@ class NeuronDetectionWidget(QWidget):
         
         # Detection button
         self.detect_btn = QPushButton("Detect Neurons")
+        self.detect_btn.setProperty("class", "primary")
         self.detect_btn.clicked.connect(self._run_detection)
         self.detect_btn.setEnabled(False)
         layout.addWidget(self.detect_btn)
@@ -255,6 +280,8 @@ class NeuronDetectionWidget(QWidget):
             correlation_threshold = self.correlation_threshold_spin.value()
             threshold_rel = self.threshold_rel_spin.value()
             apply_detrending = self.detrending_checkbox.isChecked()
+            use_max_projection = self.max_projection_checkbox.isChecked()
+            preprocess_sigma = self.preprocess_sigma_spin.value()
             
             # Run detection
             self.detect_btn.setEnabled(False)
@@ -276,7 +303,9 @@ class NeuronDetectionWidget(QWidget):
                 num_peaks=num_peaks,
                 correlation_threshold=correlation_threshold,
                 threshold_rel=threshold_rel,
-                apply_detrending=apply_detrending
+                apply_detrending=apply_detrending,
+                use_max_projection=use_max_projection,
+                preprocess_sigma=preprocess_sigma,
             )
             
             # Calculate mean frame for visualization
