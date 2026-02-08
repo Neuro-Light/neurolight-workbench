@@ -342,58 +342,59 @@ class ImageProcessor:
         transform_const = transform_map.get(transform_type.lower(), StackReg.RIGID_BODY)
         
         if progress_callback:
-            progress_callback(0, num_frames, "Initializing StackReg...")
-        
+            if not progress_callback(0, num_frames, "Initializing StackReg..."):
+                return image_stack.copy(), np.empty(0), []
+
         # Initialize StackReg
         sr = StackReg(transform_const)
-        
-        # Normalize all frames to a consistent range (0-65535) for alignment
-        # This ensures consistent brightness across frames during alignment
-        image_stack_normalized = np.zeros_like(image_stack, dtype=np.float32)
+
+        # Vectorized normalization to uint16 range for StackReg
         global_min = float(np.min(image_stack))
         global_max = float(np.max(image_stack))
         global_range = global_max - global_min
-        
+
         if global_range > 0:
-            for i in range(num_frames):
-                image_stack_normalized[i] = ((image_stack[i].astype(np.float32) - global_min) / global_range) * 65535.0
+            image_stack_uint16 = (
+                (image_stack.astype(np.float32) - global_min)
+                / global_range
+                * 65535.0
+            ).astype(np.uint16)
         else:
-            image_stack_normalized = image_stack.astype(np.float32)
-        
-        # Convert to uint16 for StackReg (it works best with uint16)
-        image_stack_uint16 = image_stack_normalized.astype(np.uint16)
-        
+            image_stack_uint16 = image_stack.astype(np.uint16)
+
         # Register to get transformation matrices
         if progress_callback:
-            progress_callback(0, num_frames, "Computing transformation matrices...")
-        
+            if not progress_callback(0, num_frames, "Computing transformation matrices..."):
+                return image_stack.copy(), np.empty(0), []
+
         tmats = sr.register_stack(image_stack_uint16, reference=reference)
-        
-        # Apply transformations
+
         if progress_callback:
-            progress_callback(0, num_frames, "Applying transformations...")
-        
+            if not progress_callback(0, num_frames, "Applying transformations..."):
+                return image_stack.copy(), np.empty(0), []
+
+        # Apply transformations
         aligned_stack_uint16 = sr.transform_stack(image_stack_uint16, tmats=tmats)
-        
-        # Convert back to original data range to preserve brightness/contrast
-        # Scale from normalized uint16 back to original range
-        aligned_stack = np.zeros_like(image_stack, dtype=image_stack.dtype)
-        
+        del image_stack_uint16
+
+        # Vectorized de-normalization back to original data range
         if global_range > 0:
-            for i in range(num_frames):
-                # Convert from uint16 (0-65535) back to original range
-                aligned_float = aligned_stack_uint16[i].astype(np.float32) / 65535.0
-                aligned_float = aligned_float * global_range + global_min
-                
-                # Convert to original dtype with proper clipping
-                if image_stack.dtype == np.uint8:
-                    aligned_stack[i] = np.clip(aligned_float, 0, 255).astype(np.uint8)
-                elif image_stack.dtype == np.uint16:
-                    aligned_stack[i] = np.clip(aligned_float, 0, 65535).astype(np.uint16)
-                else:
-                    aligned_stack[i] = aligned_float.astype(image_stack.dtype)
+            aligned_float = (
+                aligned_stack_uint16.astype(np.float32)
+                * (global_range / 65535.0)
+                + global_min
+            )
+            del aligned_stack_uint16
+
+            if image_stack.dtype == np.uint8:
+                aligned_stack = np.clip(aligned_float, 0, 255).astype(np.uint8)
+            elif image_stack.dtype == np.uint16:
+                aligned_stack = np.clip(aligned_float, 0, 65535).astype(np.uint16)
+            else:
+                aligned_stack = aligned_float.astype(image_stack.dtype)
+            del aligned_float
         else:
-            # If all pixels are the same, just copy the original
+            del aligned_stack_uint16
             aligned_stack = image_stack.copy()
         
         # Calculate confidence scores using normalized cross-correlation
@@ -419,7 +420,8 @@ class ImageProcessor:
                 reference_frame = aligned_stack[0]
             
             if progress_callback:
-                progress_callback(i, num_frames, f"Calculating confidence for frame {i+1}/{num_frames}...")
+                if not progress_callback(i, num_frames, f"Calculating confidence for frame {i+1}/{num_frames}..."):
+                    return aligned_stack, tmats, confidence_scores
             
             # Convert to float32 for calculations
             ref_float = reference_frame.astype(np.float32)

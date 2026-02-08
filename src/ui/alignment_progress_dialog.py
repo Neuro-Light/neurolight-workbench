@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -12,10 +13,13 @@ from PySide6.QtWidgets import (
 
 class AlignmentProgressDialog(QDialog):
     """Dialog showing progress during image alignment."""
-    
+
     def __init__(self, parent=None, total_frames: int = 0):
         super().__init__(parent)
         self.setWindowTitle("Aligning Images...")
+        self.setWindowFlags(
+            Qt.Dialog | Qt.WindowTitleHint | Qt.CustomizeWindowHint
+        )
         self.setModal(True)
         self.setMinimumWidth(500)
         self.setMinimumHeight(200)
