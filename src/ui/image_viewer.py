@@ -46,6 +46,7 @@ class ImageViewer(QWidget):
     roiSelected = Signal(object)  # Emits ROI object
     roiChanged = Signal(object)  # Emits ROI object when adjusted
     displaySettingsChanged = Signal(int, int)  # Emits (exposure, contrast) when display settings change
+    editsConfirmed = Signal()
 
     def __init__(self, handler: ImageStackHandler) -> None:
         super().__init__()
@@ -65,6 +66,11 @@ class ImageViewer(QWidget):
         self.active_handle = ROIHandle.NONE
         self.last_mouse_pos = None
         self.can_adjust_roi = False  # Only true when user clicks "Adjust ROI"
+        
+        # Edit confirmation and gating state
+        self.edits_confirmed = False
+        self.has_edited_since_load = False
+        self.roi_allowed = False
 
         self.filename_label = QLabel("Load image to see data") #label for user to see if no image are selected
         self.filename_label.setAlignment(Qt.AlignCenter)
@@ -138,6 +144,9 @@ class ImageViewer(QWidget):
         #handle the changing value for the contrast slider
         self.contrast_slider.valueChanged.connect(self._on_adjustment_changed)
         
+        # Confirm edits button (required before alignment)
+        self.confirm_edits_btn = QPushButton("Confirm Edits")
+        self.confirm_edits_btn.clicked.connect(self._confirm_edits)
 
         nav = QHBoxLayout()
         nav.addWidget(self.prev_btn)
@@ -155,6 +164,8 @@ class ImageViewer(QWidget):
         adjustments_layout.addWidget(self.contrast_label)
         # Add the slider to the container
         adjustments_layout.addWidget(self.contrast_slider)
+        # Add confirm button to complete edit step
+        adjustments_layout.addWidget(self.confirm_edits_btn)
 
         layout = QVBoxLayout(self)
         # Image gets most of the space (stretch factor 1)
@@ -170,12 +181,15 @@ class ImageViewer(QWidget):
         self._update_adjustment_labels()
 
         self.setAcceptDrops(True)
+        self.set_editing_enabled(False)
 
     def set_stack(self, files) -> None:
         self.handler.load_image_stack(files)
         self.slider.setRange(0, max(0, self.handler.get_image_count() - 1))
         self.index = 0
         self._show_current()
+        self._reset_editing_state()
+        self.set_editing_enabled(True)
         
         # Hide upload button when images are loaded
         if self.handler.get_image_count() > 0:
@@ -224,6 +238,9 @@ class ImageViewer(QWidget):
         # Show upload button again
         self.upload_btn.show()
         self._center_upload_button()
+        self._reset_editing_state()
+        self.set_editing_enabled(False)
+        self.roi_allowed = False
 
     def dragEnterEvent(self, event) -> None:  # noqa: N802
         md = event.mimeData()
@@ -336,8 +353,35 @@ class ImageViewer(QWidget):
     def _on_adjustment_changed(self, _value: int) -> None:
         self._update_adjustment_labels()
         self._show_current()
+        if self.handler.get_image_count() > 0:
+            self.has_edited_since_load = True
         # Emit signal so MainWindow can save to experiment
         self.displaySettingsChanged.emit(self.exposure_slider.value(), self.contrast_slider.value())
+
+    def _confirm_edits(self) -> None:
+        """Confirm exposure/contrast edits before alignment."""
+        from PySide6.QtWidgets import QMessageBox
+        
+        if self.handler.get_image_count() == 0:
+            QMessageBox.warning(
+                self,
+                "No Images",
+                "Please load an image stack before confirming edits."
+            )
+            return
+        
+        if not self.has_edited_since_load:
+            QMessageBox.warning(
+                self,
+                "Edit Required",
+                "Adjust exposure or contrast before confirming edits."
+            )
+            return
+        
+        self.edits_confirmed = True
+        self.set_editing_enabled(False)
+        self.confirm_edits_btn.setText("Edits Confirmed")
+        self.editsConfirmed.emit()
 
 
     # Function to convert to 8 bits
@@ -531,6 +575,14 @@ class ImageViewer(QWidget):
         """Toggle ROI selection mode."""
         from PySide6.QtWidgets import QMessageBox
         
+        if not self.roi_allowed:
+            QMessageBox.warning(
+                self,
+                "Step Order",
+                "Please complete alignment before selecting an ROI."
+            )
+            return
+        
         # If we're not in selection mode and there's an existing ROI, confirm before starting new selection
         if not self.roi_selection_mode and self.current_roi is not None:
             reply = QMessageBox.question(
@@ -558,6 +610,16 @@ class ImageViewer(QWidget):
     
     def _toggle_adjustment_mode(self) -> None:
         """Toggle ROI adjustment mode."""
+        from PySide6.QtWidgets import QMessageBox
+        
+        if not self.roi_allowed:
+            QMessageBox.warning(
+                self,
+                "Step Order",
+                "Please complete alignment before adjusting the ROI."
+            )
+            return
+        
         self.can_adjust_roi = not self.can_adjust_roi
         self.adjust_roi_btn.setText("Finish Adjusting" if self.can_adjust_roi else "Adjust ROI")
         
@@ -592,6 +654,40 @@ class ImageViewer(QWidget):
             self.adjust_roi_btn.setVisible(True)
         else:
             self.adjust_roi_btn.setVisible(False)
+
+    def set_editing_enabled(self, enabled: bool) -> None:
+        """Enable/disable exposure/contrast editing controls."""
+        self.exposure_slider.setEnabled(enabled)
+        self.contrast_slider.setEnabled(enabled)
+        self.confirm_edits_btn.setEnabled(enabled and not self.edits_confirmed)
+
+    def set_roi_allowed(self, allowed: bool) -> None:
+        """Allow or block ROI interactions based on workflow state."""
+        self.roi_allowed = allowed
+        if self.handler.get_image_count() == 0:
+            self.roi_btn.setEnabled(False)
+            self.adjust_roi_btn.setEnabled(False)
+            return
+        self.roi_btn.setEnabled(allowed)
+        self.adjust_roi_btn.setEnabled(allowed and self.current_roi is not None)
+        if not allowed and self.roi_selection_mode:
+            self.roi_selection_mode = False
+            self.roi_start_point = None
+            self.roi_end_point = None
+            self._update_roi_button_text()
+            self._show_current()
+
+    def _reset_editing_state(self) -> None:
+        """Reset edit confirmation state for a new stack."""
+        self.edits_confirmed = False
+        self.has_edited_since_load = False
+        self.confirm_edits_btn.setText("Confirm Edits")
+
+    def reset_confirm_edits(self) -> None:
+        """Allow user to confirm edits again (e.g., after alignment cancel)."""
+        self.edits_confirmed = False
+        self.confirm_edits_btn.setText("Confirm Edits")
+        self.set_editing_enabled(True)
 
     def _get_image_coords_from_mouse(self, event) -> Optional[Tuple[int, int, float]]:
         """Convert mouse coordinates to image coordinates and return scale."""
@@ -793,4 +889,3 @@ class ImageViewer(QWidget):
         self._update_roi_button_text()
         # Redraw to show the ROI with correct scaling
         self._show_current()
-

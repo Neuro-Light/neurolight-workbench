@@ -14,10 +14,12 @@ from PySide6.QtWidgets import (
     QSplitter,
     QWidget,
     QVBoxLayout,
+    QHBoxLayout,
     QLabel,
     QMessageBox,
     QApplication,
     QDialog,
+    QProgressBar,
 )
 from PySide6.QtGui import QAction, QCloseEvent
 
@@ -68,6 +70,9 @@ class MainWindow(QMainWindow):
         self.manager = ExperimentManager()
         self.current_experiment_path: Optional[str] = None
         self.image_processor = ImageProcessor(experiment)
+        #progress tracking
+        self._workflow_step = "upload"
+        self._loading_aligned_stack = False
 
         # Initialize debounced save timer for display settings
         self._display_settings_timer = QTimer()
@@ -81,6 +86,7 @@ class MainWindow(QMainWindow):
 
         self._init_menu()
         self._init_layout()
+        self._set_workflow_step("upload")
 
     def _init_menu(self) -> None:
         menubar = self.menuBar()
@@ -120,9 +126,9 @@ class MainWindow(QMainWindow):
         tools_menu.addAction(crop_action)
         
         # Add alignment action
-        align_action = QAction("Align Images", self)
-        align_action.triggered.connect(self._align_images)
-        tools_menu.addAction(align_action)
+        self.align_action = QAction("Align Images", self)
+        self.align_action.triggered.connect(self._align_images)
+        tools_menu.addAction(self.align_action)
         
         
         tools_menu.addAction("Run Analysis")
@@ -198,6 +204,17 @@ class MainWindow(QMainWindow):
         # log file at ~/.neurolight/neurolight.log for full error details.
 
     def _init_layout(self) -> None:
+        # Workflow progress bar
+        self._progress_label = QLabel()
+        self._progress_bar = QProgressBar()
+        self._progress_bar.setRange(0, 3)
+        self._progress_bar.setTextVisible(False)
+        progress_layout = QHBoxLayout()
+        progress_layout.addWidget(self._progress_label, 1)
+        progress_layout.addWidget(self._progress_bar, 2)
+        progress_widget = QWidget()
+        progress_widget.setLayout(progress_layout)
+
         splitter = QSplitter()
 
         # Left panel: image viewer
@@ -205,6 +222,7 @@ class MainWindow(QMainWindow):
         self.stack_handler.associate_with_experiment(self.experiment)
         self.viewer = ImageViewer(self.stack_handler)
         self.viewer.stackLoaded.connect(self._on_stack_loaded)
+        self.viewer.editsConfirmed.connect(self._on_edits_confirmed)
 
         # Right panel: analysis dashboard
         self.analysis = AnalysisPanel()
@@ -241,7 +259,12 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 7)
 
-        self.setCentralWidget(splitter)
+        container = QWidget()
+        container_layout = QVBoxLayout(container)
+        container_layout.setContentsMargins(0, 0, 0, 0)
+        container_layout.addWidget(progress_widget)
+        container_layout.addWidget(splitter)
+        self.setCentralWidget(container)
 
         # Auto-load image stack/ROI if experiment has saved data
         self._auto_load_experiment_data()
@@ -314,6 +337,7 @@ class MainWindow(QMainWindow):
                                     
                                     self.viewer.set_roi(roi)
                                     self._on_roi_selected(roi)
+                                    self._set_workflow_step("roi")
                                     
                                     # Load neuron detection data if available
                                     detection_data = self.experiment.get_neuron_detection_data()
@@ -364,6 +388,10 @@ class MainWindow(QMainWindow):
         self.viewer.set_stack(directory)
 
     def _on_stack_loaded(self, directory_path: str) -> None:
+        if self._loading_aligned_stack:
+            self._loading_aligned_stack = False
+        else:
+            self._set_workflow_step("edit")
         # ImageStackHandler already updates experiment association for path/count
         self.stack_handler.associate_with_experiment(self.experiment)
         
@@ -521,6 +549,7 @@ class MainWindow(QMainWindow):
 
             # Reset viewer state
             self.viewer.reset()
+            self._set_workflow_step("upload")
 
             # Clear analysis panel
             self.analysis.roi_plot_widget.clear_plot()
@@ -569,6 +598,34 @@ class MainWindow(QMainWindow):
                 except Exception:
                     pass
             QApplication.quit()
+    # Initialize workflow
+    def _on_edits_confirmed(self) -> None:
+        self._set_workflow_step("align")
+        self._align_images()
+    # Track the work flow
+    def _set_workflow_step(self, step: str) -> None:
+        self._workflow_step = step
+        self._update_workflow_controls()
+        self._update_progress_bar()
+    # Enable/disable controls based on workflow step and whether stack is loaded
+    def _update_workflow_controls(self) -> None:
+        has_stack = self.stack_handler.get_image_count() > 0
+        self.viewer.set_editing_enabled(has_stack and self._workflow_step == "edit")
+        self.align_action.setEnabled(has_stack and self._workflow_step == "align")
+        self.viewer.set_roi_allowed(has_stack and self._workflow_step == "roi")
+    #update the progress bar based on workflow step
+    def _update_progress_bar(self) -> None:
+        steps = [
+            ("upload", "Step 1/4: Load Image Stack"),
+            ("edit", "Step 2/4: Edit Exposure/Contrast"),
+            ("align", "Step 3/4: Align Images"),
+            ("roi", "Step 4/4: Select ROI"),
+        ]
+        step_index = {key: idx for idx, (key, _) in enumerate(steps)}
+        idx = step_index.get(self._workflow_step, 0)
+        self._progress_bar.setValue(idx)
+        self._progress_label.setText(steps[idx][1])
+
 
     def _on_roi_selected(self, roi: ROI) -> None:
         """Handle ROI selection and extract intensity time series."""
@@ -850,7 +907,15 @@ class MainWindow(QMainWindow):
             )
     
     def _align_images(self) -> None:
+        #progress dialog for alignment with warning
         """Align images in the stack."""
+        if self._workflow_step != "align":
+            QMessageBox.warning(
+                self,
+                "Step Order",
+                "Please confirm your image edits before aligning."
+            )
+            return
         # Check if images are loaded
         num_frames = self.stack_handler.get_image_count()
         if num_frames == 0:
@@ -872,6 +937,8 @@ class MainWindow(QMainWindow):
         # Show alignment dialog
         dialog = AlignmentDialog(self, num_frames)
         if dialog.exec() != QDialog.Accepted:
+            self._set_workflow_step("edit")
+            self.viewer.reset_confirm_edits()
             return
         
         params = dialog.get_parameters()
@@ -924,6 +991,9 @@ class MainWindow(QMainWindow):
                     "Alignment Cancelled",
                     "Image alignment was cancelled. No changes were saved."
                 )
+                #reset editing step
+                self._set_workflow_step("edit")
+                self.viewer.reset_confirm_edits()
                 return
             
             # Check alignment quality
@@ -981,9 +1051,12 @@ class MainWindow(QMainWindow):
                     QMessageBox.Yes | QMessageBox.No,
                     QMessageBox.Yes
                 )
-                
+                # when aligned images are loaded, dont edit
                 if load_reply == QMessageBox.Yes:
+                    self._loading_aligned_stack = True
                     self.viewer.set_stack(output_dir)
+            
+            self._set_workflow_step("roi")
             
         except Exception as e:
             progress_dialog.close()
