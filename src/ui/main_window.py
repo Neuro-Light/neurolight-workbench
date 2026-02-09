@@ -33,6 +33,7 @@ from ui.analysis_panel import AnalysisPanel
 from ui.startup_dialog import StartupDialog
 from ui.alignment_dialog import AlignmentDialog
 from ui.alignment_progress_dialog import AlignmentProgressDialog
+from ui.alignment_worker import AlignmentWorker
 from ui.loading_dialog import LoadingDialog
 
 # Set up logger for main window
@@ -68,6 +69,7 @@ class MainWindow(QMainWindow):
         self.manager = ExperimentManager()
         self.current_experiment_path: Optional[str] = None
         self.image_processor = ImageProcessor(experiment)
+        self._alignment_worker: Optional[AlignmentWorker] = None
 
         # Initialize debounced save timer for display settings
         self._display_settings_timer = QTimer()
@@ -146,6 +148,10 @@ class MainWindow(QMainWindow):
         )
 
         if reply == QMessageBox.Yes:
+            # Stop alignment worker if running
+            if self._alignment_worker is not None and self._alignment_worker.isRunning():
+                self._alignment_worker.request_cancel()
+                self._alignment_worker.wait(5000)
             # Flush any pending display settings before exiting
             self._flush_pending_display_settings()
             # Save current ROI to experiment before exiting
@@ -850,7 +856,16 @@ class MainWindow(QMainWindow):
             )
     
     def _align_images(self) -> None:
-        """Align images in the stack."""
+        """Align images in the stack using a background worker thread."""
+        # Guard: prevent re-entry while a worker is already running
+        if self._alignment_worker is not None and self._alignment_worker.isRunning():
+            QMessageBox.warning(
+                self,
+                "Alignment In Progress",
+                "An alignment operation is already running. Please wait for it to finish."
+            )
+            return
+
         # Check if images are loaded
         num_frames = self.stack_handler.get_image_count()
         if num_frames == 0:
@@ -860,7 +875,7 @@ class MainWindow(QMainWindow):
                 "No image stack loaded. Please load an image stack first."
             )
             return
-        
+
         if num_frames < 2:
             QMessageBox.warning(
                 self,
@@ -868,130 +883,129 @@ class MainWindow(QMainWindow):
                 "At least 2 images are required for alignment."
             )
             return
-        
+
         # Show alignment dialog
         dialog = AlignmentDialog(self, num_frames)
         if dialog.exec() != QDialog.Accepted:
             return
-        
-        params = dialog.get_parameters()
-        
+
+        self._alignment_params = dialog.get_parameters()
+
+        # Load frames on the main thread (PIL is not thread-safe)
+        frame_data = self.stack_handler.get_all_frames_as_array()
+        if frame_data is None:
+            QMessageBox.warning(
+                self,
+                "No Image Data",
+                "Failed to load image stack."
+            )
+            return
+
         # Show progress dialog
-        progress_dialog = AlignmentProgressDialog(self, num_frames)
-        progress_dialog.show()
-        QApplication.processEvents()
-        
-        try:
-            # Load all frames
-            progress_dialog.update_progress(0, num_frames, "Loading image stack...")
-            QApplication.processEvents()
-            
-            frame_data = self.stack_handler.get_all_frames_as_array()
-            if frame_data is None:
-                progress_dialog.close()
-                QMessageBox.warning(
-                    self,
-                    "No Image Data",
-                    "Failed to load image stack."
-                )
-                return
-            
-            # Progress callback - returns False if cancelled
-            def progress_callback(completed: int, total: int, message: str) -> bool:
-                progress_dialog.update_progress(completed, total, message)
-                QApplication.processEvents()
-                # Return False if cancelled (to stop alignment), True to continue
-                return not progress_dialog.is_cancelled()
-            
-            # Perform alignment
-            progress_dialog.update_progress(0, num_frames, "Starting alignment...")
-            QApplication.processEvents()
-            
-            aligned_stack, transformation_matrices, confidence_scores = (
-                self.image_processor.align_image_stack(
-                    frame_data,
-                    transform_type=params["transform_type"],
-                    reference=params["reference"],
-                    progress_callback=progress_callback
-                )
-            )
-            
-            # Check if alignment was cancelled
-            if progress_dialog.is_cancelled():
-                progress_dialog.close()
-                QMessageBox.information(
-                    self,
-                    "Alignment Cancelled",
-                    "Image alignment was cancelled. No changes were saved."
-                )
-                return
-            
-            # Check alignment quality
-            avg_confidence = sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0.0
-            low_confidence_frames = [
-                i for i, conf in enumerate(confidence_scores) if conf < 0.5
-            ]
-            
-            progress_dialog.close()
-            
-            # Show alignment results
-            result_message = (
-                f"Alignment complete!\n\n"
-                f"Average confidence: {avg_confidence:.2%}\n"
-                f"Frames with low confidence (<50%): {len(low_confidence_frames)}"
-            )
-            
-            if low_confidence_frames:
-                result_message += f"\n\nLow confidence frames: {low_confidence_frames[:10]}"
-                if len(low_confidence_frames) > 10:
-                    result_message += f" (+{len(low_confidence_frames) - 10} more)"
-            
-            reply = QMessageBox.question(
+        self._alignment_progress = AlignmentProgressDialog(self, num_frames)
+        self._alignment_progress.show()
+
+        # Create and wire up the worker
+        worker = AlignmentWorker(
+            frame_data,
+            transform_type=self._alignment_params["transform_type"],
+            reference=self._alignment_params["reference"],
+            parent=self,
+        )
+        self._alignment_worker = worker
+
+        worker.progress.connect(self._alignment_progress.update_progress)
+        worker.finished.connect(self._on_alignment_finished)
+        worker.error.connect(self._on_alignment_error)
+        worker.cancelled.connect(self._on_alignment_cancelled)
+        self._alignment_progress.rejected.connect(worker.request_cancel)
+
+        worker.start()
+
+    # ------------------------------------------------------------------
+    # Alignment worker handler slots
+    # ------------------------------------------------------------------
+
+    def _on_alignment_finished(self, aligned_stack, tmats, confidence_scores) -> None:
+        """Handle successful alignment completion."""
+        self._alignment_progress.close()
+        self._alignment_worker = None
+
+        avg_confidence = (
+            sum(confidence_scores) / len(confidence_scores)
+            if confidence_scores
+            else 0.0
+        )
+        low_confidence_frames = [
+            i for i, conf in enumerate(confidence_scores) if conf < 0.5
+        ]
+
+        result_message = (
+            f"Alignment complete!\n\n"
+            f"Average confidence: {avg_confidence:.2%}\n"
+            f"Frames with low confidence (<50%): {len(low_confidence_frames)}"
+        )
+
+        if low_confidence_frames:
+            result_message += f"\n\nLow confidence frames: {low_confidence_frames[:10]}"
+            if len(low_confidence_frames) > 10:
+                result_message += f" (+{len(low_confidence_frames) - 10} more)"
+
+        reply = QMessageBox.question(
+            self,
+            "Alignment Complete",
+            result_message + "\n\nWould you like to save the aligned images?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,
+        )
+
+        if reply == QMessageBox.Yes:
+            output_dir = QFileDialog.getExistingDirectory(
                 self,
-                "Alignment Complete",
-                result_message + "\n\nWould you like to save the aligned images?",
+                "Select Output Directory for Aligned Stack",
+                "",
+            )
+            if not output_dir:
+                return
+
+            self._save_aligned_stack(
+                aligned_stack,
+                tmats,
+                confidence_scores,
+                output_dir,
+                self._alignment_params,
+            )
+
+            load_reply = QMessageBox.question(
+                self,
+                "Load Aligned Images?",
+                "Would you like to load the aligned images into the viewer?",
                 QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.Yes
+                QMessageBox.Yes,
             )
-            
-            if reply == QMessageBox.Yes:
-                # Ask user for output directory
-                output_dir = QFileDialog.getExistingDirectory(
-                    self,
-                    "Select Output Directory for Aligned Stack",
-                    ""
-                )
-                if not output_dir:
-                    return
-                
-                # Save aligned images
-                self._save_aligned_stack(
-                    aligned_stack,
-                    transformation_matrices,
-                    confidence_scores,
-                    output_dir,
-                    params
-                )
-                
-                # Ask if user wants to load aligned images
-                load_reply = QMessageBox.question(
-                    self,
-                    "Load Aligned Images?",
-                    "Would you like to load the aligned images into the viewer?",
-                    QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.Yes
-                )
-                
-                if load_reply == QMessageBox.Yes:
-                    self.viewer.set_stack(output_dir)
-            
-        except Exception as e:
-            progress_dialog.close()
-            QMessageBox.critical(
-                self,
-                "Alignment Error",
-                f"Failed to align images:\n{str(e)}"
-            )
+
+            if load_reply == QMessageBox.Yes:
+                self.viewer.set_stack(output_dir)
+
+    def _on_alignment_error(self, error_message: str) -> None:
+        """Handle alignment errors from the worker thread."""
+        self._alignment_progress.close()
+        self._alignment_worker = None
+        QMessageBox.critical(
+            self,
+            "Alignment Error",
+            f"Failed to align images:\n{error_message}",
+        )
+
+    def _on_alignment_cancelled(self) -> None:
+        """Handle alignment cancellation."""
+        self._alignment_progress.close()
+        self._alignment_worker = None
+        QMessageBox.information(
+            self,
+            "Alignment Cancelled",
+            "Image alignment was cancelled. No changes were saved.",
+        )
     
     def _apply_exposure_contrast(self, arr: np.ndarray, exposure: int, contrast: int) -> np.ndarray:
         """
