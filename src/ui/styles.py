@@ -6,6 +6,8 @@ FONT_SIZE_BASE = "13px"
 FONT_SIZE_SMALL = "12px"
 FONT_SIZE_LARGE = "14px"
 FONT_SIZE_TITLE = "16px"
+FONT_SIZE_DIALOG_TITLE = "22px"
+FONT_SIZE_SECTION_HEADING = "15px"
 
 # Spacing & radius
 RADIUS = "6px"
@@ -16,19 +18,26 @@ PADDING_SMALL = "4px 8px"
 
 # Color palettes
 COLORS_LIGHT = {
-    "bg": "#f5f7fa",
-    "surface": "#ffffff",
-    "surface_alt": "#f8fafc",
-    "primary": "#2563eb",
-    "primary_hover": "#1d4ed8",
-    "primary_pressed": "#1e40af",
-    "text": "#1e293b",
-    "text_secondary": "#64748b",
-    "text_disabled": "#94a3b8",
-    "border": "#e2e8f0",
-    "border_focus": "#2563eb",
-    "hover": "#f1f5f9",
-    "disabled": "#cbd5e1",
+    # Light palette
+    "bg": "#F5F5F5",
+    # Surfaces / cards / inputs
+    "surface": "#FFFFFF",
+    # Alternate surface / subtle panels
+    "surface_alt": "#FFFFFF",
+    # Primary accent
+    "primary": "#4A90E2",
+    "primary_hover": "#357ABD",
+    "primary_pressed": "#2D6FB3",
+    # Text
+    "text": "#212121",
+    "text_secondary": "#616161",
+    "text_disabled": "#9E9E9E",
+    # Borders / separators
+    "border": "#E0E0E0",
+    "border_focus": "#4A90E2",
+    # Hover / disabled fills
+    "hover": "#EEEEEE",
+    "disabled": "#E0E0E0",
     "success": "#059669",
     "warning": "#d97706",
     # Matplotlib toolbar: dark bg in light mode so white icons are visible
@@ -39,30 +48,99 @@ COLORS_LIGHT = {
 }
 
 COLORS_DARK = {
-    "bg": "#0f172a",
-    "surface": "#1e293b",
-    "surface_alt": "#334155",
-    "primary": "#3b82f6",
-    "primary_hover": "#60a5fa",
-    "primary_pressed": "#2563eb",
-    "text": "#f1f5f9",
-    "text_secondary": "#94a3b8",
-    "text_disabled": "#64748b",
-    "border": "#334155",
-    "border_focus": "#3b82f6",
-    "hover": "#334155",
-    "disabled": "#475569",
+    # Dark palette
+    "bg": "#1E1E1E",
+    # Surfaces / cards / inputs
+    "surface": "#2D2D2D",      # Graph background / main surfaces
+    "surface_alt": "#262626",  # Slightly darker alt surface
+    # Primary accent
+    "primary": "#4A90E2",
+    "primary_hover": "#6AA7E8",
+    "primary_pressed": "#357ABD",
+    # Text
+    "text": "#E0E0E0",
+    "text_secondary": "#B0B0B0",
+    "text_disabled": "#7A7A7A",
+    # Borders / separators
+    "border": "#3A3A3A",
+    "border_focus": "#4A90E2",
+    # Hover / disabled fills
+    "hover": "#333333",
+    "disabled": "#3A3A3A",
     "success": "#10b981",
     "warning": "#f59e0b",
 }
 
+# High contrast palettes (stronger text/background and border contrast)
+COLORS_LIGHT_HC = {
+    "bg": "#FFFFFF",
+    "surface": "#FFFFFF",
+    "surface_alt": "#F5F5F5",
+    "primary": "#0066CC",
+    "primary_hover": "#0052A3",
+    "primary_pressed": "#003D7A",
+    "text": "#000000",
+    "text_secondary": "#000000",
+    "text_disabled": "#595959",
+    "border": "#000000",
+    "border_focus": "#0066CC",
+    "hover": "#E8E8E8",
+    "disabled": "#CCCCCC",
+    "success": "#0D7D4D",
+    "warning": "#B35C00",
+    "mpl_toolbar_bg": "#1A1A1A",
+    "mpl_toolbar_text": "#FFFFFF",
+    "mpl_toolbar_border": "#333333",
+    "mpl_toolbar_hover": "#333333",
+}
+
+COLORS_DARK_HC = {
+    "bg": "#000000",
+    "surface": "#1A1A1A",
+    "surface_alt": "#262626",
+    "primary": "#6BB3FF",
+    "primary_hover": "#8FC5FF",
+    "primary_pressed": "#4A90E2",
+    "text": "#FFFFFF",
+    "text_secondary": "#FFFFFF",
+    "text_disabled": "#999999",
+    "border": "#FFFFFF",
+    "border_focus": "#6BB3FF",
+    "hover": "#262626",
+    "disabled": "#333333",
+    "success": "#00E676",
+    "warning": "#FFB74D",
+}
+
+
+# Valid theme values (single selection in Preferences)
+THEME_DARK = "dark"
+THEME_LIGHT = "light"
+THEME_DARK_HIGH_CONTRAST = "dark_high_contrast"
+THEME_LIGHT_HIGH_CONTRAST = "light_high_contrast"
+
+
+def _palette(theme: str) -> dict:
+    """Return the color palette for the given theme.
+    theme is one of: dark, light, dark_high_contrast, light_high_contrast.
+    """
+    if theme == THEME_DARK_HIGH_CONTRAST:
+        return COLORS_DARK_HC
+    if theme == THEME_LIGHT_HIGH_CONTRAST:
+        return COLORS_LIGHT_HC
+    if theme == THEME_LIGHT:
+        return COLORS_LIGHT
+    return COLORS_DARK
+
 
 def get_mpl_theme(theme: str = "dark") -> dict:
     """Return matplotlib-friendly theme colors (facecolor, text, grid, line colors).
-    Use for Figure/axes to match app dark/light mode.
+    Use for Figure/axes to match app theme (dark, light, dark_high_contrast, light_high_contrast).
     """
-    if theme == "dark":
-        c = COLORS_DARK
+    c = _palette(theme)
+    is_dark = theme in (THEME_DARK, THEME_DARK_HIGH_CONTRAST)
+    is_high_contrast = theme in (THEME_DARK_HIGH_CONTRAST, THEME_LIGHT_HIGH_CONTRAST)
+    if is_dark:
         return {
             "figure_facecolor": c["surface"],
             "axes_facecolor": c["surface"],
@@ -71,16 +149,14 @@ def get_mpl_theme(theme: str = "dark") -> dict:
             "grid_color": c["border"],
             "legend_facecolor": c["surface_alt"],
             "legend_edgecolor": c["border"],
-            # Line colors that work on dark background
             "good_color": "#22c55e",
             "bad_color": "#f87171",
-            "neutral_color": "#60a5fa",
+            "neutral_color": "#6BB3FF" if is_high_contrast else "#60a5fa",
             "average_color": "#e2e8f0",
             "average_good_color": "#4ade80",
-            "roi_line_color": "#60a5fa",
+            "roi_line_color": "#6BB3FF" if is_high_contrast else "#60a5fa",
         }
     else:
-        c = COLORS_LIGHT
         return {
             "figure_facecolor": c["surface"],
             "axes_facecolor": c["surface"],
@@ -102,9 +178,9 @@ def get_stylesheet(theme: str = "dark") -> str:
     """Return the application stylesheet string.
     
     Args:
-        theme: "dark" or "light". Default is "dark".
+        theme: One of "dark", "light", "dark_high_contrast", "light_high_contrast".
     """
-    c = COLORS_DARK if theme == "dark" else COLORS_LIGHT
+    c = _palette(theme)
     return f"""
     /* === Global / Base === */
     QWidget {{
@@ -124,16 +200,39 @@ def get_stylesheet(theme: str = "dark") -> str:
         color: {c['text']};
     }}
 
+    /* Experiment Manager: same darker background as main app so buttons/experiments pop */
+    QDialog#experimentManagerDialog {{
+        background-color: {c['bg']};
+    }}
+
     /* === Labels === */
     QLabel {{
         color: {c['text']};
         font-size: {FONT_SIZE_BASE};
+        background-color: transparent;
     }}
 
     QLabel[class="title"] {{
         font-size: {FONT_SIZE_TITLE};
         font-weight: 600;
         color: {c['text']};
+        background-color: transparent;
+    }}
+
+    /* Dialog / app title (e.g. Experiment Manager) - bold, large, no highlight bar */
+    QLabel[class="dialog-title"] {{
+        font-size: {FONT_SIZE_DIALOG_TITLE};
+        font-weight: 700;
+        color: {c['text']};
+        background-color: transparent;
+    }}
+
+    /* Section heading (e.g. Recent Experiments) - bold, centered */
+    QLabel[class="section-heading"] {{
+        font-size: {FONT_SIZE_SECTION_HEADING};
+        font-weight: 700;
+        color: {c['text']};
+        background-color: transparent;
     }}
 
     /* === Buttons === */
@@ -186,6 +285,32 @@ def get_stylesheet(theme: str = "dark") -> str:
         background-color: {c['disabled']};
         border-color: {c['disabled']};
         color: {c['text_disabled']};
+    }}
+
+    /* Buttons that match selected tab (surface bg, primary text) - e.g. Experiment Manager */
+    QPushButton[class="tab-action"] {{
+        background-color: {c['surface']};
+        color: {c['primary']};
+        border: 1px solid {c['border']};
+        font-weight: 600;
+    }}
+
+    QPushButton[class="tab-action"]:hover {{
+        background-color: {c['hover']};
+        border-color: {c['primary']};
+        color: {c['primary']};
+    }}
+
+    QPushButton[class="tab-action"]:pressed {{
+        background-color: {c['border']};
+        border-color: {c['primary']};
+        color: {c['primary']};
+    }}
+
+    QPushButton[class="tab-action"]:disabled {{
+        background-color: {c['surface_alt']};
+        color: {c['text_disabled']};
+        border-color: {c['border']};
     }}
 
     /* === Line Edits & Text === */
@@ -309,6 +434,35 @@ def get_stylesheet(theme: str = "dark") -> str:
         border-color: {c['disabled']};
     }}
 
+    /* === Radio Button (same blue box as checkbox for theme selection) === */
+    QRadioButton {{
+        color: {c['text']};
+        font-size: {FONT_SIZE_BASE};
+        spacing: 8px;
+    }}
+
+    QRadioButton::indicator {{
+        width: 18px;
+        height: 18px;
+        border: 2px solid {c['border']};
+        border-radius: {RADIUS_SMALL};
+        background-color: {c['surface']};
+    }}
+
+    QRadioButton::indicator:hover {{
+        border-color: {c['primary']};
+    }}
+
+    QRadioButton::indicator:checked {{
+        background-color: {c['primary']};
+        border-color: {c['primary']};
+    }}
+
+    QRadioButton::indicator:disabled {{
+        background-color: {c['surface_alt']};
+        border-color: {c['disabled']};
+    }}
+
     /* === Sliders === */
     QSlider::groove:horizontal {{
         height: 6px;
@@ -406,20 +560,38 @@ def get_stylesheet(theme: str = "dark") -> str:
     QListWidget::item {{
         padding: 10px 12px;
         border-radius: {RADIUS_SMALL};
+        background-color: {c['surface']};
+        border: 1px solid {c['border']};
+        margin: 3px 4px;
+        min-height: 20px;
     }}
 
     QListWidget::item:hover {{
         background-color: {c['hover']};
+        border-color: {c['primary']};
     }}
 
     QListWidget::item:selected {{
         background-color: {c['primary']};
         color: white;
+        border-color: {c['primary']};
     }}
 
     QListWidget::item:selected:!active {{
         background-color: {c['surface_alt']};
         color: {c['text']};
+        border-color: {c['border']};
+    }}
+
+    /* Horizontal divider between Load button and Recent Experiments (Experiment Manager) */
+    QFrame#experimentManagerDivider {{
+        background-color: {c['border']};
+        border: none;
+    }}
+
+    /* Recent experiment row widget - transparent so item border/card shows */
+    QWidget#recentExperimentRow {{
+        background-color: transparent;
     }}
 
     /* === Splitter === */

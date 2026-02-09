@@ -8,7 +8,6 @@ from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
     QGroupBox,
-    QHBoxLayout,
     QLabel,
     QRadioButton,
     QVBoxLayout,
@@ -17,6 +16,15 @@ from PySide6.QtWidgets import (
 
 from ui.app_settings import get_theme, set_theme
 from ui.styles import get_stylesheet
+
+
+# Theme values shown in Preferences (single selection, same blue-box style)
+THEME_VALUES = (
+    ("dark", "Dark mode"),
+    ("light", "Light mode"),
+    ("dark_high_contrast", "Dark high contrast"),
+    ("light_high_contrast", "Light high contrast"),
+)
 
 
 class SettingsDialog(QDialog):
@@ -30,22 +38,21 @@ class SettingsDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
-        # Theme group
+        # Theme group: four options with same selection style (blue box)
         theme_group = QGroupBox("Appearance")
         theme_layout = QVBoxLayout()
-        self.dark_radio = QRadioButton("Dark mode")
-        self.light_radio = QRadioButton("Light mode")
-        theme_layout.addWidget(self.dark_radio)
-        theme_layout.addWidget(self.light_radio)
+        self.theme_radios = {}
+        for value, label in THEME_VALUES:
+            radio = QRadioButton(label)
+            radio.setToolTip("Increase contrast for text, borders, and backgrounds." if "high contrast" in label else None)
+            self.theme_radios[value] = radio
+            theme_layout.addWidget(radio)
         theme_group.setLayout(theme_layout)
         layout.addWidget(theme_group)
 
         # Set current selection
         current = get_theme()
-        if current == "light":
-            self.light_radio.setChecked(True)
-        else:
-            self.dark_radio.setChecked(True)
+        self.theme_radios.get(current, self.theme_radios["dark"]).setChecked(True)
 
         # Info label
         info = QLabel("Theme changes apply immediately.")
@@ -62,7 +69,11 @@ class SettingsDialog(QDialog):
 
     def _apply_and_accept(self) -> None:
         """Save theme and reapply stylesheet."""
-        theme = "light" if self.light_radio.isChecked() else "dark"
+        theme = "dark"
+        for value, radio in self.theme_radios.items():
+            if radio.isChecked():
+                theme = value
+                break
         set_theme(theme)
 
         from PySide6.QtWidgets import QApplication
