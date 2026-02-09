@@ -1031,30 +1031,28 @@ class MainWindow(QMainWindow):
                     "Select Output Directory for Aligned Stack",
                     ""
                 )
-                if not output_dir:
-                    return
-                
-                # Save aligned images
-                self._save_aligned_stack(
-                    aligned_stack,
-                    transformation_matrices,
-                    confidence_scores,
-                    output_dir,
-                    params
-                )
-                
-                # Ask if user wants to load aligned images
-                load_reply = QMessageBox.question(
-                    self,
-                    "Load Aligned Images?",
-                    "Would you like to load the aligned images into the viewer?",
-                    QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.Yes
-                )
-                # when aligned images are loaded, dont edit
-                if load_reply == QMessageBox.Yes:
-                    self._loading_aligned_stack = True
-                    self.viewer.set_stack(output_dir)
+                if output_dir:
+                    # Save aligned images
+                    self._save_aligned_stack(
+                        aligned_stack,
+                        transformation_matrices,
+                        confidence_scores,
+                        output_dir,
+                        params
+                    )
+                    
+                    # Ask if user wants to load aligned images
+                    load_reply = QMessageBox.question(
+                        self,
+                        "Load Aligned Images?",
+                        "Would you like to load the aligned images into the viewer?",
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.Yes
+                    )
+                    # when aligned images are loaded, dont edit
+                    if load_reply == QMessageBox.Yes:
+                        self._loading_aligned_stack = True
+                        self.viewer.set_stack(output_dir)
             
             self._set_workflow_step("roi")
             
