@@ -84,6 +84,9 @@ jobs:
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: [lint, test, build]
+    concurrency:
+      group: release-prep-${{ github.ref }}
+      cancel-in-progress: false
     permissions:
       contents: write
     steps:
