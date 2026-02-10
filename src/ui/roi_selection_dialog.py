@@ -6,7 +6,6 @@ from typing import List, Optional
 import numpy as np
 from PySide6.QtCore import Qt, QPointF, QRectF
 from PySide6.QtGui import (
-    QImage,
     QPixmap,
     QPainter,
     QPen,
@@ -32,6 +31,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.roi import ROI, ROIShape, ROIHandle, HandleResult
+from utils.image_utils import numpy_to_qimage
 
 
 # ---------------------------------------------------------------------------
@@ -252,26 +252,8 @@ class ROISelectionDialog(QDialog):
     # Image loading
     # ------------------------------------------------------------------
 
-    def _numpy_to_qimage(self, arr: np.ndarray) -> QImage:
-        if arr.ndim == 2:
-            h, w = arr.shape
-            fmt = (
-                QImage.Format_Grayscale8
-                if arr.dtype != np.uint16
-                else QImage.Format_Grayscale16
-            )
-            bytes_per_line = arr.strides[0]
-            return QImage(arr.data, w, h, bytes_per_line, fmt)
-        if arr.ndim == 3:
-            h, w, c = arr.shape
-            if c == 3:
-                return QImage(arr.data, w, h, 3 * w, QImage.Format_RGB888)
-            if c == 4:
-                return QImage(arr.data, w, h, 4 * w, QImage.Format_RGBA8888)
-        raise ValueError("Unsupported image shape")
-
     def _load_image(self) -> None:
-        qimg = self._numpy_to_qimage(self._image)
+        qimg = numpy_to_qimage(self._image)
         pix = QPixmap.fromImage(qimg)
         self._pixmap_item = QGraphicsPixmapItem(pix)
         self._scene.addItem(self._pixmap_item)
@@ -525,6 +507,11 @@ class ROISelectionDialog(QDialog):
         if event.button() != Qt.LeftButton:
             return
         if self._selection_mode and len(self._polygon_points) >= 3:
+            # The preceding mousePressEvent already appended a point for this
+            # same click; remove it so the double-click does not create a
+            # duplicate vertex.  (_complete_polygon has its own close-to-first
+            # dedup which stays unchanged.)
+            self._polygon_points.pop()
             self._complete_polygon()
 
     def _handle_key_press(self, event: QKeyEvent) -> None:

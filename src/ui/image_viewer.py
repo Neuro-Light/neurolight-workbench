@@ -6,7 +6,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 from PySide6.QtCore import Qt, Signal, QPointF
-from PySide6.QtGui import QImage, QPixmap, QPainter, QPen, QPolygonF
+from PySide6.QtGui import QPixmap, QPainter, QPen, QPolygonF
 from PySide6.QtWidgets import (
     QLabel,
     QSlider,
@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from utils.file_handler import ImageStackHandler
+from utils.image_utils import numpy_to_qimage
 from core.roi import ROI, ROIShape
 
 
@@ -239,24 +240,6 @@ class ImageViewer(QWidget):
                     "Only TIF and GIF files are supported."
                 )
 
-    def _numpy_to_qimage(self, arr: np.ndarray) -> QImage:
-        if arr.ndim == 2:
-            h, w = arr.shape
-            fmt = (
-                QImage.Format_Grayscale8
-                if arr.dtype != np.uint16
-                else QImage.Format_Grayscale16
-            )
-            bytes_per_line = arr.strides[0]
-            return QImage(arr.data, w, h, bytes_per_line, fmt)
-        if arr.ndim == 3:
-            h, w, c = arr.shape
-            if c == 3:
-                return QImage(arr.data, w, h, 3 * w, QImage.Format_RGB888)
-            if c == 4:
-                return QImage(arr.data, w, h, 4 * w, QImage.Format_RGBA8888)
-        raise ValueError("Unsupported image shape")
-
     # Function to update the silder value so the user can see what value they have
     def _update_adjustment_labels(self) -> None:
         # For exposure
@@ -348,7 +331,7 @@ class ImageViewer(QWidget):
             self.cache.set(self.index, img)
         #show the 8 bit image on the workbench
         preview_img = self._ensure_uint8(img)
-        qimg = self._numpy_to_qimage(preview_img)
+        qimg = numpy_to_qimage(preview_img)
         pix = QPixmap.fromImage(qimg)
         scaled_pix = pix.scaled(
             self.image_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
