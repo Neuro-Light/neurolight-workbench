@@ -22,12 +22,20 @@ def numpy_to_qimage(arr: np.ndarray) -> QImage:
     """
     if arr.ndim == 2:
         h, w = arr.shape
-        fmt = (
-            QImage.Format_Grayscale8
-            if arr.dtype != np.uint16
-            else QImage.Format_Grayscale16
-        )
-        bytes_per_line = arr.strides[0]
+        if arr.dtype == np.uint8:
+            fmt = QImage.Format_Grayscale8
+        elif arr.dtype == np.uint16:
+            fmt = QImage.Format_Grayscale16
+        else:
+            # Normalize non-uint8/uint16 data (e.g. float32, int16) to uint8
+            arr_f = arr.astype(np.float64)
+            lo, hi = float(arr_f.min()), float(arr_f.max())
+            if hi - lo > 0:
+                arr = ((arr_f - lo) / (hi - lo) * 255.0).astype(np.uint8)
+            else:
+                arr = np.clip(arr_f, 0, 255).astype(np.uint8)
+            fmt = QImage.Format_Grayscale8
+        bytes_per_line = w * arr.itemsize
         return QImage(arr.data, w, h, bytes_per_line, fmt)
 
     if arr.ndim == 3:

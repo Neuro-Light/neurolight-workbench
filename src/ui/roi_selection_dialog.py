@@ -508,10 +508,16 @@ class ROISelectionDialog(QDialog):
             return
         if self._selection_mode and len(self._polygon_points) >= 3:
             # The preceding mousePressEvent already appended a point for this
-            # same click; remove it so the double-click does not create a
-            # duplicate vertex.  (_complete_polygon has its own close-to-first
-            # dedup which stays unchanged.)
-            self._polygon_points.pop()
+            # same click.  Only remove it when it is truly a duplicate of the
+            # previous vertex (same coordinates); this avoids breaking the
+            # triangle case where the double-click *is* the third distinct
+            # point.  (_complete_polygon has its own close-to-first dedup
+            # which stays unchanged.)
+            if len(self._polygon_points) >= 2:
+                last = self._polygon_points[-1]
+                prev = self._polygon_points[-2]
+                if last.x() == prev.x() and last.y() == prev.y():
+                    self._polygon_points.pop()
             self._complete_polygon()
 
     def _handle_key_press(self, event: QKeyEvent) -> None:
