@@ -52,6 +52,10 @@ def main_window(app, sample_experiment):
     mock_viewer.set_roi = Mock()
     mock_viewer.reset = Mock()
     mock_viewer.image_processor = Mock()
+    # Methods called by _close_experiment / _exit_experiment
+    mock_viewer.get_current_roi = Mock(return_value=None)
+    mock_viewer.get_exposure = Mock(return_value=0)
+    mock_viewer.get_contrast = Mock(return_value=0)
     # Signal mocks - allow connection
     mock_viewer.stackLoaded = Mock()
     mock_viewer.stackLoaded.connect = Mock()
@@ -73,7 +77,9 @@ def main_window(app, sample_experiment):
 
     mock_data_analyzer = Mock()
 
-    # Patch the heavy UI components to return mocks
+    # Patch the heavy UI components to return mocks.
+    # Use yield (not return) so the with-block stays alive during the test,
+    # keeping patches active and preventing Qt C++ objects from being deleted.
     with (
         patch("ui.main_window.ImageViewer", return_value=mock_viewer),
         patch("ui.main_window.AnalysisPanel", return_value=mock_analysis),
@@ -82,7 +88,7 @@ def main_window(app, sample_experiment):
         patch("ui.main_window.QTimer.singleShot"),  # Avoid timer side effects
     ):
         window = MainWindow(sample_experiment)
-        return window
+        yield window
 
 
 class TestCloseExperiment:
