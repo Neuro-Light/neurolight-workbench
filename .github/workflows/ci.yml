@@ -17,7 +17,7 @@ jobs:
           version: "latest"
 
       - name: Set up Python
-        run: uv python install 3.9
+        run: uv python install 3.10
 
       - name: Install dependencies
         run: uv sync --all-extras
@@ -39,7 +39,7 @@ jobs:
           version: "latest"
 
       - name: Set up Python
-        run: uv python install 3.9
+        run: uv python install 3.10
 
       - name: Install dependencies
         run: uv sync --all-extras
@@ -58,10 +58,59 @@ jobs:
           version: "latest"
 
       - name: Set up Python
-        run: uv python install 3.9
+        run: uv python install 3.10
 
       - name: Install dependencies
         run: uv sync
 
       - name: Build package
         run: uv build
+
+      - name: Upload dist artifacts
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  release-prep:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [lint, test, build]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch tags
+        run: git fetch origin 'refs/tags/v*:refs/tags/v*' || true
+
+      - name: Compute next version and create tag
+        id: tag
+        run: |
+          LATEST=$(git tag -l 'v*' --sort=-v:refname | head -1)
+          if [ -z "$LATEST" ]; then
+            NEXT="v1.0.0"
+          else
+            # Parse vX.Y.Z and bump patch
+            MAJOR=$(echo "$LATEST" | sed -n 's/^v\([0-9]*\)\.[0-9]*\.[0-9]*$/\1/p')
+            MINOR=$(echo "$LATEST" | sed -n 's/^v[0-9]*\.\([0-9]*\)\.[0-9]*$/\1/p')
+            PATCH=$(echo "$LATEST" | sed -n 's/^v[0-9]*\.[0-9]*\.\([0-9]*\)$/\1/p')
+            PATCH=$((PATCH + 1))
+            NEXT="v${MAJOR}.${MINOR}.${PATCH}"
+          fi
+          # Skip if current commit already has this tag (e.g. re-run)
+          if git rev-parse "$NEXT" >/dev/null 2>&1; then
+            echo "Tag $NEXT already exists, skipping"
+            echo "tag=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$NEXT"
+          git push origin "$NEXT"
+          echo "tag=$NEXT" >> $GITHUB_OUTPUT
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
