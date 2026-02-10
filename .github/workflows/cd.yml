@@ -111,13 +111,30 @@ jobs:
         with:
           path: release-package
 
-      - name: Flatten python-dist into release folder
+      - name: Validate artifacts exist
+        run: |
+          missing=0
+          for dir in python-dist exe-windows exe-macos exe-linux; do
+            path="release-package/$dir"
+            if [ ! -d "$path" ] || [ -z "$(ls -A "$path")" ]; then
+              echo "::error::Missing or empty artifact directory: $path"
+              missing=1
+            else
+              echo "OK: $path contains $(ls "$path" | wc -l) file(s)"
+            fi
+          done
+          if [ "$missing" -eq 1 ]; then
+            echo "::error::One or more required artifacts are missing. Aborting release."
+            exit 1
+          fi
+
+      - name: Flatten artifacts into release folder
         run: |
           mkdir -p release-package/upload
-          cp release-package/python-dist/* release-package/upload/ || true
-          cp release-package/exe-windows/* release-package/upload/ || true
-          cp release-package/exe-macos/* release-package/upload/ || true
-          cp release-package/exe-linux/* release-package/upload/ || true
+          cp release-package/python-dist/* release-package/upload/
+          cp release-package/exe-windows/* release-package/upload/
+          cp release-package/exe-macos/* release-package/upload/
+          cp release-package/exe-linux/* release-package/upload/
 
       - name: Create GitHub Release and upload assets
         uses: softprops/action-gh-release@v2
