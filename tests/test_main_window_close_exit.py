@@ -9,7 +9,7 @@ Tests verify that:
 
 import pytest
 from unittest.mock import Mock, patch
-from PySide6.QtWidgets import QApplication, QMessageBox, QDialog
+from PySide6.QtWidgets import QApplication, QMessageBox, QDialog, QWidget
 
 from core.experiment_manager import Experiment
 from ui.main_window import MainWindow
@@ -36,8 +36,9 @@ def sample_experiment():
 @pytest.fixture
 def main_window(app, sample_experiment):
     """Create a MainWindow instance for testing."""
-    # Create mock objects for heavy UI components
-    mock_viewer = Mock()
+    # Use real QWidget subclasses so QSplitter.addWidget() accepts them,
+    # but attach mock attributes/methods the tests and MainWindow.__init__ need.
+    mock_viewer = QWidget()
     mock_viewer.index = 0
     mock_viewer.cache = Mock()
     mock_viewer.current_roi = None
@@ -49,16 +50,22 @@ def main_window(app, sample_experiment):
     mock_viewer.slider = Mock()
     mock_viewer.set_stack = Mock()
     mock_viewer.set_roi = Mock()
+    mock_viewer.reset = Mock()
+    mock_viewer.image_processor = Mock()
     # Signal mocks - allow connection
     mock_viewer.stackLoaded = Mock()
     mock_viewer.stackLoaded.connect = Mock()
     mock_viewer.roiSelected = Mock()
     mock_viewer.roiSelected.connect = Mock()
+    mock_viewer.displaySettingsChanged = Mock()
+    mock_viewer.displaySettingsChanged.connect = Mock()
 
-    mock_analysis = Mock()
+    mock_analysis = QWidget()
     mock_roi_plot_widget = Mock()
     mock_analysis.roi_plot_widget = mock_roi_plot_widget
     mock_analysis.get_roi_plot_widget = Mock(return_value=mock_roi_plot_widget)
+    mock_analysis.get_neuron_detection_widget = Mock(return_value=Mock())
+    mock_analysis.get_neuron_trajectory_plot_widget = Mock(return_value=Mock())
 
     mock_stack_handler = Mock()
     mock_stack_handler.files = []
