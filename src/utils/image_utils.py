@@ -35,7 +35,7 @@ def numpy_to_qimage(arr: np.ndarray) -> QImage:
             else:
                 arr = np.clip(arr_f, 0, 255).astype(np.uint8)
             fmt = QImage.Format_Grayscale8
-        bytes_per_line = w * arr.itemsize
+        bytes_per_line = arr.strides[0]
         return QImage(arr.data, w, h, bytes_per_line, fmt)
 
     if arr.ndim == 3:
