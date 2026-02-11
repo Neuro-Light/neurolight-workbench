@@ -313,6 +313,32 @@ def get_stylesheet(theme: str = "dark") -> str:
         border-color: {c['border']};
     }}
 
+    /* Same look for QToolButton used as row options (e.g. ...) */
+    QToolButton[class="tab-action"] {{
+        background-color: {c['surface']};
+        color: {c['primary']};
+        border: 1px solid {c['border']};
+        font-weight: 600;
+    }}
+
+    QToolButton[class="tab-action"]:hover {{
+        background-color: {c['hover']};
+        border-color: {c['primary']};
+        color: {c['primary']};
+    }}
+
+    QToolButton[class="tab-action"]:pressed {{
+        background-color: {c['border']};
+        border-color: {c['primary']};
+        color: {c['primary']};
+    }}
+
+    QToolButton[class="tab-action"]:disabled {{
+        background-color: {c['surface_alt']};
+        color: {c['text_disabled']};
+        border-color: {c['border']};
+    }}
+
     /* === Line Edits & Text === */
     QLineEdit, QPlainTextEdit {{
         background-color: {c['surface']};

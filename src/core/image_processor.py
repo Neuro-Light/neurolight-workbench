@@ -546,13 +546,13 @@ class ImageProcessor:
         # Step 2: Neuron Detection (Local Maxima)
         # ============================================================
         # Footprint: find maxima over a neuron-sized region (reduces spurious
-        # single-pixel peaks, improves detection of dimmer neurons)
+        # single-pixel peaks). In scikit-image 0.21+, footprint and min_distance
+        # are mutually exclusive; we use footprint only.
         footprint_radius = max(1, cell_size // 2)
         footprint = disk(footprint_radius)
         
         peaks = peak_local_max(
             projection,
-            min_distance=cell_size,
             num_peaks=num_peaks,
             threshold_rel=threshold_rel,
             footprint=footprint,

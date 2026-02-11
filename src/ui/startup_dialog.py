@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QToolButton,
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
@@ -34,12 +35,12 @@ from ui.settings_dialog import SettingsDialog
 EXPERIMENTS_DIR = Path(__file__).resolve().parents[2] / "experiments"
 EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
 
-# Horizontal ellipsis for options button
-OPTIONS_CHAR = "\u2026"
+# Options button label for recent-experiment rows (text only, no icon)
+OPTIONS_LABEL = "..."
 
 
 class RecentExperimentRow(QWidget):
-    """Single row in the recent experiments list: centered name + options button (⋮)."""
+    """Single row in the recent experiments list: centered name + options button (...)."""
 
     def __init__(
         self,
@@ -65,8 +66,11 @@ class RecentExperimentRow(QWidget):
         layout.addWidget(self.name_label, 1)
         layout.addStretch()
 
-        self.options_btn = QPushButton(OPTIONS_CHAR)
-        self.options_btn.setFixedSize(18, 18)
+        # QToolButton with text only so the platform doesn't substitute an icon (e.g. upside-down U)
+        self.options_btn = QToolButton()
+        self.options_btn.setText(OPTIONS_LABEL)
+        self.options_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        self.options_btn.setFixedSize(36, 22)
         self.options_btn.setToolTip("Options")
         self.options_btn.setProperty("class", "tab-action")
         layout.addWidget(self.options_btn)
@@ -184,23 +188,12 @@ class StartupDialog(QDialog):
         self.recent_list.customContextMenuRequested.connect(self._show_context_menu)
         self._refresh_recent()
 
-        # Buttons for selected experiment actions
+        # Bottom bar: Preferences on the right (Delete/Export are on each row's ... menu)
         buttons_layout = QHBoxLayout()
-        self.delete_btn = QPushButton("Delete Selected")
-        self.delete_btn.clicked.connect(self._delete_selected)
-        self.delete_btn.setEnabled(False)
-        self.export_btn = QPushButton("Export Selected")
-        self.export_btn.clicked.connect(self._export_selected)
-        self.export_btn.setEnabled(False)
+        buttons_layout.addStretch()
         self.settings_btn = QPushButton("Preferences...")
         self.settings_btn.clicked.connect(self._open_settings)
-        buttons_layout.addWidget(self.delete_btn)
-        buttons_layout.addWidget(self.export_btn)
-        buttons_layout.addStretch()
         buttons_layout.addWidget(self.settings_btn)
-        
-        # Connect selection changed to enable/disable buttons
-        self.recent_list.itemSelectionChanged.connect(self._on_selection_changed)
 
         layout = QVBoxLayout()
         layout.addWidget(title)
@@ -346,12 +339,6 @@ class StartupDialog(QDialog):
             )
             self._refresh_recent()
 
-    def _on_selection_changed(self) -> None:
-        """Enable/disable delete and export buttons based on selection."""
-        has_selection = len(self.recent_list.selectedItems()) > 0
-        self.delete_btn.setEnabled(has_selection)
-        self.export_btn.setEnabled(has_selection)
-
     def _open_settings(self) -> None:
         """Open the Preferences dialog."""
         dlg = SettingsDialog(self)
@@ -379,25 +366,6 @@ class StartupDialog(QDialog):
             self._delete_experiment(item, delete_file=True)
         elif action == export_action:
             self._export_experiment(item)
-
-    def _delete_selected(self) -> None:
-        """Delete the selected experiment from the list."""
-        selected_items = self.recent_list.selectedItems()
-        if not selected_items:
-            return
-        
-        item = selected_items[0]
-        reply = QMessageBox.question(
-            self,
-            "Delete Experiment",
-            f"Remove '{item.text()}' from recent experiments list?\n\n"
-            "This will not delete the experiment file from disk.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-        
-        if reply == QMessageBox.Yes:
-            self._delete_experiment(item, delete_file=False)
 
     def _delete_experiment(self, item: QListWidgetItem, delete_file: bool = False) -> None:
         """Delete an experiment from the list and optionally from disk."""
@@ -444,15 +412,6 @@ class StartupDialog(QDialog):
                 "Error",
                 f"An error occurred while deleting:\n{str(e)}"
             )
-
-    def _export_selected(self) -> None:
-        """Export the selected experiment."""
-        selected_items = self.recent_list.selectedItems()
-        if not selected_items:
-            return
-        
-        item = selected_items[0]
-        self._export_experiment(item)
 
     def _export_experiment(self, item: QListWidgetItem) -> None:
         """Export an experiment to a .nexp file."""

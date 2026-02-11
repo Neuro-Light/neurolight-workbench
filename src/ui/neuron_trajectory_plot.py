@@ -287,8 +287,8 @@ class NeuronTrajectoryPlotWidget(QWidget):
         ax.set_xlabel("Frame Number", fontsize=12)
         ax.set_ylabel("Intensity", fontsize=12)
         ax.set_title("Neuron Intensity Trajectories Over Time", fontsize=14)
-        self._apply_theme(ax)
         ax.legend(loc="best")
+        self._apply_theme(ax)
         
         if getattr(self, "_hover_cid", None) is not None:
             self.canvas.mpl_disconnect(self._hover_cid)

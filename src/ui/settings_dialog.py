@@ -77,6 +77,8 @@ class SettingsDialog(QDialog):
         set_theme(theme)
 
         from PySide6.QtWidgets import QApplication
-        QApplication.instance().setStyleSheet(get_stylesheet(theme))
+        app = QApplication.instance()
+        if app is not None:
+            app.setStyleSheet(get_stylesheet(theme))
 
         self.accept()

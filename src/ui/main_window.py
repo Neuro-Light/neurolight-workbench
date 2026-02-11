@@ -18,6 +18,10 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QApplication,
     QDialog,
+    QDialogButtonBox,
+    QFormLayout,
+    QLineEdit,
+    QPlainTextEdit,
 )
 from PySide6.QtGui import QAction, QCloseEvent
 
@@ -60,6 +64,47 @@ if not logger.handlers:
     logger.addHandler(file_handler)
     logger.setLevel(logging.ERROR)
     logger.propagate = False  # Prevent duplicate logs
+
+
+class _ExperimentSettingsDialog(QDialog):
+    """Dialog to edit experiment name, principal investigator, and description."""
+
+    def __init__(self, experiment: Experiment, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Experiment Settings")
+        self.setModal(True)
+        self.setMinimumWidth(400)
+        layout = QVBoxLayout(self)
+        form = QFormLayout()
+        self.name_edit = QLineEdit()
+        self.name_edit.setText(experiment.name)
+        self.name_edit.setPlaceholderText("Experiment name")
+        form.addRow("Name", self.name_edit)
+        self.pi_edit = QLineEdit()
+        self.pi_edit.setText(experiment.principal_investigator)
+        self.pi_edit.setPlaceholderText("Principal investigator")
+        form.addRow("Principal Investigator", self.pi_edit)
+        self.desc_edit = QPlainTextEdit()
+        self.desc_edit.setPlainText(experiment.description)
+        self.desc_edit.setPlaceholderText("Description")
+        self.desc_edit.setMaximumHeight(120)
+        form.addRow("Description", self.desc_edit)
+        layout.addLayout(form)
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self._accept_dialog)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _accept_dialog(self) -> None:
+        name = self.name_edit.text().strip()
+        if not name:
+            QMessageBox.warning(self, "Experiment Settings", "Name is required.")
+            self.name_edit.setFocus()
+            return
+        self.name = name
+        self.principal_investigator = self.pi_edit.text().strip()
+        self.description = self.desc_edit.toPlainText().strip()
+        self.accept()
 
 
 class MainWindow(QMainWindow):
@@ -117,7 +162,9 @@ class MainWindow(QMainWindow):
         settings_action.setShortcut("Ctrl+,")
         settings_action.triggered.connect(self._open_settings)
         edit_menu.addAction(settings_action)
-        edit_menu.addAction("Experiment Settings")
+        experiment_settings_action = QAction("Experiment Settings...", self)
+        experiment_settings_action.triggered.connect(self._open_experiment_settings)
+        edit_menu.addAction(experiment_settings_action)
         tools_menu = menubar.addMenu("Tools")
         
         # Add crop action
@@ -145,6 +192,27 @@ class MainWindow(QMainWindow):
             # Theme was applied by SettingsDialog; redraw plots to match
             self.analysis.get_neuron_trajectory_plot_widget().refresh_theme()
             self.analysis.get_roi_plot_widget().refresh_theme()
+
+    def _open_experiment_settings(self) -> None:
+        """Open the Experiment Settings dialog to edit name, PI, and description."""
+        if self.experiment is None or not self.current_experiment_path:
+            QMessageBox.information(
+                self,
+                "Experiment Settings",
+                "No experiment is loaded. Open or create an experiment first.",
+            )
+            return
+        dlg = _ExperimentSettingsDialog(self.experiment, self)
+        if dlg.exec() == QDialog.Accepted:
+            self.experiment.name = dlg.name
+            self.experiment.description = dlg.description
+            self.experiment.principal_investigator = dlg.principal_investigator
+            self.experiment.update_modified_date()
+            try:
+                self.manager.save_experiment(self.experiment, self.current_experiment_path)
+                QMessageBox.information(self, "Saved", "Experiment settings saved.")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to save: {e}")
     
     def closeEvent(self, event: QCloseEvent) -> None:
         """
