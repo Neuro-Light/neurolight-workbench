@@ -388,7 +388,7 @@ class NeuronDetectionWidget(QWidget):
                     self.quality_mask,
                     self.neuron_locations
                 )
-            
+            self.detectionCompleted.emit()
         except Exception as e:
             QMessageBox.critical(
                 self,
@@ -398,13 +398,6 @@ class NeuronDetectionWidget(QWidget):
             self.status_label.setText(f"Detection failed: {str(e)}")
         finally:
             self.detect_btn.setEnabled(True)
-            # Tell listeners that detection has finished successfully
-            if (
-                self.neuron_locations is not None
-                and self.neuron_trajectories is not None
-                and self.quality_mask is not None
-            ):
-                self.detectionCompleted.emit()
 
     def _visualize_results(self) -> None:
         """Visualize detected neurons overlaid on the mean frame."""
