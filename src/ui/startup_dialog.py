@@ -3,17 +3,19 @@ from __future__ import annotations
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Callable
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QIcon
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
+    QFrame,
     QLabel,
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QToolButton,
     QFileDialog,
     QFormLayout,
     QHBoxLayout,
@@ -23,13 +25,65 @@ from PySide6.QtWidgets import (
     QWidget,
     QMessageBox,
     QMenu,
+    QSizePolicy,
 )
 
 from core.experiment_manager import ExperimentManager, Experiment
+from ui.settings_dialog import SettingsDialog
 
 
 EXPERIMENTS_DIR = Path(__file__).resolve().parents[2] / "experiments"
 EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
+
+# Options button label for recent-experiment rows (text only, no icon)
+OPTIONS_LABEL = "..."
+
+
+class RecentExperimentRow(QWidget):
+    """Single row in the recent experiments list: centered name + options button (...)."""
+
+    def __init__(
+        self,
+        name: str,
+        path: str,
+        on_open: Callable[[], None],
+        on_click: Optional[Callable[[], None]] = None,
+        parent: Optional[QWidget] = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setObjectName("recentExperimentRow")
+        self._on_open = on_open
+        self._on_click = on_click or (lambda: None)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 4, 4, 4)
+        layout.setSpacing(8)
+
+        layout.addStretch()
+        self.name_label = QLabel(name)
+        self.name_label.setAlignment(Qt.AlignCenter)
+        self.name_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        layout.addWidget(self.name_label, 1)
+        layout.addStretch()
+
+        # QToolButton with text only so the platform doesn't substitute an icon (e.g. upside-down U)
+        self.options_btn = QToolButton()
+        self.options_btn.setText(OPTIONS_LABEL)
+        self.options_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        self.options_btn.setFixedSize(36, 22)
+        self.options_btn.setToolTip("Options")
+        self.options_btn.setProperty("class", "tab-action")
+        layout.addWidget(self.options_btn)
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton and self.childAt(event.position().toPoint()) != self.options_btn:
+            self._on_click()
+        super().mousePressEvent(event)
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton:
+            self._on_open()
+        super().mouseDoubleClickEvent(event)
 
 
 class NewExperimentDialog(QDialog):
@@ -67,7 +121,9 @@ class NewExperimentDialog(QDialog):
         container.addLayout(path_container)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Cancel | QDialogButtonBox.Ok)
-        buttons.button(QDialogButtonBox.Ok).setText("Create")
+        create_btn = buttons.button(QDialogButtonBox.Ok)
+        create_btn.setText("Create")
+        create_btn.setProperty("class", "primary")
         buttons.rejected.connect(self.reject)
         buttons.accepted.connect(self._accept)
         container.addWidget(buttons)
@@ -106,6 +162,7 @@ class NewExperimentDialog(QDialog):
 class StartupDialog(QDialog):
     def __init__(self) -> None:
         super().__init__()
+        self.setObjectName("experimentManagerDialog")
         self.setWindowTitle("Neurolight - Experiment Manager")
         self.setModal(True)
         self.setMinimumWidth(520)
@@ -115,9 +172,12 @@ class StartupDialog(QDialog):
 
         title = QLabel("Neurolight - Experiment Manager")
         title.setAlignment(Qt.AlignCenter)
+        title.setProperty("class", "dialog-title")
 
         new_btn = QPushButton("Start New Experiment")
+        new_btn.setProperty("class", "tab-action")
         load_btn = QPushButton("Load Existing Experiment")
+        load_btn.setProperty("class", "tab-action")
 
         new_btn.clicked.connect(self._start_new)
         load_btn.clicked.connect(self._load_existing)
@@ -128,38 +188,108 @@ class StartupDialog(QDialog):
         self.recent_list.customContextMenuRequested.connect(self._show_context_menu)
         self._refresh_recent()
 
-        # Buttons for selected experiment actions
+        # Bottom bar: Preferences on the right (Delete/Export are on each row's ... menu)
         buttons_layout = QHBoxLayout()
-        self.delete_btn = QPushButton("Delete Selected")
-        self.delete_btn.clicked.connect(self._delete_selected)
-        self.delete_btn.setEnabled(False)
-        self.export_btn = QPushButton("Export Selected")
-        self.export_btn.clicked.connect(self._export_selected)
-        self.export_btn.setEnabled(False)
-        buttons_layout.addWidget(self.delete_btn)
-        buttons_layout.addWidget(self.export_btn)
-        
-        # Connect selection changed to enable/disable buttons
-        self.recent_list.itemSelectionChanged.connect(self._on_selection_changed)
+        buttons_layout.addStretch()
+        self.settings_btn = QPushButton("Preferences...")
+        self.settings_btn.clicked.connect(self._open_settings)
+        buttons_layout.addWidget(self.settings_btn)
 
         layout = QVBoxLayout()
         layout.addWidget(title)
         layout.addWidget(new_btn)
         layout.addWidget(load_btn)
-        layout.addWidget(QLabel("Recent Experiments"))
+
+        # Dividing line between main actions and Recent Experiments
+        divider = QFrame()
+        divider.setFrameShape(QFrame.HLine)
+        divider.setFixedHeight(2)
+        divider.setObjectName("experimentManagerDivider")
+        layout.addWidget(divider)
+
+        recent_heading = QLabel("Recent Experiments")
+        recent_heading.setAlignment(Qt.AlignCenter)
+        recent_heading.setProperty("class", "section-heading")
+        layout.addWidget(recent_heading)
         layout.addWidget(self.recent_list)
         layout.addLayout(buttons_layout)
         self.setLayout(layout)
 
     def _refresh_recent(self) -> None:
         self.recent_list.clear()
-        for item in self.manager.get_recent_experiments():
-            label = f"{item.get('name','')} — {item.get('path','')}"
-            list_item = QListWidgetItem(label)
-            list_item.setData(Qt.UserRole, item.get("path"))
+        for rec in self.manager.get_recent_experiments():
+            path = rec.get("path") or ""
+            name = rec.get("name") or Path(path).stem if path else ""
+            list_item = QListWidgetItem()
+            list_item.setData(Qt.UserRole, path)
+            list_item.setSizeHint(self._row_size_hint())
             self.recent_list.addItem(list_item)
-        # Clear selection after refresh to disable buttons
+
+            row = RecentExperimentRow(
+                name=name,
+                path=path,
+                on_open=lambda p=path: self._open_recent_by_path(p),
+                on_click=lambda p=path: self._select_item_by_path(p),
+                parent=self.recent_list,
+            )
+            row.options_btn.clicked.connect(
+                lambda checked=False, p=path, b=row.options_btn: self._show_options_for_path(p, b)
+            )
+            self.recent_list.setItemWidget(list_item, row)
         self.recent_list.clearSelection()
+
+    def _row_size_hint(self):
+        from PySide6.QtCore import QSize
+        return QSize(0, 52)
+
+    def _get_item_for_path(self, path: str):
+        for i in range(self.recent_list.count()):
+            item = self.recent_list.item(i)
+            if item and item.data(Qt.UserRole) == path:
+                return item
+        return None
+
+    def _select_item_by_path(self, path: str) -> None:
+        item = self._get_item_for_path(path)
+        if item is not None:
+            self.recent_list.setCurrentItem(item)
+
+    def _open_recent_by_path(self, path: str) -> None:
+        item = self._get_item_for_path(path)
+        if item is not None:
+            self._open_recent(item)
+
+    def _show_options_for_path(self, path: str, options_button: Optional[QPushButton]) -> None:
+        menu = QMenu(self)
+        menu.addAction("Delete", lambda: self._remove_from_list_for_path(path))
+        menu.addAction("Export", lambda: self._export_for_path(path))
+        menu.addAction("Show file location", lambda: self._show_file_location(path))
+
+        if options_button and options_button.isVisible():
+            menu.exec(options_button.mapToGlobal(options_button.rect().bottomLeft()))
+        else:
+            menu.exec(self.recent_list.mapToGlobal(self.recent_list.rect().center()))
+
+    def _remove_from_list_for_path(self, path: str) -> None:
+        item = self._get_item_for_path(path)
+        if item is not None:
+            self._delete_experiment(item, delete_file=False)
+
+    def _export_for_path(self, path: str) -> None:
+        item = self._get_item_for_path(path)
+        if item is not None:
+            self._export_experiment(item)
+
+    def _show_file_location(self, path: str) -> None:
+        if not path or not os.path.isfile(path):
+            QMessageBox.warning(
+                self,
+                "File location",
+                "The experiment file could not be found.",
+            )
+            return
+        parent_dir = str(Path(path).resolve().parent)
+        QDesktopServices.openUrl(QUrl.fromLocalFile(parent_dir))
 
     def _start_new(self) -> None:
         dlg = NewExperimentDialog(self)
@@ -209,11 +339,10 @@ class StartupDialog(QDialog):
             )
             self._refresh_recent()
 
-    def _on_selection_changed(self) -> None:
-        """Enable/disable delete and export buttons based on selection."""
-        has_selection = len(self.recent_list.selectedItems()) > 0
-        self.delete_btn.setEnabled(has_selection)
-        self.export_btn.setEnabled(has_selection)
+    def _open_settings(self) -> None:
+        """Open the Preferences dialog."""
+        dlg = SettingsDialog(self)
+        dlg.exec()
 
     def _show_context_menu(self, position) -> None:
         """Show context menu for right-click on experiment list."""
@@ -237,25 +366,6 @@ class StartupDialog(QDialog):
             self._delete_experiment(item, delete_file=True)
         elif action == export_action:
             self._export_experiment(item)
-
-    def _delete_selected(self) -> None:
-        """Delete the selected experiment from the list."""
-        selected_items = self.recent_list.selectedItems()
-        if not selected_items:
-            return
-        
-        item = selected_items[0]
-        reply = QMessageBox.question(
-            self,
-            "Delete Experiment",
-            f"Remove '{item.text()}' from recent experiments list?\n\n"
-            "This will not delete the experiment file from disk.",
-            QMessageBox.Yes | QMessageBox.No,
-            QMessageBox.No
-        )
-        
-        if reply == QMessageBox.Yes:
-            self._delete_experiment(item, delete_file=False)
 
     def _delete_experiment(self, item: QListWidgetItem, delete_file: bool = False) -> None:
         """Delete an experiment from the list and optionally from disk."""
@@ -302,15 +412,6 @@ class StartupDialog(QDialog):
                 "Error",
                 f"An error occurred while deleting:\n{str(e)}"
             )
-
-    def _export_selected(self) -> None:
-        """Export the selected experiment."""
-        selected_items = self.recent_list.selectedItems()
-        if not selected_items:
-            return
-        
-        item = selected_items[0]
-        self._export_experiment(item)
 
     def _export_experiment(self, item: QListWidgetItem) -> None:
         """Export an experiment to a .nexp file."""

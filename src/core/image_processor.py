@@ -446,10 +446,12 @@ class ImageProcessor:
         frame_data: np.ndarray,
         roi_mask: np.ndarray,
         cell_size: int = 6,
-        num_peaks: int = 400,
+        num_peaks: int = 800,
         correlation_threshold: float = 0.4,
-        threshold_rel: float = 0.1,
-        apply_detrending: bool = True
+        threshold_rel: float = 0.03,
+        apply_detrending: bool = True,
+        use_max_projection: bool = True,
+        preprocess_sigma: float = 1.0,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Detect neurons within a specified ROI using local maxima detection.
@@ -474,9 +476,16 @@ class ImageProcessor:
         correlation_threshold : float
             Threshold for filtering neurons by correlation (default: 0.4)
         threshold_rel : float
-            Relative threshold for peak detection (0.0-1.0, default: 0.1)
+            Relative threshold for peak detection (0.0-1.0, default: 0.03).
+            Lower values find dimmer neurons but may increase false positives.
         apply_detrending : bool
             Whether to apply Savitzky-Golay detrending (default: True)
+        use_max_projection : bool
+            If True, use max projection across frames for detection (better for
+            calcium imaging where neurons flash). If False, use mean projection.
+        preprocess_sigma : float
+            Gaussian blur sigma before peak detection (default: 1.0). Smooths
+            noise to make dimmer peaks easier to find. Use 0 to disable.
             
         Returns:
         --------
@@ -488,6 +497,8 @@ class ImageProcessor:
             Boolean array indicating good (True) vs bad (False) neurons
         """
         from skimage.feature import peak_local_max
+        from skimage.morphology import disk
+        from scipy.ndimage import gaussian_filter
         from scipy.signal import savgol_filter
         
         if frame_data.ndim != 3:
@@ -509,29 +520,45 @@ class ImageProcessor:
         for t in range(num_frames):
             roi_region_stack[t] = frame_data[t] * roi_mask.astype(frame_data.dtype)
         
-        # Rescale pixel values to 0.0-1.0 range
+        # Rescale pixel values to 0.0-1.0 range (per-frame min/max within ROI)
         frame_min = np.min(roi_region_stack)
         frame_max = np.max(roi_region_stack)
         if frame_max > frame_min:
             roi_region_stack = (roi_region_stack - frame_min) / (frame_max - frame_min)
         else:
-            # All pixels are the same value
             roi_region_stack = np.zeros_like(roi_region_stack)
         
-        # Calculate mean frame across all time points for the ROI region
-        mean_frame = np.mean(roi_region_stack, axis=0)
+        # Projection: max captures transient flashes (better for calcium imaging),
+        # mean averages activity. Max projection typically finds more neurons.
+        if use_max_projection:
+            projection = np.max(roi_region_stack, axis=0)
+        else:
+            projection = np.mean(roi_region_stack, axis=0)
+        
+        # Optional Gaussian blur to reduce noise and make dimmer peaks detectable
+        if preprocess_sigma > 0:
+            projection = gaussian_filter(
+                projection.astype(np.float64),
+                sigma=preprocess_sigma,
+                mode="constant",
+                cval=0.0,
+            ).astype(np.float32)
         
         # ============================================================
         # Step 2: Neuron Detection (Local Maxima)
         # ============================================================
-        # Use peak_local_max to find local maxima
-        # Note: peak_local_max returns (row, col) = (y, x) coordinates
+        # Footprint: find maxima over a neuron-sized region (reduces spurious
+        # single-pixel peaks). In scikit-image 0.21+, footprint and min_distance
+        # are mutually exclusive; we use footprint only.
+        footprint_radius = max(1, cell_size // 2)
+        footprint = disk(footprint_radius)
+        
         peaks = peak_local_max(
-            mean_frame,
-            min_distance=cell_size,
+            projection,
             num_peaks=num_peaks,
             threshold_rel=threshold_rel,
-            exclude_border=cell_size // 2  # Exclude border to avoid edge artifacts
+            footprint=footprint,
+            exclude_border=cell_size // 2,
         )
         
         if len(peaks) == 0:
