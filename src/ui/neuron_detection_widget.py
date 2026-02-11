@@ -21,11 +21,14 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QFormLayout,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 
 
 class NeuronDetectionWidget(QWidget):
     """Widget for detecting and visualizing neurons within a selected ROI."""
+
+    # Emitted when neuron detection finishes successfully
+    detectionCompleted = Signal()
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -395,6 +398,13 @@ class NeuronDetectionWidget(QWidget):
             self.status_label.setText(f"Detection failed: {str(e)}")
         finally:
             self.detect_btn.setEnabled(True)
+            # Tell listeners that detection has finished successfully
+            if (
+                self.neuron_locations is not None
+                and self.neuron_trajectories is not None
+                and self.quality_mask is not None
+            ):
+                self.detectionCompleted.emit()
 
     def _visualize_results(self) -> None:
         """Visualize detected neurons overlaid on the mean frame."""
