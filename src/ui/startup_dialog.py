@@ -26,6 +26,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QMenu,
     QSizePolicy,
+    QComboBox,
 )
 
 from core.experiment_manager import ExperimentManager, Experiment
@@ -98,6 +99,12 @@ class NewExperimentDialog(QDialog):
         self.desc_edit = QPlainTextEdit()
         self.date_edit = QLineEdit(datetime.utcnow().strftime("%Y-%m-%d"))
 
+        # Analysis type selection (future-proof for multiple analysis pipelines)
+        self.analysis_combo = QComboBox()
+        self.analysis_combo.addItem("SCN", "SCN")  # Current supported analysis
+        # Make sure the combo box is wide enough to show full labels
+        self.analysis_combo.setMinimumWidth(180)
+
         self.path_edit = QLineEdit(str(EXPERIMENTS_DIR))
         browse_btn = QPushButton("Browse…")
         browse_btn.clicked.connect(self._browse)
@@ -108,6 +115,7 @@ class NewExperimentDialog(QDialog):
 
         form = QFormLayout()
         form.addRow("Experiment Name*", self.name_edit)
+        form.addRow("Analysis Type", self.analysis_combo)
         form.addRow("Principal Investigator", self.pi_edit)
         form.addRow("Description", self.desc_edit)
         form.addRow("Date", self.date_edit)
@@ -155,6 +163,7 @@ class NewExperimentDialog(QDialog):
             "description": self.desc_edit.toPlainText().strip(),
             "principal_investigator": self.pi_edit.text().strip(),
             "created_date": datetime.utcnow(),
+            "analysis_type": self.analysis_combo.currentData(),
         }
         self.accept()
 

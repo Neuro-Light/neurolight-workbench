@@ -40,7 +40,7 @@ from ui.alignment_progress_dialog import AlignmentProgressDialog
 from ui.alignment_worker import AlignmentWorker
 from ui.loading_dialog import LoadingDialog
 from ui.settings_dialog import SettingsDialog
-from ui.workflow import WorkflowManager, WorkflowStep, WorkflowStepper
+from ui.workflow import STEP_DEFINITIONS, WorkflowManager, WorkflowStep, WorkflowStepper
 
 # Set up logger for main window
 logger = logging.getLogger(__name__)
@@ -135,6 +135,8 @@ class MainWindow(QMainWindow):
         # Guided workflow
         self.workflow_manager = WorkflowManager(self.experiment, self)
         self.workflow_stepper = WorkflowStepper(self.workflow_manager, self)
+        # Wire stepper actions
+        self.workflow_stepper.requestAlignImages.connect(self._align_images)
 
         self._init_menu()
         self._init_layout()
@@ -153,6 +155,7 @@ class MainWindow(QMainWindow):
 
         def refresh_controls() -> None:
             current = self.workflow_manager.current_step
+            current_index = STEP_DEFINITIONS[current].index
 
             # Step 1: Load Image Stack
             enable_load = current == WorkflowStep.LOAD_IMAGES
@@ -193,6 +196,19 @@ class MainWindow(QMainWindow):
                         detection_widget.detect_btn.setEnabled(enable_detect)
                 except Exception:
                     pass
+
+            # Hide the analysis panel until ROI has been selected and the
+            # "Select ROI" step has been completed (i.e. downstream of step 4).
+            if hasattr(self, "analysis"):
+                roi_index = STEP_DEFINITIONS[WorkflowStep.SELECT_ROI].index
+                # Show once either:
+                # - current step is beyond Select ROI, or
+                # - Select ROI is in completed steps (user finished step 4)
+                show_analysis = (
+                    current_index > roi_index
+                    or WorkflowStep.SELECT_ROI in self.workflow_manager.completed_steps
+                )
+                self.analysis.setVisible(show_analysis)
 
         # Connect workflow manager notifications
         self.workflow_manager.step_changed.connect(lambda _step: refresh_controls())

@@ -29,8 +29,17 @@ class Experiment:
     processing_history: List[Dict[str, Any]] = field(default_factory=list)
     analysis_results: Dict[str, Any] = field(default_factory=dict)
     settings: Dict[str, Any] = field(default_factory=lambda: {
-        "display": {"colormap": "gray", "brightness": 1.0, "exposure": 0, "contrast": 0},
-        "processing": {"auto_save": True},
+        "display": {
+            "colormap": "gray",
+            "brightness": 1.0,
+            "exposure": 0,
+            "contrast": 0,
+        },
+        # Default processing settings; analysis_type can be overridden at creation time
+        "processing": {
+            "auto_save": True,
+            "analysis_type": "SCN",
+        },
     })
     # Store ROI coordinates in image pixel space (not widget/display space)
     # Format: {"x": int, "y": int, "width": int, "height": int, "shape": str}
@@ -251,6 +260,12 @@ class ExperimentManager:
             created_date=metadata.get("created_date", datetime.utcnow()),
             modified_date=datetime.utcnow(),
         )
+        # Apply optional analysis type (e.g., "SCN") for future pipeline branching
+        analysis_type = metadata.get("analysis_type")
+        if analysis_type:
+            if "processing" not in experiment.settings:
+                experiment.settings["processing"] = {}
+            experiment.settings["processing"]["analysis_type"] = analysis_type
         return experiment
 
     def load_experiment(self, file_path: str) -> Experiment:

@@ -263,6 +263,10 @@ class WorkflowStepper(QFrame):
     navigate backwards to make adjustments.
     """
 
+    # Signals for step-specific actions that the main window can wire up
+    requestAlignImages = Signal()
+    requestSkipAlignment = Signal()
+
     def __init__(self, manager: WorkflowManager, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._manager = manager
@@ -300,7 +304,7 @@ class WorkflowStepper(QFrame):
 
         root_layout.addLayout(steps_row)
 
-        # Bottom row: description + Next button
+        # Bottom row: description + step actions
         bottom_row = QHBoxLayout()
         bottom_row.setContentsMargins(0, 0, 0, 0)
 
@@ -308,6 +312,17 @@ class WorkflowStepper(QFrame):
         self._description_label.setWordWrap(True)
         self._description_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         bottom_row.addWidget(self._description_label, stretch=1)
+
+        # Align Images button (shown only on ALIGN_IMAGES step)
+        self._align_button = QPushButton("Align Images")
+        self._align_button.setProperty("class", "primary")
+        self._align_button.clicked.connect(self.requestAlignImages.emit)
+        bottom_row.addWidget(self._align_button, stretch=0)
+
+        # Skip alignment button (for already-aligned stacks)
+        self._skip_align_button = QPushButton("Skip (already aligned)")
+        self._skip_align_button.clicked.connect(self._on_skip_alignment_clicked)
+        bottom_row.addWidget(self._skip_align_button, stretch=0)
 
         self._next_button = QPushButton("Next")
         self._next_button.setProperty("class", "primary")
@@ -347,6 +362,14 @@ class WorkflowStepper(QFrame):
     def _on_next_clicked(self) -> None:
         self._manager.complete_current_step()
 
+    def _on_skip_alignment_clicked(self) -> None:
+        """
+        Allow users to skip the alignment step explicitly when their stack
+        is already aligned.
+        """
+        if self._manager.current_step == WorkflowStep.ALIGN_IMAGES:
+            self._manager.complete_current_step()
+
     # ------------------------------------------------------------------
     # UI refresh helpers
     # ------------------------------------------------------------------
@@ -381,4 +404,9 @@ class WorkflowStepper(QFrame):
 
         # "Next" button is disabled only on the final step (no further progression)
         self._next_button.setEnabled(current != WorkflowStep.ANALYZE_GRAPHS)
+
+        # Show Align/Skip controls only on the alignment step
+        is_align_step = current == WorkflowStep.ALIGN_IMAGES
+        self._align_button.setVisible(is_align_step)
+        self._skip_align_button.setVisible(is_align_step)
 
