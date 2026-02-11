@@ -42,9 +42,6 @@ def main_window(app, sample_experiment):
     mock_viewer.index = 0
     mock_viewer.cache = Mock()
     mock_viewer.current_roi = None
-    mock_viewer.roi_selection_mode = False
-    mock_viewer.roi_start_point = None
-    mock_viewer.roi_end_point = None
     mock_viewer.image_label = Mock()
     mock_viewer.filename_label = Mock()
     mock_viewer.slider = Mock()
@@ -167,9 +164,6 @@ class TestCloseExperiment:
         main_window.viewer.filename_label = Mock()
         main_window.viewer.slider = Mock()
         main_window.viewer.current_roi = None
-        main_window.viewer.roi_selection_mode = False
-        main_window.viewer.roi_start_point = None
-        main_window.viewer.roi_end_point = None
 
         with (
             patch.object(QMessageBox, "question") as mock_question,
