@@ -9,6 +9,9 @@ __pycache__/
 env/
 venv/
 .venv/
+build/
+dist/
+.pyinstaller/
 
 # macOS
 .DS_Store

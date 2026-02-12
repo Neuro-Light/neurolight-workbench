@@ -1,8 +1,8 @@
 [project]
 name = "neurolight-prototype"
-version = "1.0.0"
+dynamic = ["version"]
 description = "A powerful PySide6 desktop application for processing and analyzing large TIF image stacks with scientific rigor"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "PySide6>=6.6.0",
     "opencv-python>=4.8.0",
@@ -18,14 +18,34 @@ dependencies = [
     "scikit-image>=0.21.0",
 ]
 
+[project.scripts]
+neurolight = "src.main:main"
+
 [project.optional-dependencies]
 test = ["pytest>=7.0.0", "pytest-cov>=4.0.0"]
 dev = ["ruff>=0.1.0", "mypy>=1.0.0"]
+build = ["pyinstaller>=6.0.0"]
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "versioningit"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "versioningit"
+default-version = "1.0.0+unknown"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+exclude = [".venv", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["F", "E", "I"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
 

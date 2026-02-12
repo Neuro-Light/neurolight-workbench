@@ -1,0 +1,175 @@
+name: CI
+
+on:
+  push:
+    # Run on every push so Ruff and tests enforce standards on all branches
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.10
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Ruff check
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.10
+
+      - name: Install dependencies
+        run: uv sync --all-extras
+
+      - name: Install Qt/EGL dependencies (Linux)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libxkbcommon0 libdbus-1-3 libxcb-cursor0
+
+      - name: Run tests
+        run: uv run pytest tests/ -v
+        env:
+          QT_QPA_PLATFORM: offscreen
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.10
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Build package
+        run: uv build
+
+      - name: Upload dist artifacts
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  release-prep:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [lint, test, build]
+    concurrency:
+      group: release-prep-${{ github.ref }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Use a PAT so the tag push triggers downstream workflows (cd.yml).
+          # GITHUB_TOKEN-created events do NOT trigger other workflows.
+          token: ${{ secrets.RELEASE_TOKEN }}
+
+      - name: Fetch tags
+        run: git fetch origin 'refs/tags/v*:refs/tags/v*' || true
+
+      - name: Detect bump type from commit message
+        id: bump
+        run: |
+          MSG=$(git log -1 --format='%B')
+          if echo "$MSG" | grep -qiE '\[major\]'; then
+            echo "type=major" >> $GITHUB_OUTPUT
+          elif echo "$MSG" | grep -qiE '\[minor\]'; then
+            echo "type=minor" >> $GITHUB_OUTPUT
+          else
+            echo "type=patch" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Compute next version and create tag
+        id: tag
+        run: |
+          set -euo pipefail
+
+          BUMP="${{ steps.bump.outputs.type }}"
+          LATEST=$(git tag -l 'v*' --sort=-v:refname | head -1)
+
+          if [ -z "$LATEST" ]; then
+            echo "No existing tags found; starting at v1.0.0"
+            NEXT="v1.0.0"
+          else
+            # Strict parse: tag must match vX.Y.Z where X, Y, Z are integers
+            if [[ "$LATEST" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+              MAJOR="${BASH_REMATCH[1]}"
+              MINOR="${BASH_REMATCH[2]}"
+              PATCH="${BASH_REMATCH[3]}"
+            else
+              echo "::error::Latest tag '$LATEST' does not match vX.Y.Z format."
+              echo "::error::Create a valid semver tag manually (e.g. v1.0.0) and re-run."
+              exit 1
+            fi
+
+            case "$BUMP" in
+              major)
+                MAJOR=$((MAJOR + 1))
+                MINOR=0
+                PATCH=0
+                ;;
+              minor)
+                MINOR=$((MINOR + 1))
+                PATCH=0
+                ;;
+              patch)
+                PATCH=$((PATCH + 1))
+                ;;
+              *)
+                echo "::error::Unknown bump type: $BUMP"
+                exit 1
+                ;;
+            esac
+
+            NEXT="v${MAJOR}.${MINOR}.${PATCH}"
+          fi
+
+          echo "Bump type: $BUMP"
+          echo "Latest tag: ${LATEST:-<none>}"
+          echo "Next tag: $NEXT"
+
+          # Skip if current commit already has this tag (e.g. re-run)
+          if git rev-parse "$NEXT" >/dev/null 2>&1; then
+            echo "Tag $NEXT already exists, skipping"
+            echo "tag=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$NEXT"
+          git push origin "$NEXT"
+          echo "tag=$NEXT" >> $GITHUB_OUTPUT

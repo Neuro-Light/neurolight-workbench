@@ -1,0 +1,184 @@
+name: CD
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  ci-check:
+    runs-on: ubuntu-latest
+    permissions:
+      checks: read
+      statuses: read
+    steps:
+      - name: Verify CI passed for tagged commit
+        run: |
+          set -euo pipefail
+          SHA="${{ github.sha }}"
+          echo "Checking CI status for commit $SHA ..."
+
+          # Poll for up to 10 minutes (CI may still be running when the tag is pushed)
+          for i in $(seq 1 20); do
+            STATUS=$(gh api "repos/${{ github.repository }}/commits/$SHA/status" \
+              --jq '.state')
+            echo "Attempt $i: combined status = $STATUS"
+
+            if [ "$STATUS" = "success" ]; then
+              echo "All CI checks passed."
+              exit 0
+            elif [ "$STATUS" = "failure" ] || [ "$STATUS" = "error" ]; then
+              echo "::error::CI checks failed or errored for $SHA. Aborting release."
+              exit 1
+            fi
+
+            # Still pending — wait 30s and retry
+            echo "Status is '$STATUS', waiting 30s ..."
+            sleep 30
+          done
+
+          echo "::error::CI checks did not complete within 10 minutes. Aborting release."
+          exit 1
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-python:
+    runs-on: ubuntu-latest
+    needs: [ci-check]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.10
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Build package
+        run: uv build
+
+      - name: Upload Python dist
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-dist
+          path: dist/
+
+  build-exe:
+    needs: [ci-check]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            exe_name: neurolight-${{ github.ref_name }}-windows-amd64.exe
+            artifact_name: exe-windows
+          - runner: macos-latest
+            exe_name: neurolight-${{ github.ref_name }}-macos-universal
+            artifact_name: exe-macos
+          - runner: ubuntu-latest
+            exe_name: neurolight-${{ github.ref_name }}-linux-x86_64
+            artifact_name: exe-linux
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.10
+
+      - name: Install dependencies and PyInstaller
+        run: uv sync --extra build
+
+      - name: Build executable
+        run: uv run pyinstaller neurolight.spec --noconfirm --clean
+        env:
+          # Prevent PyInstaller from embedding a random runpath
+          PYINSTALLER_CONFIG_DIR: ${{ github.workspace }}/.pyinstaller
+
+      - name: Prepare release asset (Windows)
+        if: matrix.runner == 'windows-latest'
+        shell: bash
+        run: |
+          mkdir -p release-asset
+          cp dist/neurolight.exe "release-asset/${{ matrix.exe_name }}"
+
+      - name: Prepare release asset (macOS)
+        if: matrix.runner == 'macos-latest'
+        shell: bash
+        run: |
+          mkdir -p release-asset
+          cp dist/neurolight "release-asset/${{ matrix.exe_name }}"
+
+      - name: Prepare release asset (Linux)
+        if: matrix.runner == 'ubuntu-latest'
+        shell: bash
+        run: |
+          mkdir -p release-asset
+          cp dist/neurolight "release-asset/${{ matrix.exe_name }}"
+
+      - name: Upload executable artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: release-asset/
+
+  release:
+    runs-on: ubuntu-latest
+    needs: [build-python, build-exe]
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-package
+
+      - name: Validate artifacts exist
+        run: |
+          missing=0
+          for dir in python-dist exe-windows exe-macos exe-linux; do
+            path="release-package/$dir"
+            if [ ! -d "$path" ] || [ -z "$(ls -A "$path")" ]; then
+              echo "::error::Missing or empty artifact directory: $path"
+              missing=1
+            else
+              echo "OK: $path contains $(ls "$path" | wc -l) file(s)"
+            fi
+          done
+          if [ "$missing" -eq 1 ]; then
+            echo "::error::One or more required artifacts are missing. Aborting release."
+            exit 1
+          fi
+
+      - name: Flatten artifacts into release folder
+        run: |
+          mkdir -p release-package/upload
+          cp release-package/python-dist/* release-package/upload/
+          cp release-package/exe-windows/* release-package/upload/
+          cp release-package/exe-macos/* release-package/upload/
+          cp release-package/exe-linux/* release-package/upload/
+
+      - name: Create GitHub Release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: release-package/upload/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

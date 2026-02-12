@@ -1,0 +1,40 @@
+# Configuration for actions/labeler
+# Maps labels to file path globs — PRs are auto-labeled when matching files change.
+
+core:
+  - changed-files:
+      - any-glob-to-any-file: 'src/core/**'
+
+ui:
+  - changed-files:
+      - any-glob-to-any-file: 'src/ui/**'
+
+utils:
+  - changed-files:
+      - any-glob-to-any-file: 'src/utils/**'
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file: 'tests/**'
+
+ci/cd:
+  - changed-files:
+      - any-glob-to-any-file: '.github/**'
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '*.md'
+          - 'LICENSE-*'
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'pyproject.toml'
+          - 'uv.lock'
+
+build:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'neurolight.spec'
+          - 'BUILD.md'
