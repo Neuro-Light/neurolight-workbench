@@ -831,44 +831,44 @@ def get_stylesheet(theme: str = "dark") -> str:
 
     /* === Workflow stepper (top process bar) === */
     QFrame[objectName="workflowStepper"] {{
-        background-color: {c['surface']};
-        border-bottom: 1px solid {c['border']};
+        background-color: {c["surface"]};
+        border-bottom: 1px solid {c["border"]};
     }}
 
     QFrame[objectName="workflowStepper"] QToolButton {{
         text-align: center;
         padding: 6px 10px;
         border-radius: {RADIUS};
-        border: 1px solid {c['border']};
-        background-color: {c['surface_alt']};
-        color: {c['text_secondary']};
+        border: 1px solid {c["border"]};
+        background-color: {c["surface_alt"]};
+        color: {c["text_secondary"]};
         font-size: {FONT_SIZE_SMALL};
     }}
 
     /* Active/current step – emphasize with blue outline and stronger text */
     QFrame[objectName="workflowStepper"] QToolButton[workflowStatus="active"] {{
-        border: 2px solid {c['primary']};
-        background-color: {c['surface']};
-        color: {c['primary']};
+        border: 2px solid {c["primary"]};
+        background-color: {c["surface"]};
+        color: {c["primary"]};
         font-weight: 600;
     }}
 
     /* Completed steps – soft green accent with checkmark text already set in code */
     QFrame[objectName="workflowStepper"] QToolButton[workflowStatus="completed"] {{
-        border: 1px solid {c['success'] if 'success' in c else c['primary']};
-        background-color: {c['surface']};
-        color: {c['text']};
+        border: 1px solid {c["success"] if "success" in c else c["primary"]};
+        background-color: {c["surface"]};
+        color: {c["text"]};
     }}
 
     /* Locked/upcoming steps – dimmed */
     QFrame[objectName="workflowStepper"] QToolButton[workflowStatus="locked"] {{
-        background-color: {c['surface_alt']};
-        color: {c['text_disabled']};
+        background-color: {c["surface_alt"]};
+        color: {c["text_disabled"]};
         border-style: dashed;
     }}
 
     QFrame[objectName="workflowStepper"] QLabel {{
-        color: {c['text_secondary']};
+        color: {c["text_secondary"]};
         font-size: {FONT_SIZE_SMALL};
     }}
 
