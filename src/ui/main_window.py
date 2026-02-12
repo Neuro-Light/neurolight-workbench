@@ -267,10 +267,10 @@ class MainWindow(QMainWindow):
         # Add alignment action
         align_action = QAction("Align Images", self)
         align_action.triggered.connect(self._align_images)
-        tools_menu.addAction(align_action)
+        self._tools_menu.addAction(align_action)
         self._action_align_images = align_action
         
-        tools_menu.addAction("Run Analysis")
+        self._tools_menu.addAction("Run Analysis")
         help_meun = menubar.addMenu("Help")
         about_action = help_meun.addAction("About")
         about_action.triggered.connect(self.open_website)
