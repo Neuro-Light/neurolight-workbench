@@ -15,28 +15,43 @@ jobs:
         run: |
           set -euo pipefail
           SHA="${{ github.sha }}"
-          echo "Checking CI status for commit $SHA ..."
-
-          # Poll for up to 10 minutes (CI may still be running when the tag is pushed).
-          # Check only the CI workflow status; combined status stays 'pending' while CD runs.
+          echo "Checking CI check runs for commit $SHA ..."
+          # GitHub Actions reports via Check Runs (job names), not commit status context.
+          # CI workflow jobs: lint, test, build, release-prep. Require all four success.
+          CI_JOBS="lint test build release-prep"
           for i in $(seq 1 20); do
-            BODY=$(gh api "repos/${{ github.repository }}/commits/$SHA/status")
-            CI_STATE=$(echo "$BODY" | jq -r '.statuses[] | select(.context == "CI") | .state')
-            COMBINED=$(echo "$BODY" | jq -r '.state')
-            echo "Attempt $i: combined = $COMBINED, CI = ${CI_STATE:-<none>}"
-
-            if [ "$CI_STATE" = "success" ]; then
-              echo "CI checks passed."
-              exit 0
-            elif [ "$CI_STATE" = "failure" ] || [ "$CI_STATE" = "error" ]; then
-              echo "::error::CI checks failed or errored for $SHA. Aborting release."
+            BODY=$(gh api "repos/${{ github.repository }}/commits/$SHA/check-runs" -q '.check_runs')
+            echo "Attempt $i:"
+            FAIL=0
+            DONE=0
+            for JOB in $CI_JOBS; do
+              RUN=$(echo "$BODY" | jq -r --arg j "$JOB" '.[] | select(.name == $j) | "\(.status) \(.conclusion // "null")"' | head -1)
+              if [ -z "$RUN" ]; then
+                echo "  $JOB: not found (CI may not have started)"
+                DONE=1
+                break
+              fi
+              STAT=$(echo "$RUN" | awk '{print $1}')
+              CONCL=$(echo "$RUN" | awk '{print $2}')
+              echo "  $JOB: status=$STAT conclusion=$CONCL"
+              if [ "$STAT" != "completed" ]; then
+                DONE=1
+              elif [ "$CONCL" != "success" ]; then
+                echo "::error::CI job $JOB concluded with $CONCL. Aborting release."
+                FAIL=1
+                break
+              fi
+            done
+            if [ "$FAIL" -eq 1 ]; then
               exit 1
             fi
-
+            if [ "$DONE" -eq 0 ]; then
+              echo "All CI check runs passed."
+              exit 0
+            fi
             echo "CI not done yet, waiting 30s ..."
             sleep 30
           done
-
           echo "::error::CI did not complete within 10 minutes. Aborting release."
           exit 1
         env:
