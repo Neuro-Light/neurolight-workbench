@@ -1,4 +1,4 @@
-# 🧠 Neurolight Prototype
+# 🧠 Neurolight Workbench
 
 A powerful PySide6 desktop application for processing and analyzing large TIF image stacks with scientific rigor. Built for neuroscientists and researchers who need reproducible, shareable experiment workflows.
 
