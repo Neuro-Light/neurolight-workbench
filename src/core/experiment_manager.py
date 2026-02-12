@@ -192,9 +192,7 @@ class Experiment:
                 dtype = np.dtype(traj_data["dtype"])
                 trajectories_bytes = base64.b64decode(traj_data["data"])
                 self._neuron_detection_data["neuron_trajectories"] = (
-                    np.frombuffer(trajectories_bytes, dtype=dtype)
-                    .reshape(shape)
-                    .copy()
+                    np.frombuffer(trajectories_bytes, dtype=dtype).reshape(shape).copy()
                 )
             else:
                 # Legacy format (list)
