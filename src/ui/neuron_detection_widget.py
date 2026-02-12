@@ -21,11 +21,14 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QFormLayout,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 
 
 class NeuronDetectionWidget(QWidget):
     """Widget for detecting and visualizing neurons within a selected ROI."""
+
+    # Emitted when neuron detection finishes successfully
+    detectionCompleted = Signal()
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -385,7 +388,7 @@ class NeuronDetectionWidget(QWidget):
                     self.quality_mask,
                     self.neuron_locations
                 )
-            
+            self.detectionCompleted.emit()
         except Exception as e:
             QMessageBox.critical(
                 self,
