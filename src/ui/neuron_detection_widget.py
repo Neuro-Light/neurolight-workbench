@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QDoubleSpinBox,
@@ -29,6 +29,9 @@ from PySide6.QtWidgets import (
 
 class NeuronDetectionWidget(QWidget):
     """Widget for detecting and visualizing neurons within a selected ROI."""
+
+    # Emitted when neuron detection finishes successfully
+    detectionCompleted = Signal()
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -382,6 +385,7 @@ class NeuronDetectionWidget(QWidget):
                 self.trajectory_plot_callback(
                     self.neuron_trajectories, self.quality_mask, self.neuron_locations
                 )
+            self.detectionCompleted.emit()
 
         except Exception as e:
             QMessageBox.critical(self, "Detection Failed", f"Failed to detect neurons:\n{str(e)}")

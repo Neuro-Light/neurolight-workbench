@@ -34,6 +34,7 @@ from ui.image_viewer import ImageViewer
 from ui.loading_dialog import LoadingDialog
 from ui.settings_dialog import SettingsDialog
 from ui.startup_dialog import StartupDialog
+from ui.workflow import STEP_DEFINITIONS, WorkflowManager, WorkflowStep, WorkflowStepper
 from utils.file_handler import ImageStackHandler
 
 # Set up logger for main window
@@ -111,6 +112,10 @@ class MainWindow(QMainWindow):
         self.image_processor = ImageProcessor(experiment)
         self._alignment_worker: Optional[AlignmentWorker] = None
 
+        # Cached references to controls affected by workflow gating
+        self._action_open_stack: Optional[QAction] = None
+        self._action_align_images: Optional[QAction] = None
+
         # Initialize debounced save timer for display settings
         self._display_settings_timer = QTimer()
         self._display_settings_timer.setSingleShot(True)
@@ -121,8 +126,94 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"Neurolight - {self.experiment.name}")
         self.resize(1200, 800)
 
+        # Guided workflow
+        self.workflow_manager = WorkflowManager(self.experiment, self)
+        self.workflow_stepper = WorkflowStepper(self.workflow_manager, self)
+        # Wire stepper actions
+        self.workflow_stepper.requestAlignImages.connect(self._align_images)
+
         self._init_menu()
         self._init_layout()
+
+    # ------------------------------------------------------------------
+    # Workflow integration
+    # ------------------------------------------------------------------
+
+    def _init_workflow_bindings(self) -> None:
+        """
+        Wire workflow manager state to enable/disable relevant UI controls.
+
+        Only the current step's primary controls are interactive. File-level
+        actions like closing or exiting the experiment remain unaffected.
+        """
+
+        def refresh_controls() -> None:
+            current = self.workflow_manager.current_step
+            current_index = STEP_DEFINITIONS[current].index
+
+            # Step 1: Load Image Stack
+            enable_load = current == WorkflowStep.LOAD_IMAGES
+            if self._action_open_stack is not None:
+                self._action_open_stack.setEnabled(enable_load)
+            # Upload button in viewer
+            if hasattr(self, "viewer") and hasattr(self.viewer, "upload_btn"):
+                self.viewer.upload_btn.setEnabled(enable_load)
+
+            # Step 2: Edit Contrast & Exposure
+            enable_edit = current == WorkflowStep.EDIT_IMAGES
+            if hasattr(self, "viewer"):
+                for attr in (
+                    "display_options_btn",
+                    "adjustments_panel",
+                    "exposure_slider",
+                    "contrast_slider",
+                ):
+                    widget = getattr(self.viewer, attr, None)
+                    if widget is not None:
+                        widget.setEnabled(enable_edit)
+
+            # Step 3: Align Images
+            enable_align = current == WorkflowStep.ALIGN_IMAGES
+            if self._action_align_images is not None:
+                self._action_align_images.setEnabled(enable_align)
+
+            # Step 4: Select ROI
+            enable_roi = current == WorkflowStep.SELECT_ROI
+            if hasattr(self, "viewer"):
+                for attr in ("roi_btn", "adjust_roi_btn"):
+                    widget = getattr(self.viewer, attr, None)
+                    if widget is not None:
+                        widget.setEnabled(enable_roi)
+
+            # Step 5: Detect Neurons
+            enable_detect = current == WorkflowStep.DETECT_NEURONS
+            if hasattr(self, "analysis"):
+                try:
+                    detection_widget = self.analysis.get_neuron_detection_widget()
+                    if hasattr(detection_widget, "detect_btn"):
+                        detection_widget.detect_btn.setEnabled(enable_detect)
+                except Exception:
+                    pass
+
+            # Hide the analysis panel until ROI has been selected and the
+            # "Select ROI" step has been completed (i.e. downstream of step 4).
+            if hasattr(self, "analysis"):
+                roi_index = STEP_DEFINITIONS[WorkflowStep.SELECT_ROI].index
+                # Show once either:
+                # - current step is beyond Select ROI, or
+                # - Select ROI is in completed steps (user finished step 4)
+                show_analysis = (
+                    current_index > roi_index
+                    or WorkflowStep.SELECT_ROI in self.workflow_manager.completed_steps
+                )
+                self.analysis.setVisible(show_analysis)
+
+        # Connect workflow manager notifications
+        self.workflow_manager.step_changed.connect(lambda _step: refresh_controls())
+        self.workflow_manager.state_changed.connect(refresh_controls)
+
+        # Apply initial state
+        refresh_controls()
 
     def _init_menu(self) -> None:
         menubar = self.menuBar()
@@ -134,6 +225,9 @@ class MainWindow(QMainWindow):
         exit_action = QAction("Exit", self)
         open_stack_action = QAction("Open Image Stack", self)
         export_results_action = QAction("Export Results", self)
+
+        # Keep references to actions we will control via workflow
+        self._action_open_stack = open_stack_action
 
         save_action.setShortcut("Ctrl+S")
 
@@ -172,11 +266,12 @@ class MainWindow(QMainWindow):
         align_action = QAction("Align Images", self)
         align_action.triggered.connect(self._align_images)
         self._tools_menu.addAction(align_action)
+        self._action_align_images = align_action
 
         self._tools_menu.addAction("Generate GIF")
         self._tools_menu.addAction("Run Analysis")
-        self._help_menu = menubar.addMenu("Help")
-        about_action = self._help_menu.addAction("About")
+        help_meun = menubar.addMenu("Help")
+        about_action = help_meun.addAction("About")
         about_action.triggered.connect(self.open_website)
 
     def open_website(self):
@@ -298,6 +393,15 @@ class MainWindow(QMainWindow):
         detection_widget.set_image_processor(self.image_processor)
         detection_widget.experiment = self.experiment
 
+        # Notify workflow manager when detection completes
+        try:
+            detection_widget.detectionCompleted.connect(
+                lambda: self.workflow_manager.complete_step_if_current(WorkflowStep.DETECT_NEURONS)
+            )
+        except Exception:
+            # In tests the widget may be heavily mocked; ignore connection errors
+            pass
+
         # Connect detection widget to trajectory plot widget
         trajectory_plot_widget = self.analysis.get_neuron_trajectory_plot_widget()
         detection_widget.set_trajectory_plot_callback(
@@ -324,7 +428,18 @@ class MainWindow(QMainWindow):
         splitter.setStretchFactor(0, 3)
         splitter.setStretchFactor(1, 7)
 
-        self.setCentralWidget(splitter)
+        # Wrap workflow stepper + splitter in a vertical layout
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+        layout.addWidget(self.workflow_stepper)
+        layout.addWidget(splitter)
+
+        self.setCentralWidget(container)
+
+        # Initialize workflow-driven enable/disable state
+        self._init_workflow_bindings()
 
         # Auto-load image stack/ROI if experiment has saved data
         self._auto_load_experiment_data()
@@ -458,11 +573,22 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+        # After any auto-load attempt, refresh workflow state from experiment data
+        # (e.g., if ROI or detection data already exist).
+        try:
+            # This will infer state if needed and trigger UI updates
+            self.workflow_manager._load_or_initialize_state()  # type: ignore[attr-defined]
+        except Exception:
+            # Failing to refresh workflow should not break core functionality
+            pass
+
     def _open_image_stack(self) -> None:
         directory = QFileDialog.getExistingDirectory(self, "Select Image Stack Folder", "")
         if not directory:
             return
         self.viewer.set_stack(directory)
+        # Reset downstream steps because the data source changed
+        self.workflow_manager.reset_from_step(WorkflowStep.EDIT_IMAGES)
 
     def _on_stack_loaded(self, directory_path: str) -> None:
         # ImageStackHandler already updates experiment association for path/count
@@ -479,6 +605,9 @@ class MainWindow(QMainWindow):
                 self.manager.save_experiment(self.experiment, self.current_experiment_path)
             except Exception:
                 pass
+
+        # Mark first workflow step complete once a stack is available
+        self.workflow_manager.complete_step_if_current(WorkflowStep.LOAD_IMAGES)
 
     def _ensure_detection_data_saved(self) -> None:
         """
@@ -720,6 +849,11 @@ class MainWindow(QMainWindow):
                 if self.analysis.tabText(i) == "ROI Intensity":
                     self.analysis.setCurrentIndex(i)
                     break
+
+            # Update workflow: ROI selection completes the ROI step and
+            # invalidates any downstream detection/analysis steps.
+            self.workflow_manager.complete_step_if_current(WorkflowStep.SELECT_ROI)
+            self.workflow_manager.reset_from_step(WorkflowStep.DETECT_NEURONS)
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to analyze ROI:\n{str(e)}")
@@ -1049,6 +1183,9 @@ class MainWindow(QMainWindow):
 
             if load_reply == QMessageBox.Yes:
                 self.viewer.set_stack(output_dir)
+
+        # Alignment finishing satisfies the alignment workflow step
+        self.workflow_manager.complete_step_if_current(WorkflowStep.ALIGN_IMAGES)
 
     def _on_alignment_error(self, error_message: str) -> None:
         """Handle alignment errors from the worker thread."""
