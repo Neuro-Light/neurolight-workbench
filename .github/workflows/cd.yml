@@ -17,26 +17,27 @@ jobs:
           SHA="${{ github.sha }}"
           echo "Checking CI status for commit $SHA ..."
 
-          # Poll for up to 10 minutes (CI may still be running when the tag is pushed)
+          # Poll for up to 10 minutes (CI may still be running when the tag is pushed).
+          # Check only the CI workflow status; combined status stays 'pending' while CD runs.
           for i in $(seq 1 20); do
-            STATUS=$(gh api "repos/${{ github.repository }}/commits/$SHA/status" \
-              --jq '.state')
-            echo "Attempt $i: combined status = $STATUS"
+            BODY=$(gh api "repos/${{ github.repository }}/commits/$SHA/status")
+            CI_STATE=$(echo "$BODY" | jq -r '.statuses[] | select(.context == "CI") | .state')
+            COMBINED=$(echo "$BODY" | jq -r '.state')
+            echo "Attempt $i: combined = $COMBINED, CI = ${CI_STATE:-<none>}"
 
-            if [ "$STATUS" = "success" ]; then
-              echo "All CI checks passed."
+            if [ "$CI_STATE" = "success" ]; then
+              echo "CI checks passed."
               exit 0
-            elif [ "$STATUS" = "failure" ] || [ "$STATUS" = "error" ]; then
+            elif [ "$CI_STATE" = "failure" ] || [ "$CI_STATE" = "error" ]; then
               echo "::error::CI checks failed or errored for $SHA. Aborting release."
               exit 1
             fi
 
-            # Still pending — wait 30s and retry
-            echo "Status is '$STATUS', waiting 30s ..."
+            echo "CI not done yet, waiting 30s ..."
             sleep 30
           done
 
-          echo "::error::CI checks did not complete within 10 minutes. Aborting release."
+          echo "::error::CI did not complete within 10 minutes. Aborting release."
           exit 1
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
