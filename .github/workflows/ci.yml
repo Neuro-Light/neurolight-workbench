@@ -4,12 +4,18 @@ on:
   push:
     # Run on every push so Ruff and tests enforce standards on all branches
   pull_request:
+  workflow_dispatch:
 
 jobs:
   lint:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install uv
         uses: astral-sh/setup-uv@v4
@@ -21,6 +27,21 @@ jobs:
 
       - name: Install dependencies
         run: uv sync --all-extras
+
+      - name: Ruff fix and format (PRs only)
+        if: github.event_name == 'pull_request'
+        run: |
+          uv run ruff check . --fix
+          uv run ruff format .
+
+      - name: Commit lint fixes
+        if: github.event_name == 'pull_request'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && echo "No lint fixes needed" || git commit -m "style: auto-fix ruff lint and format"
+          git push
 
       - name: Ruff check
         run: uv run ruff check .

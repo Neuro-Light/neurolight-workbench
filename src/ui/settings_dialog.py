@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (
 from ui.app_settings import get_theme, set_theme
 from ui.styles import get_stylesheet
 
-
 # Theme values shown in Preferences (single selection, same blue-box style)
 THEME_VALUES = (
     ("dark", "Dark mode"),
@@ -44,7 +43,11 @@ class SettingsDialog(QDialog):
         self.theme_radios = {}
         for value, label in THEME_VALUES:
             radio = QRadioButton(label)
-            radio.setToolTip("Increase contrast for text, borders, and backgrounds." if "high contrast" in label else None)
+            radio.setToolTip(
+                "Increase contrast for text, borders, and backgrounds."
+                if "high contrast" in label
+                else None
+            )
             self.theme_radios[value] = radio
             theme_layout.addWidget(radio)
         theme_group.setLayout(theme_layout)
@@ -60,9 +63,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(info)
 
         # Buttons
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.Ok | QDialogButtonBox.Cancel
-        )
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self._apply_and_accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
@@ -77,6 +78,7 @@ class SettingsDialog(QDialog):
         set_theme(theme)
 
         from PySide6.QtWidgets import QApplication
+
         app = QApplication.instance()
         if app is not None:
             app.setStyleSheet(get_stylesheet(theme))

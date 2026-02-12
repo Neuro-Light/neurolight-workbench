@@ -46,27 +46,43 @@ STEP_DEFINITIONS: Dict[WorkflowStep, StepMeta] = {
     WorkflowStep.LOAD_IMAGES: StepMeta(
         index=1,
         short_label="Load Image Stack",
-        tooltip="Load the image stack to analyze. Use File → Open Image Stack or the Open Images button.",
-        description="Start by loading the image stack you want to analyze. "
-        "You can use File → Open Image Stack, the Open Images button in the viewer, or drag-and-drop TIF/GIF files.",
+        tooltip=(
+            "Load the image stack to analyze. "
+            "Use File → Open Image Stack or the Open Images button."
+        ),
+        description=(
+            "Start by loading the image stack you want to analyze. "
+            "You can use File → Open Image Stack, the Open Images "
+            "button in the viewer, or drag-and-drop TIF/GIF files."
+        ),
     ),
     WorkflowStep.EDIT_IMAGES: StepMeta(
         index=2,
         short_label="Edit Contrast & Exposure",
-        tooltip="Adjust exposure and contrast so structures of interest are clearly visible.",
-        description="Use the Display options panel to adjust exposure and contrast until neurons and background are clearly separated.",
+        tooltip=("Adjust exposure and contrast so structures of interest are clearly visible."),
+        description=(
+            "Use the Display options panel to adjust exposure and "
+            "contrast until neurons and background are clearly separated."
+        ),
     ),
     WorkflowStep.ALIGN_IMAGES: StepMeta(
         index=3,
         short_label="Align Images",
         tooltip="Align frames in the stack using PyStackReg to correct motion.",
-        description="Run image alignment from the Tools → Align Images menu to correct for motion across the stack.",
+        description=(
+            "Run image alignment from the Tools → Align Images "
+            "menu to correct for motion across the stack."
+        ),
     ),
     WorkflowStep.SELECT_ROI: StepMeta(
         index=4,
         short_label="Select ROI",
         tooltip="Define the Region of Interest (ROI) where neurons will be detected.",
-        description="Draw or adjust the ROI in the image viewer. The ROI defines the region used for intensity analysis and neuron detection.",
+        description=(
+            "Draw or adjust the ROI in the image viewer. The ROI "
+            "defines the region used for intensity analysis and "
+            "neuron detection."
+        ),
     ),
     WorkflowStep.DETECT_NEURONS: StepMeta(
         index=5,
@@ -153,9 +169,7 @@ class WorkflowManager(QObject):
         # Remove all completed steps at or after the given step
         indices = {s: STEP_DEFINITIONS[s].index for s in self.completed_steps}
         step_index = STEP_DEFINITIONS[step].index
-        self.completed_steps = {
-            s for s, idx in indices.items() if idx < step_index
-        }
+        self.completed_steps = {s for s, idx in indices.items() if idx < step_index}
 
         # If current step is downstream of the reset point, move it back
         if STEP_DEFINITIONS[self.current_step].index >= step_index:
@@ -244,10 +258,13 @@ class WorkflowManager(QObject):
         """Persist current workflow state into the experiment.settings dict."""
         workflow_state = {
             "current_step": self.current_step.name,
-            "completed_steps": [s.name for s in sorted(
-                self.completed_steps,
-                key=lambda s: STEP_DEFINITIONS[s].index,
-            )],
+            "completed_steps": [
+                s.name
+                for s in sorted(
+                    self.completed_steps,
+                    key=lambda s: STEP_DEFINITIONS[s].index,
+                )
+            ],
         }
         if "workflow" not in self._experiment.settings:
             self._experiment.settings["workflow"] = {}
@@ -409,4 +426,3 @@ class WorkflowStepper(QFrame):
         is_align_step = current == WorkflowStep.ALIGN_IMAGES
         self._align_button.setVisible(is_align_step)
         self._skip_align_button.setVisible(is_align_step)
-

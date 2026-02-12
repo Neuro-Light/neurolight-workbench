@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Dict, Optional
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -31,9 +31,11 @@ class DataAnalyzer:
         return fig
 
     def save_results_to_experiment(self, experiment: Experiment) -> None:
-        experiment.analysis_results.setdefault("runs", []).append({
-            "summary": "Placeholder analysis",
-        })
+        experiment.analysis_results.setdefault("runs", []).append(
+            {
+                "summary": "Placeholder analysis",
+            }
+        )
 
     # Placeholders for future expansion
     def time_series_analysis(self, data: np.ndarray):
@@ -93,4 +95,3 @@ class DataAnalyzer:
             roi_region = frame_data[t, y1:y2, x1:x2]
             roi_intensities[t] = np.mean(roi_region)
         return roi_intensities
-

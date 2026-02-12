@@ -1,42 +1,43 @@
 """ROI Selection Dialog with zoom/pan support for precise polygon drawing."""
+
 from __future__ import annotations
 
 from typing import List, Optional
 
 import numpy as np
-from PySide6.QtCore import Qt, QPointF, QRectF
+from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import (
-    QPixmap,
+    QBrush,
+    QColor,
+    QKeyEvent,
+    QMouseEvent,
     QPainter,
     QPen,
-    QColor,
-    QBrush,
+    QPixmap,
     QPolygonF,
     QWheelEvent,
-    QMouseEvent,
-    QKeyEvent,
 )
 from PySide6.QtWidgets import (
-    QDialog,
-    QGraphicsView,
-    QGraphicsScene,
-    QGraphicsPixmapItem,
-    QVBoxLayout,
-    QHBoxLayout,
-    QPushButton,
-    QLabel,
-    QWidget,
     QApplication,
+    QDialog,
+    QGraphicsPixmapItem,
+    QGraphicsScene,
+    QGraphicsView,
+    QHBoxLayout,
+    QLabel,
+    QPushButton,
     QSizePolicy,
+    QVBoxLayout,
+    QWidget,
 )
 
-from core.roi import ROI, ROIShape, ROIHandle, HandleResult
+from core.roi import ROI, HandleResult, ROIHandle, ROIShape
 from utils.image_utils import numpy_to_qimage
-
 
 # ---------------------------------------------------------------------------
 # Custom QGraphicsView with zoom, pan, and ROI interaction
 # ---------------------------------------------------------------------------
+
 
 class _ROIGraphicsView(QGraphicsView):
     """QGraphicsView subclass that provides mouse-wheel zoom, pan,
@@ -116,12 +117,8 @@ class _ROIGraphicsView(QGraphicsView):
         if self._panning:
             delta = event.position() - self._pan_start
             self._pan_start = event.position()
-            self.horizontalScrollBar().setValue(
-                self.horizontalScrollBar().value() - int(delta.x())
-            )
-            self.verticalScrollBar().setValue(
-                self.verticalScrollBar().value() - int(delta.y())
-            )
+            self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - int(delta.x()))
+            self.verticalScrollBar().setValue(self.verticalScrollBar().value() - int(delta.y()))
             event.accept()
             return
 
@@ -152,6 +149,7 @@ class _ROIGraphicsView(QGraphicsView):
 # ---------------------------------------------------------------------------
 # ROI Selection Dialog
 # ---------------------------------------------------------------------------
+
 
 class ROISelectionDialog(QDialog):
     """Modal dialog for ROI polygon selection with zoom and pan."""
@@ -260,6 +258,7 @@ class ROISelectionDialog(QDialog):
         self._scene.setSceneRect(QRectF(0, 0, pix.width(), pix.height()))
         # Fit after a short delay so the view has its final size
         from PySide6.QtCore import QTimer
+
         QTimer.singleShot(0, self._on_fit_view)
 
     def _on_fit_view(self) -> None:
@@ -297,16 +296,20 @@ class ROISelectionDialog(QDialog):
         if len(pts) >= 2:
             for i in range(len(pts) - 1):
                 line = self._scene.addLine(
-                    pts[i].x(), pts[i].y(),
-                    pts[i + 1].x(), pts[i + 1].y(),
+                    pts[i].x(),
+                    pts[i].y(),
+                    pts[i + 1].x(),
+                    pts[i + 1].y(),
                     pen,
                 )
                 line.setZValue(10)
             # Preview line to cursor
             if self._preview_pos is not None:
                 preview_line = self._scene.addLine(
-                    pts[-1].x(), pts[-1].y(),
-                    self._preview_pos.x(), self._preview_pos.y(),
+                    pts[-1].x(),
+                    pts[-1].y(),
+                    self._preview_pos.x(),
+                    self._preview_pos.y(),
                     pen,
                 )
                 preview_line.setZValue(10)
@@ -315,8 +318,12 @@ class ROISelectionDialog(QDialog):
         r = 4  # radius in scene units (will stay visually small because cosmetic pen)
         for pt in pts:
             ellipse = self._scene.addEllipse(
-                pt.x() - r, pt.y() - r, 2 * r, 2 * r,
-                vertex_pen, vertex_brush,
+                pt.x() - r,
+                pt.y() - r,
+                2 * r,
+                2 * r,
+                vertex_pen,
+                vertex_brush,
             )
             ellipse.setZValue(11)
 
@@ -331,9 +338,7 @@ class ROISelectionDialog(QDialog):
 
         if roi.shape == ROIShape.POLYGON and roi.points:
             qpts = [QPointF(p[0], p[1]) for p in roi.points]
-            polygon = self._scene.addPolygon(
-                QPolygonF(qpts), pen, QBrush(Qt.NoBrush)
-            )
+            polygon = self._scene.addPolygon(QPolygonF(qpts), pen, QBrush(Qt.NoBrush))
             polygon.setZValue(10)
 
             # Adjustment handles
@@ -344,8 +349,12 @@ class ROISelectionDialog(QDialog):
                 hs = 5  # half-size of handle square in scene pixels
                 for pt in qpts:
                     rect = self._scene.addRect(
-                        pt.x() - hs, pt.y() - hs, 2 * hs, 2 * hs,
-                        handle_pen, handle_brush,
+                        pt.x() - hs,
+                        pt.y() - hs,
+                        2 * hs,
+                        2 * hs,
+                        handle_pen,
+                        handle_brush,
                     )
                     rect.setZValue(11)
 
