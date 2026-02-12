@@ -220,7 +220,7 @@ class MainWindow(QMainWindow):
     def _init_menu(self) -> None:
         menubar = self.menuBar()
 
-        file_menu = menubar.addMenu("File")
+        self._file_menu = menubar.addMenu("File")
         save_action = QAction("Save Experiment", self)
         save_as_action = QAction("Save Experiment As...", self)
         close_action = QAction("Close Experiment", self)
@@ -240,29 +240,29 @@ class MainWindow(QMainWindow):
         open_stack_action.triggered.connect(self._open_image_stack)
         export_results_action.triggered.connect(self._export_experiment)
 
-        file_menu.addAction(save_action)
-        file_menu.addAction(save_as_action)
-        file_menu.addSeparator()
-        file_menu.addAction(open_stack_action)
-        file_menu.addAction(export_results_action)
-        file_menu.addSeparator()
-        file_menu.addAction(close_action)
-        file_menu.addAction(exit_action)
+        self._file_menu.addAction(save_action)
+        self._file_menu.addAction(save_as_action)
+        self._file_menu.addSeparator()
+        self._file_menu.addAction(open_stack_action)
+        self._file_menu.addAction(export_results_action)
+        self._file_menu.addSeparator()
+        self._file_menu.addAction(close_action)
+        self._file_menu.addAction(exit_action)
 
-        edit_menu = menubar.addMenu("Edit")
+        self._edit_menu = menubar.addMenu("Edit")
         settings_action = QAction("Preferences...", self)
         settings_action.setShortcut("Ctrl+,")
         settings_action.triggered.connect(self._open_settings)
-        edit_menu.addAction(settings_action)
+        self._edit_menu.addAction(settings_action)
         experiment_settings_action = QAction("Experiment Settings...", self)
         experiment_settings_action.triggered.connect(self._open_experiment_settings)
-        edit_menu.addAction(experiment_settings_action)
-        tools_menu = menubar.addMenu("Tools")
+        self._edit_menu.addAction(experiment_settings_action)
+        self._tools_menu = menubar.addMenu("Tools")
         
         # Add crop action
         crop_action = QAction("Crop Stack to ROI", self)
         crop_action.triggered.connect(self._crop_stack_to_roi)
-        tools_menu.addAction(crop_action)
+        self._tools_menu.addAction(crop_action)
         
         # Add alignment action
         align_action = QAction("Align Images", self)
@@ -274,6 +274,7 @@ class MainWindow(QMainWindow):
         help_meun = menubar.addMenu("Help")
         about_action = help_meun.addAction("About")
         about_action.triggered.connect(self.open_website)
+
     def open_website(self):
         QDesktopServices.openUrl(QUrl("https://sce.nau.edu/capstone/projects/CS/2026/NeuroNauts_F25/project_overview.html"))
 

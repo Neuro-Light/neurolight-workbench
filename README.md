@@ -1,4 +1,4 @@
-# 🧠 Neurolight Prototype
+# 🧠 Neurolight Workbench
 
 A powerful PySide6 desktop application for processing and analyzing large TIF image stacks with scientific rigor. Built for neuroscientists and researchers who need reproducible, shareable experiment workflows.
 
@@ -20,7 +20,7 @@ A powerful PySide6 desktop application for processing and analyzing large TIF im
 
 ### Prerequisites
 
-- Python 3.9 or higher
+- Python 3.10 or higher
 - [uv](https://github.com/astral-sh/uv) package manager
 
 ### Installation
