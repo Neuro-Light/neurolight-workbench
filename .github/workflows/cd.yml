@@ -17,7 +17,8 @@ jobs:
           SHA="${{ github.sha }}"
           echo "Checking CI check runs for commit $SHA ..."
           # GitHub Actions reports via Check Runs (job names), not commit status context.
-          # CI workflow jobs: lint, test, build, release-prep. Require all four success.
+          # CI workflow jobs: lint, test, build, release-prep. Require completed; accept success or skipped.
+          # (release-prep can show as skipped when multiple runs exist for the same commit, e.g. PR vs push.)
           CI_JOBS="lint test build release-prep"
           for i in $(seq 1 20); do
             BODY=$(gh api "repos/${{ github.repository }}/commits/$SHA/check-runs" -q '.check_runs')
@@ -36,7 +37,7 @@ jobs:
               echo "  $JOB: status=$STAT conclusion=$CONCL"
               if [ "$STAT" != "completed" ]; then
                 DONE=1
-              elif [ "$CONCL" != "success" ]; then
+              elif [ "$CONCL" = "failure" ] || [ "$CONCL" = "cancelled" ] || [ "$CONCL" = "timed_out" ] || [ "$CONCL" = "action_required" ]; then
                 echo "::error::CI job $JOB concluded with $CONCL. Aborting release."
                 FAIL=1
                 break
