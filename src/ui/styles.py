@@ -51,7 +51,7 @@ COLORS_DARK = {
     # Dark palette
     "bg": "#1E1E1E",
     # Surfaces / cards / inputs
-    "surface": "#2D2D2D",      # Graph background / main surfaces
+    "surface": "#2D2D2D",  # Graph background / main surfaces
     "surface_alt": "#262626",  # Slightly darker alt surface
     # Primary accent
     "primary": "#4A90E2",
@@ -176,7 +176,7 @@ def get_mpl_theme(theme: str = "dark") -> dict:
 
 def get_stylesheet(theme: str = "dark") -> str:
     """Return the application stylesheet string.
-    
+
     Args:
         theme: One of "dark", "light", "dark_high_contrast", "light_high_contrast".
     """
@@ -184,30 +184,30 @@ def get_stylesheet(theme: str = "dark") -> str:
     return f"""
     /* === Global / Base === */
     QWidget {{
-        background-color: {c['bg']};
-        color: {c['text']};
+        background-color: {c["bg"]};
+        color: {c["text"]};
         font-family: {FONT_FAMILY};
         font-size: {FONT_SIZE_BASE};
     }}
 
     QMainWindow {{
-        background-color: {c['bg']};
+        background-color: {c["bg"]};
     }}
 
     /* === Dialogs === */
     QDialog {{
-        background-color: {c['surface']};
-        color: {c['text']};
+        background-color: {c["surface"]};
+        color: {c["text"]};
     }}
 
     /* Experiment Manager: same darker background as main app so buttons/experiments pop */
     QDialog#experimentManagerDialog {{
-        background-color: {c['bg']};
+        background-color: {c["bg"]};
     }}
 
     /* === Labels === */
     QLabel {{
-        color: {c['text']};
+        color: {c["text"]};
         font-size: {FONT_SIZE_BASE};
         background-color: transparent;
     }}
@@ -215,7 +215,7 @@ def get_stylesheet(theme: str = "dark") -> str:
     QLabel[class="title"] {{
         font-size: {FONT_SIZE_TITLE};
         font-weight: 600;
-        color: {c['text']};
+        color: {c["text"]};
         background-color: transparent;
     }}
 
@@ -223,7 +223,7 @@ def get_stylesheet(theme: str = "dark") -> str:
     QLabel[class="dialog-title"] {{
         font-size: {FONT_SIZE_DIALOG_TITLE};
         font-weight: 700;
-        color: {c['text']};
+        color: {c["text"]};
         background-color: transparent;
     }}
 
@@ -231,15 +231,15 @@ def get_stylesheet(theme: str = "dark") -> str:
     QLabel[class="section-heading"] {{
         font-size: {FONT_SIZE_SECTION_HEADING};
         font-weight: 700;
-        color: {c['text']};
+        color: {c["text"]};
         background-color: transparent;
     }}
 
     /* === Buttons === */
     QPushButton {{
-        background-color: {c['surface']};
-        color: {c['text']};
-        border: 1px solid {c['border']};
+        background-color: {c["surface"]};
+        color: {c["text"]};
+        border: 1px solid {c["border"]};
         border-radius: {RADIUS};
         padding: {PADDING};
         font-size: {FONT_SIZE_BASE};
@@ -247,124 +247,124 @@ def get_stylesheet(theme: str = "dark") -> str:
     }}
 
     QPushButton:hover {{
-        background-color: {c['hover']};
-        border-color: {c['primary']};
-        color: {c['primary']};
+        background-color: {c["hover"]};
+        border-color: {c["primary"]};
+        color: {c["primary"]};
     }}
 
     QPushButton:pressed {{
-        background-color: {c['border']};
-        border-color: {c['primary_pressed']};
+        background-color: {c["border"]};
+        border-color: {c["primary_pressed"]};
     }}
 
     QPushButton:disabled {{
-        background-color: {c['surface_alt']};
-        color: {c['text_disabled']};
-        border-color: {c['border']};
+        background-color: {c["surface_alt"]};
+        color: {c["text_disabled"]};
+        border-color: {c["border"]};
     }}
 
     /* Primary action buttons (e.g., Open Images, Detect Neurons) */
     QPushButton[class="primary"] {{
-        background-color: {c['primary']};
+        background-color: {c["primary"]};
         color: white;
-        border: 1px solid {c['primary']};
+        border: 1px solid {c["primary"]};
     }}
 
     QPushButton[class="primary"]:hover {{
-        background-color: {c['primary_hover']};
-        border-color: {c['primary_hover']};
+        background-color: {c["primary_hover"]};
+        border-color: {c["primary_hover"]};
         color: white;
     }}
 
     QPushButton[class="primary"]:pressed {{
-        background-color: {c['primary_pressed']};
-        border-color: {c['primary_pressed']};
+        background-color: {c["primary_pressed"]};
+        border-color: {c["primary_pressed"]};
     }}
 
     QPushButton[class="primary"]:disabled {{
-        background-color: {c['disabled']};
-        border-color: {c['disabled']};
-        color: {c['text_disabled']};
+        background-color: {c["disabled"]};
+        border-color: {c["disabled"]};
+        color: {c["text_disabled"]};
     }}
 
     /* Buttons that match selected tab (surface bg, primary text) - e.g. Experiment Manager */
     QPushButton[class="tab-action"] {{
-        background-color: {c['surface']};
-        color: {c['primary']};
-        border: 1px solid {c['border']};
+        background-color: {c["surface"]};
+        color: {c["primary"]};
+        border: 1px solid {c["border"]};
         font-weight: 600;
     }}
 
     QPushButton[class="tab-action"]:hover {{
-        background-color: {c['hover']};
-        border-color: {c['primary']};
-        color: {c['primary']};
+        background-color: {c["hover"]};
+        border-color: {c["primary"]};
+        color: {c["primary"]};
     }}
 
     QPushButton[class="tab-action"]:pressed {{
-        background-color: {c['border']};
-        border-color: {c['primary']};
-        color: {c['primary']};
+        background-color: {c["border"]};
+        border-color: {c["primary"]};
+        color: {c["primary"]};
     }}
 
     QPushButton[class="tab-action"]:disabled {{
-        background-color: {c['surface_alt']};
-        color: {c['text_disabled']};
-        border-color: {c['border']};
+        background-color: {c["surface_alt"]};
+        color: {c["text_disabled"]};
+        border-color: {c["border"]};
     }}
 
     /* Same look for QToolButton used as row options (e.g. ...) */
     QToolButton[class="tab-action"] {{
-        background-color: {c['surface']};
-        color: {c['primary']};
-        border: 1px solid {c['border']};
+        background-color: {c["surface"]};
+        color: {c["primary"]};
+        border: 1px solid {c["border"]};
         font-weight: 600;
     }}
 
     QToolButton[class="tab-action"]:hover {{
-        background-color: {c['hover']};
-        border-color: {c['primary']};
-        color: {c['primary']};
+        background-color: {c["hover"]};
+        border-color: {c["primary"]};
+        color: {c["primary"]};
     }}
 
     QToolButton[class="tab-action"]:pressed {{
-        background-color: {c['border']};
-        border-color: {c['primary']};
-        color: {c['primary']};
+        background-color: {c["border"]};
+        border-color: {c["primary"]};
+        color: {c["primary"]};
     }}
 
     QToolButton[class="tab-action"]:disabled {{
-        background-color: {c['surface_alt']};
-        color: {c['text_disabled']};
-        border-color: {c['border']};
+        background-color: {c["surface_alt"]};
+        color: {c["text_disabled"]};
+        border-color: {c["border"]};
     }}
 
     /* === Line Edits & Text === */
     QLineEdit, QPlainTextEdit {{
-        background-color: {c['surface']};
-        color: {c['text']};
-        border: 1px solid {c['border']};
+        background-color: {c["surface"]};
+        color: {c["text"]};
+        border: 1px solid {c["border"]};
         border-radius: {RADIUS_SMALL};
         padding: 6px 10px;
         font-size: {FONT_SIZE_BASE};
-        selection-background-color: {c['primary']};
+        selection-background-color: {c["primary"]};
         selection-color: white;
     }}
 
     QLineEdit:focus, QPlainTextEdit:focus {{
-        border-color: {c['border_focus']};
+        border-color: {c["border_focus"]};
     }}
 
     QLineEdit:disabled, QPlainTextEdit:disabled {{
-        background-color: {c['surface_alt']};
-        color: {c['text_disabled']};
+        background-color: {c["surface_alt"]};
+        color: {c["text_disabled"]};
     }}
 
     /* === Spin Boxes === */
     QSpinBox, QDoubleSpinBox {{
-        background-color: {c['surface']};
-        color: {c['text']};
-        border: 1px solid {c['border']};
+        background-color: {c["surface"]};
+        color: {c["text"]};
+        border: 1px solid {c["border"]};
         border-radius: {RADIUS_SMALL};
         padding: 6px 10px;
         font-size: {FONT_SIZE_BASE};
@@ -372,12 +372,12 @@ def get_stylesheet(theme: str = "dark") -> str:
     }}
 
     QSpinBox:focus, QDoubleSpinBox:focus {{
-        border-color: {c['border_focus']};
+        border-color: {c["border_focus"]};
     }}
 
     QSpinBox::up-button, QDoubleSpinBox::up-button,
     QSpinBox::down-button, QDoubleSpinBox::down-button {{
-        background-color: {c['surface_alt']};
+        background-color: {c["surface_alt"]};
         border: none;
         width: 18px;
         border-radius: {RADIUS_SMALL};
@@ -385,14 +385,14 @@ def get_stylesheet(theme: str = "dark") -> str:
 
     QSpinBox::up-button:hover, QDoubleSpinBox::up-button:hover,
     QSpinBox::down-button:hover, QDoubleSpinBox::down-button:hover {{
-        background-color: {c['hover']};
+        background-color: {c["hover"]};
     }}
 
     /* === Combo Box === */
     QComboBox {{
-        background-color: {c['surface']};
-        color: {c['text']};
-        border: 1px solid {c['border']};
+        background-color: {c["surface"]};
+        color: {c["text"]};
+        border: 1px solid {c["border"]};
         border-radius: {RADIUS_SMALL};
         padding: 6px 10px;
         font-size: {FONT_SIZE_BASE};
@@ -400,40 +400,40 @@ def get_stylesheet(theme: str = "dark") -> str:
     }}
 
     QComboBox:hover {{
-        border-color: {c['primary']};
+        border-color: {c["primary"]};
     }}
 
     QComboBox:focus {{
-        border-color: {c['border_focus']};
+        border-color: {c["border_focus"]};
     }}
 
     QComboBox::drop-down {{
         border: none;
         width: 24px;
-        background-color: {c['surface_alt']};
+        background-color: {c["surface_alt"]};
         border-radius: 0 {RADIUS_SMALL} {RADIUS_SMALL} 0;
     }}
 
     QComboBox::down-arrow {{
         width: 10px;
         height: 10px;
-        border: 2px solid {c['text_secondary']};
+        border: 2px solid {c["text_secondary"]};
         border-width: 0 2px 2px 0;
         margin: 4px;
     }}
 
     QComboBox QAbstractItemView {{
-        background-color: {c['surface']};
-        border: 1px solid {c['border']};
+        background-color: {c["surface"]};
+        border: 1px solid {c["border"]};
         border-radius: {RADIUS_SMALL};
         padding: 4px;
-        selection-background-color: {c['primary']};
+        selection-background-color: {c["primary"]};
         selection-color: white;
     }}
 
     /* === Check Box === */
     QCheckBox {{
-        color: {c['text']};
+        color: {c["text"]};
         font-size: {FONT_SIZE_BASE};
         spacing: 8px;
     }}
@@ -441,28 +441,28 @@ def get_stylesheet(theme: str = "dark") -> str:
     QCheckBox::indicator {{
         width: 18px;
         height: 18px;
-        border: 2px solid {c['border']};
+        border: 2px solid {c["border"]};
         border-radius: {RADIUS_SMALL};
-        background-color: {c['surface']};
+        background-color: {c["surface"]};
     }}
 
     QCheckBox::indicator:hover {{
-        border-color: {c['primary']};
+        border-color: {c["primary"]};
     }}
 
     QCheckBox::indicator:checked {{
-        background-color: {c['primary']};
-        border-color: {c['primary']};
+        background-color: {c["primary"]};
+        border-color: {c["primary"]};
     }}
 
     QCheckBox::indicator:disabled {{
-        background-color: {c['surface_alt']};
-        border-color: {c['disabled']};
+        background-color: {c["surface_alt"]};
+        border-color: {c["disabled"]};
     }}
 
     /* === Radio Button (same blue box as checkbox for theme selection) === */
     QRadioButton {{
-        color: {c['text']};
+        color: {c["text"]};
         font-size: {FONT_SIZE_BASE};
         spacing: 8px;
     }}
@@ -470,29 +470,29 @@ def get_stylesheet(theme: str = "dark") -> str:
     QRadioButton::indicator {{
         width: 18px;
         height: 18px;
-        border: 2px solid {c['border']};
+        border: 2px solid {c["border"]};
         border-radius: {RADIUS_SMALL};
-        background-color: {c['surface']};
+        background-color: {c["surface"]};
     }}
 
     QRadioButton::indicator:hover {{
-        border-color: {c['primary']};
+        border-color: {c["primary"]};
     }}
 
     QRadioButton::indicator:checked {{
-        background-color: {c['primary']};
-        border-color: {c['primary']};
+        background-color: {c["primary"]};
+        border-color: {c["primary"]};
     }}
 
     QRadioButton::indicator:disabled {{
-        background-color: {c['surface_alt']};
-        border-color: {c['disabled']};
+        background-color: {c["surface_alt"]};
+        border-color: {c["disabled"]};
     }}
 
     /* === Sliders === */
     QSlider::groove:horizontal {{
         height: 6px;
-        background-color: {c['border']};
+        background-color: {c["border"]};
         border-radius: 3px;
     }}
 
@@ -500,18 +500,18 @@ def get_stylesheet(theme: str = "dark") -> str:
         width: 16px;
         height: 16px;
         margin: -5px 0;
-        background-color: {c['surface']};
-        border: 2px solid {c['border']};
+        background-color: {c["surface"]};
+        border: 2px solid {c["border"]};
         border-radius: 8px;
     }}
 
     QSlider::handle:horizontal:hover {{
-        border-color: {c['primary']};
-        background-color: {c['hover']};
+        border-color: {c["primary"]};
+        background-color: {c["hover"]};
     }}
 
     QSlider::sub-page:horizontal {{
-        background-color: {c['primary']};
+        background-color: {c["primary"]};
         border-radius: 3px;
     }}
 
@@ -519,8 +519,8 @@ def get_stylesheet(theme: str = "dark") -> str:
     QGroupBox {{
         font-size: {FONT_SIZE_BASE};
         font-weight: 600;
-        color: {c['text']};
-        border: 1px solid {c['border']};
+        color: {c["text"]};
+        border: 1px solid {c["border"]};
         border-radius: {RADIUS};
         margin-top: 12px;
         padding: 16px 12px 12px 12px;
@@ -533,25 +533,25 @@ def get_stylesheet(theme: str = "dark") -> str:
         left: 12px;
         top: 4px;
         padding: 0 6px;
-        background-color: {c['surface']};
-        color: {c['text_secondary']};
+        background-color: {c["surface"]};
+        color: {c["text_secondary"]};
         font-weight: 600;
         font-size: {FONT_SIZE_SMALL};
     }}
 
     /* === Tab Widget === */
     QTabWidget::pane {{
-        border: 1px solid {c['border']};
+        border: 1px solid {c["border"]};
         border-radius: {RADIUS};
-        background-color: {c['surface']};
+        background-color: {c["surface"]};
         top: -1px;
         padding: 8px;
     }}
 
     QTabBar::tab {{
-        background-color: {c['surface_alt']};
-        color: {c['text_secondary']};
-        border: 1px solid {c['border']};
+        background-color: {c["surface_alt"]};
+        color: {c["text_secondary"]};
+        border: 1px solid {c["border"]};
         border-bottom: none;
         border-top-left-radius: {RADIUS};
         border-top-right-radius: {RADIUS};
@@ -561,23 +561,23 @@ def get_stylesheet(theme: str = "dark") -> str:
     }}
 
     QTabBar::tab:selected {{
-        background-color: {c['surface']};
-        color: {c['primary']};
+        background-color: {c["surface"]};
+        color: {c["primary"]};
         font-weight: 600;
-        border-color: {c['border']};
-        border-bottom: 1px solid {c['surface']};
+        border-color: {c["border"]};
+        border-bottom: 1px solid {c["surface"]};
         margin-bottom: -1px;
     }}
 
     QTabBar::tab:hover:!selected {{
-        background-color: {c['hover']};
-        color: {c['text']};
+        background-color: {c["hover"]};
+        color: {c["text"]};
     }}
 
     /* === List Widget === */
     QListWidget {{
-        background-color: {c['surface']};
-        border: 1px solid {c['border']};
+        background-color: {c["surface"]};
+        border: 1px solid {c["border"]};
         border-radius: {RADIUS};
         padding: 4px;
         outline: none;
@@ -586,32 +586,32 @@ def get_stylesheet(theme: str = "dark") -> str:
     QListWidget::item {{
         padding: 10px 12px;
         border-radius: {RADIUS_SMALL};
-        background-color: {c['surface']};
-        border: 1px solid {c['border']};
+        background-color: {c["surface"]};
+        border: 1px solid {c["border"]};
         margin: 3px 4px;
         min-height: 20px;
     }}
 
     QListWidget::item:hover {{
-        background-color: {c['hover']};
-        border-color: {c['primary']};
+        background-color: {c["hover"]};
+        border-color: {c["primary"]};
     }}
 
     QListWidget::item:selected {{
-        background-color: {c['primary']};
+        background-color: {c["primary"]};
         color: white;
-        border-color: {c['primary']};
+        border-color: {c["primary"]};
     }}
 
     QListWidget::item:selected:!active {{
-        background-color: {c['surface_alt']};
-        color: {c['text']};
-        border-color: {c['border']};
+        background-color: {c["surface_alt"]};
+        color: {c["text"]};
+        border-color: {c["border"]};
     }}
 
     /* Horizontal divider between Load button and Recent Experiments (Experiment Manager) */
     QFrame#experimentManagerDivider {{
-        background-color: {c['border']};
+        background-color: {c["border"]};
         border: none;
     }}
 
@@ -622,39 +622,39 @@ def get_stylesheet(theme: str = "dark") -> str:
 
     /* === Splitter === */
     QSplitter::handle {{
-        background-color: {c['border']};
+        background-color: {c["border"]};
         width: 2px;
         height: 2px;
     }}
 
     QSplitter::handle:hover {{
-        background-color: {c['primary']};
+        background-color: {c["primary"]};
     }}
 
     /* === Progress Bar === */
     QProgressBar {{
-        border: 1px solid {c['border']};
+        border: 1px solid {c["border"]};
         border-radius: {RADIUS};
         text-align: center;
-        background-color: {c['surface_alt']};
+        background-color: {c["surface_alt"]};
         height: 24px;
     }}
 
     QProgressBar::chunk {{
-        background-color: {c['primary']};
+        background-color: {c["primary"]};
         border-radius: {RADIUS_SMALL};
     }}
 
     /* === Text Edit (read-only log, etc.) === */
     QTextEdit {{
-        background-color: {c['surface_alt']};
-        color: {c['text']};
-        border: 1px solid {c['border']};
+        background-color: {c["surface_alt"]};
+        color: {c["text"]};
+        border: 1px solid {c["border"]};
         border-radius: {RADIUS};
         padding: 8px;
         font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
         font-size: {FONT_SIZE_SMALL};
-        selection-background-color: {c['primary']};
+        selection-background-color: {c["primary"]};
         selection-color: white;
     }}
 
@@ -665,9 +665,9 @@ def get_stylesheet(theme: str = "dark") -> str:
 
     /* === Menu Bar & Menus === */
     QMenuBar {{
-        background-color: {c['surface']};
-        color: {c['text']};
-        border-bottom: 1px solid {c['border']};
+        background-color: {c["surface"]};
+        color: {c["text"]};
+        border-bottom: 1px solid {c["border"]};
         padding: 4px 0;
     }}
 
@@ -677,13 +677,13 @@ def get_stylesheet(theme: str = "dark") -> str:
     }}
 
     QMenuBar::item:selected {{
-        background-color: {c['hover']};
-        color: {c['primary']};
+        background-color: {c["hover"]};
+        color: {c["primary"]};
     }}
 
     QMenu {{
-        background-color: {c['surface']};
-        border: 1px solid {c['border']};
+        background-color: {c["surface"]};
+        border: 1px solid {c["border"]};
         border-radius: {RADIUS};
         padding: 4px;
     }}
@@ -694,91 +694,91 @@ def get_stylesheet(theme: str = "dark") -> str:
     }}
 
     QMenu::item:selected {{
-        background-color: {c['hover']};
-        color: {c['primary']};
+        background-color: {c["hover"]};
+        color: {c["primary"]};
     }}
 
     QMenu::separator {{
         height: 1px;
-        background-color: {c['border']};
+        background-color: {c["border"]};
         margin: 4px 8px;
     }}
 
     /* === Status Bar === */
     QStatusBar {{
-        background-color: {c['surface']};
-        color: {c['text_secondary']};
-        border-top: 1px solid {c['border']};
+        background-color: {c["surface"]};
+        color: {c["text_secondary"]};
+        border-top: 1px solid {c["border"]};
         padding: 4px 8px;
         font-size: {FONT_SIZE_SMALL};
     }}
 
     /* === Tool Bar (matplotlib navigation toolbar) === */
     QToolBar {{
-        background-color: {c['surface']};
-        color: {c['text']};
-        border: 1px solid {c['border']};
+        background-color: {c["surface"]};
+        color: {c["text"]};
+        border: 1px solid {c["border"]};
         border-radius: {RADIUS};
         padding: 4px;
         spacing: 4px;
     }}
 
     QToolBar QToolButton {{
-        background-color: {c['surface']};
-        color: {c['text']};
+        background-color: {c["surface"]};
+        color: {c["text"]};
         border: 1px solid transparent;
         border-radius: {RADIUS_SMALL};
         padding: 4px 8px;
     }}
 
     QToolBar QToolButton:hover {{
-        background-color: {c['hover']};
-        color: {c['primary']};
-        border-color: {c['border']};
+        background-color: {c["hover"]};
+        color: {c["primary"]};
+        border-color: {c["border"]};
     }}
 
     QToolBar QToolButton:pressed {{
-        background-color: {c['border']};
+        background-color: {c["border"]};
     }}
 
     /* Matplotlib toolbar: in light mode use dark bg so white icons are visible */
     QToolBar#mpl_nav_toolbar {{
-        background-color: {c.get('mpl_toolbar_bg', c['surface'])};
-        color: {c.get('mpl_toolbar_text', c['text'])};
-        border: 1px solid {c.get('mpl_toolbar_border', c['border'])};
+        background-color: {c.get("mpl_toolbar_bg", c["surface"])};
+        color: {c.get("mpl_toolbar_text", c["text"])};
+        border: 1px solid {c.get("mpl_toolbar_border", c["border"])};
     }}
 
     QToolBar#mpl_nav_toolbar QToolButton {{
-        background-color: {c.get('mpl_toolbar_bg', c['surface'])};
-        color: {c.get('mpl_toolbar_text', c['text'])};
+        background-color: {c.get("mpl_toolbar_bg", c["surface"])};
+        color: {c.get("mpl_toolbar_text", c["text"])};
     }}
 
     QToolBar#mpl_nav_toolbar QToolButton:hover {{
-        background-color: {c.get('mpl_toolbar_hover', c['hover'])};
-        color: {c.get('mpl_toolbar_text', c['text'])};
+        background-color: {c.get("mpl_toolbar_hover", c["hover"])};
+        color: {c.get("mpl_toolbar_text", c["text"])};
     }}
 
     QToolBar#mpl_nav_toolbar QToolButton:pressed {{
-        background-color: {c.get('mpl_toolbar_border', c['border'])};
+        background-color: {c.get("mpl_toolbar_border", c["border"])};
     }}
 
     /* === Scroll Bars === */
     QScrollBar:vertical {{
-        background-color: {c['surface_alt']};
+        background-color: {c["surface_alt"]};
         width: 12px;
         border-radius: 6px;
         margin: 0;
     }}
 
     QScrollBar::handle:vertical {{
-        background-color: {c['disabled']};
+        background-color: {c["disabled"]};
         border-radius: 6px;
         min-height: 24px;
         margin: 2px;
     }}
 
     QScrollBar::handle:vertical:hover {{
-        background-color: {c['text_secondary']};
+        background-color: {c["text_secondary"]};
     }}
 
     QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
@@ -786,43 +786,43 @@ def get_stylesheet(theme: str = "dark") -> str:
     }}
 
     QScrollBar:horizontal {{
-        background-color: {c['surface_alt']};
+        background-color: {c["surface_alt"]};
         height: 12px;
         border-radius: 6px;
         margin: 0;
     }}
 
     QScrollBar::handle:horizontal {{
-        background-color: {c['disabled']};
+        background-color: {c["disabled"]};
         border-radius: 6px;
         min-width: 24px;
         margin: 2px;
     }}
 
     QScrollBar::handle:horizontal:hover {{
-        background-color: {c['text_secondary']};
+        background-color: {c["text_secondary"]};
     }}
 
     /* === Form Layout spacing === */
     QFormLayout QLabel {{
-        color: {c['text_secondary']};
+        color: {c["text_secondary"]};
     }}
 
     /* Plot hover / coordinate readout label */
     QLabel[class="plot-hover"] {{
-        color: {c['text_secondary']};
+        color: {c["text_secondary"]};
         font-size: {FONT_SIZE_SMALL};
     }}
 
     /* === Image container (neutral background for image display) === */
     QWidget#imageContainer {{
-        background-color: {c['surface_alt']};
+        background-color: {c["surface_alt"]};
     }}
 
     /* === Tooltip === */
     QToolTip {{
-        background-color: {c['text']};
-        color: {c['surface']};
+        background-color: {c["text"]};
+        color: {c["surface"]};
         border: none;
         border-radius: {RADIUS_SMALL};
         padding: 6px 10px;
@@ -831,6 +831,6 @@ def get_stylesheet(theme: str = "dark") -> str:
 
     /* === Message Box (kept consistent with theme) === */
     QMessageBox {{
-        background-color: {c['surface']};
+        background-color: {c["surface"]};
     }}
     """

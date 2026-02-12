@@ -1,25 +1,30 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from core.experiment_manager import Experiment
 
 import numpy as np
-from core.roi import ROI, ROIShape
 from matplotlib.backends.backend_qtagg import (
     FigureCanvasQTAgg as FigureCanvas,
+)
+from matplotlib.backends.backend_qtagg import (
     NavigationToolbar2QT as NavigationToolbar,
 )
 from matplotlib.figure import Figure
-from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QPushButton,
-    QLabel,
-    QFileDialog,
-    QMessageBox,
-)
 from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+)
 
+from core.roi import ROI, ROIShape
 from ui.app_settings import get_theme
 from ui.styles import get_mpl_theme
 
@@ -34,14 +39,14 @@ class ROIIntensityPlotWidget(QWidget):
         self.roi: Optional[ROI] = None
         self.experiment: Optional["Experiment"] = None
         self._hover_cid = None
-        
+
         layout = QVBoxLayout(self)
-        
+
         # Label for status
         self.status_label = QLabel("No ROI selected. Select an ROI in the image viewer.")
         self.status_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.status_label)
-        
+
         # Matplotlib figure and canvas (theme applied when plotting)
         self.figure = Figure(figsize=(8, 6))
         self.canvas = FigureCanvas(self.figure)
@@ -49,26 +54,26 @@ class ROIIntensityPlotWidget(QWidget):
         self.toolbar.setObjectName("mpl_nav_toolbar")
         layout.addWidget(self.toolbar)
         layout.addWidget(self.canvas)
-        
+
         # Hover label for coordinates
         self.hover_label = QLabel("Hover over plot for frame and intensity.")
         self.hover_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.hover_label)
-        
+
         # Buttons layout
         button_layout = QHBoxLayout()
-        
+
         self.export_png_btn = QPushButton("Export PNG...")
         self.export_png_btn.clicked.connect(self._export_to_png)
         self.export_png_btn.setEnabled(False)
         self.export_png_btn.setToolTip("Save the current plot as a PNG image.")
         button_layout.addWidget(self.export_png_btn)
-        
+
         self.export_btn = QPushButton("Export to CSV")
         self.export_btn.clicked.connect(self._export_to_csv)
         self.export_btn.setEnabled(False)
         button_layout.addWidget(self.export_btn)
-        
+
         layout.addLayout(button_layout)
 
     def _apply_theme(self, ax) -> None:
@@ -103,11 +108,7 @@ class ROIIntensityPlotWidget(QWidget):
             f"Frame {frame_idx}  ·  Intensity {self.intensity_data[frame_idx]:.3f}"
         )
 
-    def plot_intensity_time_series(
-        self,
-        intensity_data: np.ndarray,
-        roi: ROI
-    ) -> None:
+    def plot_intensity_time_series(self, intensity_data: np.ndarray, roi: ROI) -> None:
         """
         Plot mean intensity time series for the selected ROI.
 
@@ -125,8 +126,8 @@ class ROIIntensityPlotWidget(QWidget):
 
         frames = np.arange(len(intensity_data))
         ax.plot(frames, intensity_data, linewidth=2, color=theme["roi_line_color"])
-        ax.set_xlabel('Frame Number', fontsize=12)
-        ax.set_ylabel('Mean Pixel Intensity', fontsize=12)
+        ax.set_xlabel("Frame Number", fontsize=12)
+        ax.set_ylabel("Mean Pixel Intensity", fontsize=12)
 
         if roi.shape == ROIShape.POLYGON and roi.points:
             roi_desc = f"Polygon ({len(roi.points)} points)"
@@ -135,14 +136,13 @@ class ROIIntensityPlotWidget(QWidget):
         ax.set_title(f"ROI Intensity Over Time\n{roi_desc}", fontsize=14)
         self._apply_theme(ax)
 
-
         self.status_label.setText(
             f"{roi_desc} | Frames: {len(intensity_data)} | "
             f"Mean Intensity: {np.mean(intensity_data):.2f}"
         )
         self.export_btn.setEnabled(True)
         self.export_png_btn.setEnabled(True)
-        
+
         if self._hover_cid is not None:
             self.canvas.mpl_disconnect(self._hover_cid)
         self._hover_cid = self.canvas.mpl_connect("motion_notify_event", self._on_motion)
@@ -183,51 +183,39 @@ class ROIIntensityPlotWidget(QWidget):
         if self.intensity_data is None:
             QMessageBox.warning(self, "No Data", "No intensity data to export.")
             return
-        
+
         # Check for experiment name properly set
         experiment_name = self.experiment.name if self.experiment else "Experiment"
-        
+
         # Get save location
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Save Intensity Data",
             f"{experiment_name}_roi_intensity_data.csv",
-            "CSV Files (*.csv)"
+            "CSV Files (*.csv)",
         )
-        
+
         if not file_path:
             return
-        
+
         try:
             # Create CSV with frame numbers and intensities
             # Format: Frame, Intensity
-            data_to_save = np.column_stack([
-                np.arange(len(self.intensity_data)),
-                self.intensity_data
-            ])
-            
+            data_to_save = np.column_stack(
+                [np.arange(len(self.intensity_data)), self.intensity_data]
+            )
+
             # Save with header
             header = "Frame,Mean_Intensity"
             np.savetxt(
-                file_path,
-                data_to_save,
-                delimiter=',',
-                header=header,
-                comments='',
-                fmt='%d,%.6f'
+                file_path, data_to_save, delimiter=",", header=header, comments="", fmt="%d,%.6f"
             )
-            
+
             QMessageBox.information(
-                self,
-                "Export Successful",
-                f"Intensity data exported to:\n{file_path}"
+                self, "Export Successful", f"Intensity data exported to:\n{file_path}"
             )
         except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Export Failed",
-                f"Failed to export data:\n{str(e)}"
-            )
+            QMessageBox.critical(self, "Export Failed", f"Failed to export data:\n{str(e)}")
 
     def refresh_theme(self) -> None:
         """Redraw the plot with the current app theme (e.g. after theme change)."""
@@ -247,4 +235,3 @@ class ROIIntensityPlotWidget(QWidget):
         self.hover_label.setText("Hover over plot for frame and intensity.")
         self.export_btn.setEnabled(False)
         self.export_png_btn.setEnabled(False)
-

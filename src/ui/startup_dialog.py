@@ -3,34 +3,33 @@ from __future__ import annotations
 import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Callable, Optional
 
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
-    QFrame,
-    QLabel,
-    QListWidget,
-    QListWidgetItem,
-    QPushButton,
-    QToolButton,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QHBoxLayout,
+    QLabel,
     QLineEdit,
+    QListWidget,
+    QListWidgetItem,
+    QMenu,
+    QMessageBox,
     QPlainTextEdit,
+    QPushButton,
+    QSizePolicy,
+    QToolButton,
     QVBoxLayout,
     QWidget,
-    QMessageBox,
-    QMenu,
-    QSizePolicy,
 )
 
-from core.experiment_manager import ExperimentManager, Experiment
+from core.experiment_manager import Experiment, ExperimentManager
 from ui.settings_dialog import SettingsDialog
-
 
 EXPERIMENTS_DIR = Path(__file__).resolve().parents[2] / "experiments"
 EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -76,7 +75,10 @@ class RecentExperimentRow(QWidget):
         layout.addWidget(self.options_btn)
 
     def mousePressEvent(self, event) -> None:
-        if event.button() == Qt.LeftButton and self.childAt(event.position().toPoint()) != self.options_btn:
+        if (
+            event.button() == Qt.LeftButton
+            and self.childAt(event.position().toPoint()) != self.options_btn
+        ):
             self._on_click()
         super().mousePressEvent(event)
 
@@ -134,7 +136,9 @@ class NewExperimentDialog(QDialog):
         self.metadata: dict = {}
 
     def _browse(self) -> None:
-        directory = QFileDialog.getExistingDirectory(self, "Select Save Location", self.path_edit.text())
+        directory = QFileDialog.getExistingDirectory(
+            self, "Select Save Location", self.path_edit.text()
+        )
         if directory:
             self.path_edit.setText(directory)
 
@@ -240,6 +244,7 @@ class StartupDialog(QDialog):
 
     def _row_size_hint(self):
         from PySide6.QtCore import QSize
+
         return QSize(0, 52)
 
     def _get_item_for_path(self, path: str):
@@ -306,7 +311,9 @@ class StartupDialog(QDialog):
             self.accept()
 
     def _load_existing(self) -> None:
-        file_path, _ = QFileDialog.getOpenFileName(self, "Open Experiment", str(EXPERIMENTS_DIR), "Neurolight Experiment (*.nexp)")
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Open Experiment", str(EXPERIMENTS_DIR), "Neurolight Experiment (*.nexp)"
+        )
         if not file_path:
             return
         try:
@@ -317,9 +324,7 @@ class StartupDialog(QDialog):
             self.accept()
         except Exception as e:
             QMessageBox.warning(
-                self,
-                "Load Failed",
-                f"Failed to load experiment:\n{file_path}\n\n{str(e)}"
+                self, "Load Failed", f"Failed to load experiment:\n{file_path}\n\n{str(e)}"
             )
             self._refresh_recent()
 
@@ -335,7 +340,8 @@ class StartupDialog(QDialog):
             QMessageBox.warning(
                 self,
                 "Load Failed",
-                f"Failed to load experiment:\n{path}\n\nThe file may have been deleted or is corrupted."
+                f"Failed to load experiment:\n{path}\n\n"
+                "The file may have been deleted or is corrupted.",
             )
             self._refresh_recent()
 
@@ -349,15 +355,15 @@ class StartupDialog(QDialog):
         item = self.recent_list.itemAt(position)
         if item is None:
             return
-        
+
         menu = QMenu(self)
         open_action = menu.addAction("Open")
         delete_action = menu.addAction("Delete from List")
         delete_file_action = menu.addAction("Delete File and Remove from List")
         export_action = menu.addAction("Export")
-        
+
         action = menu.exec(self.recent_list.mapToGlobal(position))
-        
+
         if action == open_action:
             self._open_recent(item)
         elif action == delete_action:
@@ -372,7 +378,7 @@ class StartupDialog(QDialog):
         path = item.data(Qt.UserRole)
         if not path:
             return
-        
+
         if delete_file:
             reply = QMessageBox.warning(
                 self,
@@ -380,82 +386,60 @@ class StartupDialog(QDialog):
                 f"Are you sure you want to permanently delete:\n{path}\n\n"
                 "This action cannot be undone!",
                 QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No
+                QMessageBox.No,
             )
             if reply != QMessageBox.Yes:
                 return
-        
+
         try:
             if self.manager.delete_experiment(path, delete_file=delete_file):
                 self._refresh_recent()
                 if delete_file:
                     QMessageBox.information(
-                        self,
-                        "Deleted",
-                        "Experiment file and entry have been deleted."
+                        self, "Deleted", "Experiment file and entry have been deleted."
                     )
                 else:
                     QMessageBox.information(
-                        self,
-                        "Removed",
-                        "Experiment has been removed from the recent list."
+                        self, "Removed", "Experiment has been removed from the recent list."
                     )
             else:
-                QMessageBox.warning(
-                    self,
-                    "Delete Failed",
-                    "Failed to delete experiment."
-                )
+                QMessageBox.warning(self, "Delete Failed", "Failed to delete experiment.")
         except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Error",
-                f"An error occurred while deleting:\n{str(e)}"
-            )
+            QMessageBox.critical(self, "Error", f"An error occurred while deleting:\n{str(e)}")
 
     def _export_experiment(self, item: QListWidgetItem) -> None:
         """Export an experiment to a .nexp file."""
         path = item.data(Qt.UserRole)
         if not path:
             return
-        
+
         try:
             # Load the experiment
             experiment = self.manager.load_experiment(path)
-            
+
             # Get export location
             default_name = f"{experiment.name}_export.nexp"
             file_path, _ = QFileDialog.getSaveFileName(
                 self,
                 "Export Experiment",
                 default_name,
-                "Neurolight Experiment (*.nexp);;All Files (*)"
+                "Neurolight Experiment (*.nexp);;All Files (*)",
             )
-            
+
             if not file_path:
                 return
-            
+
             # Ensure .nexp extension
             if not file_path.endswith(".nexp"):
                 file_path += ".nexp"
-            
+
             # Export experiment data using the manager's save method
             # This ensures the file format matches the native .nexp format
             if self.manager.save_experiment(experiment, file_path):
                 QMessageBox.information(
-                    self,
-                    "Export Successful",
-                    f"Experiment exported to:\n{file_path}"
+                    self, "Export Successful", f"Experiment exported to:\n{file_path}"
                 )
             else:
-                QMessageBox.warning(
-                    self,
-                    "Export Failed",
-                    "Failed to export experiment."
-                )
+                QMessageBox.warning(self, "Export Failed", "Failed to export experiment.")
         except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Export Failed",
-                f"Failed to export experiment:\n{str(e)}"
-            )
+            QMessageBox.critical(self, "Export Failed", f"Failed to export experiment:\n{str(e)}")

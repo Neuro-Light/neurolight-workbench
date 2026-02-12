@@ -1,15 +1,14 @@
-import os
 import sys
 from pathlib import Path
 
+from PySide6.QtCore import QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
-from PySide6.QtCore import QTimer
 
-from ui.startup_dialog import StartupDialog
-from ui.main_window import MainWindow
-from ui.styles import get_stylesheet
 from ui.app_settings import get_theme
+from ui.main_window import MainWindow
+from ui.startup_dialog import StartupDialog
+from ui.styles import get_stylesheet
 
 # Application icon (project root / logo.png)
 _LOGO_PATH = Path(__file__).resolve().parent.parent / "logo.png"
@@ -49,4 +48,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

@@ -16,9 +16,11 @@ _MIN_FRAMES_FOR_MP = 10
 # with the 'spawn' start method used on Windows / macOS).
 # ------------------------------------------------------------------
 
+
 def _register_pair(ref_frame, moving_frame, transform_type):
     """Register *moving_frame* to *ref_frame*.  Runs in a worker process."""
     from pystackreg import StackReg
+
     sr = StackReg(transform_type)
     return sr.register(ref_frame, moving_frame)
 
@@ -26,6 +28,7 @@ def _register_pair(ref_frame, moving_frame, transform_type):
 def _transform_frame(frame, tmat, transform_type):
     """Apply *tmat* to a single frame.  Runs in a worker process."""
     from pystackreg import StackReg
+
     sr = StackReg(transform_type)
     result = sr.transform(frame, tmat=tmat)
     # Convert back to uint16 to reduce IPC serialization size.
@@ -38,7 +41,7 @@ def _transform_frame(frame, tmat, transform_type):
 class AlignmentWorker(QThread):
     """Worker thread that runs the image alignment pipeline off the main thread."""
 
-    progress = Signal(int, int, str)       # (completed, total, message)
+    progress = Signal(int, int, str)  # (completed, total, message)
     finished = Signal(object, object, object)  # (aligned_stack, tmats, confidence_scores)
     error = Signal(str)
     cancelled = Signal()
@@ -96,9 +99,7 @@ class AlignmentWorker(QThread):
                 "affine": StackReg.AFFINE,
                 "bilinear": StackReg.BILINEAR,
             }
-            transform_const = transform_map.get(
-                self._transform_type.lower(), StackReg.RIGID_BODY
-            )
+            transform_const = transform_map.get(self._transform_type.lower(), StackReg.RIGID_BODY)
 
             sr = StackReg(transform_const)
 
@@ -112,9 +113,7 @@ class AlignmentWorker(QThread):
 
             if global_range > 0:
                 image_stack_uint16 = (
-                    (image_stack.astype(np.float32) - global_min)
-                    / global_range
-                    * 65535.0
+                    (image_stack.astype(np.float32) - global_min) / global_range * 65535.0
                 ).astype(np.uint16)
             else:
                 image_stack_uint16 = image_stack.astype(np.uint16)
@@ -131,9 +130,7 @@ class AlignmentWorker(QThread):
                 # 'spawn' is the only start method safe with Qt on all
                 # platforms (fork can deadlock on macOS / crash on Windows).
                 ctx = multiprocessing.get_context("spawn")
-                executor = ProcessPoolExecutor(
-                    max_workers=n_workers, mp_context=ctx
-                )
+                executor = ProcessPoolExecutor(max_workers=n_workers, mp_context=ctx)
 
             # ----------------------------------------------------------
             # Registration
@@ -149,12 +146,8 @@ class AlignmentWorker(QThread):
                 if tmats is None:
                     return  # cancelled
             else:
-                self.progress.emit(
-                    0, num_frames, "Computing transformation matrices..."
-                )
-                tmats = sr.register_stack(
-                    image_stack_uint16, reference=self._reference
-                )
+                self.progress.emit(0, num_frames, "Computing transformation matrices...")
+                tmats = sr.register_stack(image_stack_uint16, reference=self._reference)
 
             if self._check_cancel("registration"):
                 return
@@ -164,18 +157,13 @@ class AlignmentWorker(QThread):
             # ----------------------------------------------------------
             if executor is not None:
                 aligned_stack_uint16 = self._transform_parallel(
-                    executor, image_stack_uint16, tmats, transform_const,
-                    num_frames
+                    executor, image_stack_uint16, tmats, transform_const, num_frames
                 )
                 if aligned_stack_uint16 is None:
                     return  # cancelled
             else:
-                self.progress.emit(
-                    0, num_frames, "Applying transformations..."
-                )
-                aligned_stack_uint16 = sr.transform_stack(
-                    image_stack_uint16, tmats=tmats
-                )
+                self.progress.emit(0, num_frames, "Applying transformations...")
+                aligned_stack_uint16 = sr.transform_stack(image_stack_uint16, tmats=tmats)
 
             del image_stack_uint16
 
@@ -189,21 +177,15 @@ class AlignmentWorker(QThread):
 
             if global_range > 0:
                 aligned_float = (
-                    aligned_stack_uint16.astype(np.float32)
-                    * (global_range / 65535.0)
-                    + global_min
+                    aligned_stack_uint16.astype(np.float32) * (global_range / 65535.0) + global_min
                 )
                 del aligned_stack_uint16
 
                 dtype = image_stack.dtype
                 if dtype == np.uint8:
-                    aligned_stack = np.clip(
-                        aligned_float, 0, 255
-                    ).astype(np.uint8)
+                    aligned_stack = np.clip(aligned_float, 0, 255).astype(np.uint8)
                 elif dtype == np.uint16:
-                    aligned_stack = np.clip(
-                        aligned_float, 0, 65535
-                    ).astype(np.uint16)
+                    aligned_stack = np.clip(aligned_float, 0, 65535).astype(np.uint16)
                 else:
                     aligned_stack = aligned_float.astype(dtype)
 
@@ -218,16 +200,12 @@ class AlignmentWorker(QThread):
             # ----------------------------------------------------------
             # Confidence scores (NCC per frame)
             # ----------------------------------------------------------
-            self.progress.emit(
-                0, num_frames, "Calculating confidence scores..."
-            )
+            self.progress.emit(0, num_frames, "Calculating confidence scores...")
 
             confidence_scores: list[float] = []
             mean_reference_frame = None
             if self._reference == "mean":
-                mean_reference_frame = np.mean(
-                    aligned_stack.astype(np.float32), axis=0
-                )
+                mean_reference_frame = np.mean(aligned_stack.astype(np.float32), axis=0)
 
             for i in range(num_frames):
                 if self._check_cancel("confidence calculation"):
@@ -257,12 +235,8 @@ class AlignmentWorker(QThread):
                 ref_float = reference_frame.astype(np.float32)
                 ali_float = aligned_stack[i].astype(np.float32)
 
-                ref_norm = (ref_float - ref_float.mean()) / (
-                    ref_float.std() + 1e-10
-                )
-                ali_norm = (ali_float - ali_float.mean()) / (
-                    ali_float.std() + 1e-10
-                )
+                ref_norm = (ref_float - ref_float.mean()) / (ref_float.std() + 1e-10)
+                ali_norm = (ali_float - ali_float.mean()) / (ali_float.std() + 1e-10)
                 ncc = float(np.mean(ref_norm * ali_norm))
 
                 confidence_scores.append(max(0.0, min(1.0, ncc)))
@@ -282,9 +256,7 @@ class AlignmentWorker(QThread):
 
     def _register_parallel(self, executor, stack, transform_const, num_frames):
         """Register every frame against a fixed reference in parallel."""
-        self.progress.emit(
-            0, num_frames - 1, "Registering frames (parallel)..."
-        )
+        self.progress.emit(0, num_frames - 1, "Registering frames (parallel)...")
 
         if self._reference == "mean":
             ref_frame = np.mean(stack.astype(np.float32), axis=0)
@@ -296,9 +268,7 @@ class AlignmentWorker(QThread):
             if self._cancel_requested:
                 self.cancelled.emit()
                 return None
-            f = executor.submit(
-                _register_pair, ref_frame, stack[i], transform_const
-            )
+            f = executor.submit(_register_pair, ref_frame, stack[i], transform_const)
             futures[f] = i
 
         # Collect results as they complete
@@ -325,22 +295,16 @@ class AlignmentWorker(QThread):
 
         return tmats
 
-    def _transform_parallel(
-        self, executor, stack, tmats, transform_const, num_frames
-    ):
+    def _transform_parallel(self, executor, stack, tmats, transform_const, num_frames):
         """Apply per-frame transformations in parallel."""
-        self.progress.emit(
-            0, num_frames, "Transforming frames (parallel)..."
-        )
+        self.progress.emit(0, num_frames, "Transforming frames (parallel)...")
 
         futures = {}
         for i in range(num_frames):
             if self._cancel_requested:
                 self.cancelled.emit()
                 return None
-            f = executor.submit(
-                _transform_frame, stack[i], tmats[i], transform_const
-            )
+            f = executor.submit(_transform_frame, stack[i], tmats[i], transform_const)
             futures[f] = i
 
         results = [None] * num_frames
