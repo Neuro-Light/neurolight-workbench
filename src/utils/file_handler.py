@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional
 
 import numpy as np
 from PIL import Image
@@ -11,11 +10,11 @@ from core.experiment_manager import Experiment
 
 class ImageStackHandler:
     def __init__(self) -> None:
-        self.files: List[str] = []
-        self._experiment: Optional[Experiment] = None
+        self.files: list[str] = []
+        self._experiment: Experiment | None = None
 
-    def load_image_stack(self, directory_or_files) -> List[str]:
-        paths: List[str] = []
+    def load_image_stack(self, directory_or_files) -> list[str]:
+        paths: list[str] = []
         if isinstance(directory_or_files, (list, tuple)):
             for p in directory_or_files:
                 if str(p).lower().endswith((".tif", ".tiff")):
@@ -30,7 +29,7 @@ class ImageStackHandler:
         self.files = paths
         return self.files
 
-    def validate_tif_files(self, file_paths: List[str]) -> bool:
+    def validate_tif_files(self, file_paths: list[str]) -> bool:
         return all(str(p).lower().endswith((".tif", ".tiff")) for p in file_paths)
 
     def get_image_count(self) -> int:
@@ -42,7 +41,7 @@ class ImageStackHandler:
         with Image.open(self.files[index]) as img:
             return np.array(img)
 
-    def get_all_frames_as_array(self) -> Optional[np.ndarray]:
+    def get_all_frames_as_array(self) -> np.ndarray | None:
         """Load all frames as a 3D numpy array (frames, height, width).
         Reuses approach from Jupyter notebook.
         Preserves original image dtype to avoid precision loss (consistent with get_image_at_index).

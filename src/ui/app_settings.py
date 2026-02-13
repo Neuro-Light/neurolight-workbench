@@ -4,17 +4,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 CONFIG_DIR = Path.home() / ".neurolight"
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
 
-DEFAULTS: Dict[str, Any] = {
+DEFAULTS: dict[str, Any] = {
     "theme": "dark",
 }
 
 
-def load_settings() -> Dict[str, Any]:
+def load_settings() -> dict[str, Any]:
     """Load application settings from disk."""
     settings = DEFAULTS.copy()
     try:
@@ -28,7 +28,7 @@ def load_settings() -> Dict[str, Any]:
     return settings
 
 
-def save_settings(settings: Dict[str, Any]) -> None:
+def save_settings(settings: dict[str, Any]) -> None:
     """Save application settings to disk."""
     try:
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)

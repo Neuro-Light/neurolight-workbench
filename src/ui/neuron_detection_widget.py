@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import csv
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from core.experiment_manager import Experiment
@@ -33,16 +33,16 @@ class NeuronDetectionWidget(QWidget):
     # Emitted when neuron detection finishes successfully
     detectionCompleted = Signal()
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.neuron_locations: Optional[np.ndarray] = None
-        self.neuron_trajectories: Optional[np.ndarray] = None
-        self.quality_mask: Optional[np.ndarray] = None
-        self.mean_frame: Optional[np.ndarray] = None
-        self.roi_mask: Optional[np.ndarray] = None
-        self.experiment: Optional["Experiment"] = None
-        self.image_processor: Optional["ImageProcessor"] = None
-        self.frame_data: Optional[np.ndarray] = None
+        self.neuron_locations: np.ndarray | None = None
+        self.neuron_trajectories: np.ndarray | None = None
+        self.quality_mask: np.ndarray | None = None
+        self.mean_frame: np.ndarray | None = None
+        self.roi_mask: np.ndarray | None = None
+        self.experiment: "Experiment" | None = None
+        self.image_processor: "ImageProcessor" | None = None
+        self.frame_data: np.ndarray | None = None
 
         layout = QVBoxLayout(self)
 
@@ -164,12 +164,12 @@ class NeuronDetectionWidget(QWidget):
         """Set the image processor for detection."""
         self.image_processor = image_processor
 
-    def set_frame_data(self, frame_data: Optional[np.ndarray]) -> None:
+    def set_frame_data(self, frame_data: np.ndarray | None) -> None:
         """Set the frame data (3D array: frames, height, width)."""
         self.frame_data = frame_data
         self._update_ui_state()
 
-    def set_roi_mask(self, roi_mask: Optional[np.ndarray]) -> None:
+    def set_roi_mask(self, roi_mask: np.ndarray | None) -> None:
         """Set the ROI mask (2D boolean array)."""
         self.roi_mask = roi_mask
         self._update_ui_state()
@@ -187,8 +187,8 @@ class NeuronDetectionWidget(QWidget):
         neuron_locations: np.ndarray,
         neuron_trajectories: np.ndarray,
         quality_mask: np.ndarray,
-        mean_frame: Optional[np.ndarray] = None,
-        detection_params: Optional[Dict[str, Any]] = None,
+        mean_frame: np.ndarray | None = None,
+        detection_params: dict[str, Any] | None = None,
     ) -> None:
         """Load previously saved detection data."""
         self.neuron_locations = neuron_locations

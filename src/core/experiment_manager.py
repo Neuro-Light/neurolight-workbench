@@ -4,9 +4,9 @@ import base64
 import json
 import os
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 
@@ -20,14 +20,14 @@ class Experiment:
     name: str
     description: str = ""
     principal_investigator: str = ""
-    created_date: datetime = field(default_factory=datetime.utcnow)
-    modified_date: datetime = field(default_factory=datetime.utcnow)
-    image_stack_path: Optional[str] = None
+    created_date: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    modified_date: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    image_stack_path: str | None = None
     image_count: int = 0
-    image_stack_files: List[str] = field(default_factory=list)  # List of selected file paths
-    processing_history: List[Dict[str, Any]] = field(default_factory=list)
-    analysis_results: Dict[str, Any] = field(default_factory=dict)
-    settings: Dict[str, Any] = field(
+    image_stack_files: list[str] = field(default_factory=list)  # List of selected file paths
+    processing_history: list[dict[str, Any]] = field(default_factory=list)
+    analysis_results: dict[str, Any] = field(default_factory=dict)
+    settings: dict[str, Any] = field(
         default_factory=lambda: {
             "display": {
                 "colormap": "gray",
@@ -47,9 +47,9 @@ class Experiment:
     # where shape is "ellipse" (rectangle kept for legacy compatibility only)
     # These coordinates are in original image pixels, ensuring ROI stays fixed to
     # the image region regardless of window size or scaling
-    roi: Optional[Dict[str, Any]] = None
+    roi: dict[str, Any] | None = None
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         return {
             "version": "1.0",
             "experiment": {
@@ -78,12 +78,12 @@ class Experiment:
         }
 
     @staticmethod
-    def from_json(data: Dict[str, Any]) -> "Experiment":
+    def from_json(data: dict[str, Any]) -> "Experiment":
         exp = data.get("experiment", {})
         created = exp.get("created_date")
         modified = exp.get("modified_date")
-        created_dt = datetime.fromisoformat(created) if created else datetime.utcnow()
-        modified_dt = datetime.fromisoformat(modified) if modified else datetime.utcnow()
+        created_dt = datetime.fromisoformat(created) if created else datetime.now(timezone.utc)
+        modified_dt = datetime.fromisoformat(modified) if modified else datetime.now(timezone.utc)
         image_stack = exp.get("image_stack", {})
         experiment = Experiment(
             name=exp.get("name", "Unnamed"),
@@ -109,9 +109,9 @@ class Experiment:
         return experiment
 
     def update_modified_date(self) -> None:
-        self.modified_date = datetime.utcnow()
+        self.modified_date = datetime.now(timezone.utc)
 
-    def _serialize_neuron_detection(self) -> Optional[Dict[str, Any]]:
+    def _serialize_neuron_detection(self) -> dict[str, Any] | None:
         """Serialize neuron detection data to JSON-serializable format."""
         # Check if data exists
         if not hasattr(self, "_neuron_detection_data"):
@@ -172,7 +172,7 @@ class Experiment:
 
         return result if result else None
 
-    def _deserialize_neuron_detection(self, data: Dict[str, Any]) -> None:
+    def _deserialize_neuron_detection(self, data: dict[str, Any]) -> None:
         """Deserialize neuron detection data from JSON format."""
         if not hasattr(self, "_neuron_detection_data"):
             self._neuron_detection_data = {}
@@ -214,11 +214,11 @@ class Experiment:
 
     def set_neuron_detection_data(
         self,
-        neuron_locations: Optional[np.ndarray] = None,
-        neuron_trajectories: Optional[np.ndarray] = None,
-        quality_mask: Optional[np.ndarray] = None,
-        mean_frame: Optional[np.ndarray] = None,
-        detection_params: Optional[Dict[str, Any]] = None,
+        neuron_locations: np.ndarray | None = None,
+        neuron_trajectories: np.ndarray | None = None,
+        quality_mask: np.ndarray | None = None,
+        mean_frame: np.ndarray | None = None,
+        detection_params: dict[str, Any] | None = None,
     ) -> None:
         """Store neuron detection data in the experiment."""
         # Always initialize the dict if it doesn't exist
@@ -239,7 +239,7 @@ class Experiment:
         if detection_params is not None:
             self._neuron_detection_data["detection_params"] = detection_params
 
-    def get_neuron_detection_data(self) -> Optional[Dict[str, Any]]:
+    def get_neuron_detection_data(self) -> dict[str, Any] | None:
         """Get stored neuron detection data."""
         if hasattr(self, "_neuron_detection_data"):
             return self._neuron_detection_data
@@ -252,7 +252,7 @@ class ExperimentManager:
         if RECENT_FILE.stat().st_size == 0:
             RECENT_FILE.write_text(json.dumps({"recent": []}, indent=2))
 
-    def create_new_experiment(self, metadata: Dict[str, Any]) -> Experiment:
+    def create_new_experiment(self, metadata: dict[str, Any]) -> Experiment:
         name = metadata.get("name", "").strip()
         if not name:
             raise ValueError("Experiment name cannot be empty")
@@ -260,8 +260,8 @@ class ExperimentManager:
             name=name,
             description=metadata.get("description", ""),
             principal_investigator=metadata.get("principal_investigator", ""),
-            created_date=metadata.get("created_date", datetime.utcnow()),
-            modified_date=datetime.utcnow(),
+            created_date=metadata.get("created_date", datetime.now(timezone.utc)),
+            modified_date=datetime.now(timezone.utc),
         )
         # Apply optional analysis type (e.g., "SCN") for future pipeline branching
         analysis_type = metadata.get("analysis_type")
@@ -280,7 +280,7 @@ class ExperimentManager:
         self.add_to_recent(file_path, experiment.name)
         return experiment
 
-    def save_experiment(self, experiment: Experiment, file_path: Optional[str] = None) -> bool:
+    def save_experiment(self, experiment: Experiment, file_path: str | None = None) -> bool:
         if not file_path:
             raise ValueError("file_path is required for saving experiment")
         experiment.update_modified_date()
@@ -306,7 +306,7 @@ class ExperimentManager:
         except Exception:
             return False
 
-    def get_recent_experiments(self) -> List[Dict[str, Any]]:
+    def get_recent_experiments(self) -> list[dict[str, Any]]:
         try:
             with open(RECENT_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f) or {"recent": []}
@@ -334,12 +334,12 @@ class ExperimentManager:
         except Exception:
             return []
 
-    def add_to_recent(self, file_path: str, name: Optional[str] = None) -> None:
+    def add_to_recent(self, file_path: str, name: str | None = None) -> None:
         file_path = str(Path(file_path).resolve())
         entry = {
             "path": file_path,
             "name": name or Path(file_path).stem,
-            "last_opened": datetime.utcnow().isoformat(timespec="seconds"),
+            "last_opened": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         }
         try:
             with open(RECENT_FILE, "r", encoding="utf-8") as f:

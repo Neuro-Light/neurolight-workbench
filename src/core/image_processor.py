@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 import cv2
 import numpy as np
@@ -20,7 +21,7 @@ class ImageProcessor:
             raise FileNotFoundError(path)
         return img
 
-    def preprocess_image(self, image: np.ndarray, params: Dict[str, Any]) -> np.ndarray:
+    def preprocess_image(self, image: np.ndarray, params: dict[str, Any]) -> np.ndarray:
         # Simple placeholder: Gaussian blur
         ksize = int(params.get("ksize", 3))
         out = cv2.GaussianBlur(image, (ksize, ksize), 0)
@@ -28,14 +29,15 @@ class ImageProcessor:
         return out
 
     def apply_opencv_filter(self, image: np.ndarray, filter_type: str) -> np.ndarray:
-        if filter_type == "edges":
-            out = cv2.Canny(image, 100, 200)
-        else:
-            out = image
+        match filter_type:
+            case "edges":
+                out = cv2.Canny(image, 100, 200)
+            case _:
+                out = image
         self.log_processing_step("filter", {"type": filter_type})
         return out
 
-    def log_processing_step(self, operation: str, params: Dict[str, Any]) -> None:
+    def log_processing_step(self, operation: str, params: dict[str, Any]) -> None:
         self.experiment.processing_history.append(
             {
                 "timestamp": self.experiment.modified_date.isoformat(),
@@ -146,7 +148,7 @@ class ImageProcessor:
         threshold_percentile: float = 95.0,
         min_area: int = 2,
         max_area: int = 100,
-    ) -> List[Tuple[int, int]]:
+    ) -> list[tuple[int, int]]:
         """
         Detect neuron positions (bright spots) in an image.
 
@@ -205,21 +207,22 @@ class ImageProcessor:
         suffix = path.suffix.lower()
 
         # Use tifffile for TIFF files (supports 16-bit, multi-page, etc.)
-        if suffix in [".tif", ".tiff"]:
-            try:
-                img = tifffile.imread(str(path))
-            except Exception as e:
-                raise ValueError(f"Failed to load TIFF file {path}: {e}") from e
-        else:
-            # Use PIL/Pillow for other formats
-            try:
-                pil_img = Image.open(str(path))
-                # Convert to grayscale if needed
-                if pil_img.mode != "L":
-                    pil_img = pil_img.convert("L")
-                img = np.array(pil_img)
-            except Exception as e:
-                raise ValueError(f"Failed to load image file {path}: {e}") from e
+        match suffix:
+            case ".tif" | ".tiff":
+                try:
+                    img = tifffile.imread(str(path))
+                except Exception as e:
+                    raise ValueError(f"Failed to load TIFF file {path}: {e}") from e
+            case _:
+                # Use PIL/Pillow for other formats
+                try:
+                    pil_img = Image.open(str(path))
+                    # Convert to grayscale if needed
+                    if pil_img.mode != "L":
+                        pil_img = pil_img.convert("L")
+                    img = np.array(pil_img)
+                except Exception as e:
+                    raise ValueError(f"Failed to load image file {path}: {e}") from e
 
         # Ensure 2D array
         if img.ndim == 2:
@@ -261,15 +264,16 @@ class ImageProcessor:
                 img = img[0]
             else:
                 # Multi-channel image: (height, width, channels)
-                if img.shape[2] == 3:
-                    # RGB - use luminance formula
-                    img = np.dot(img[..., :3], [0.2989, 0.5870, 0.1140]).astype(img.dtype)
-                elif img.shape[2] == 4:
-                    # RGBA - use RGB channels with luminance formula
-                    img = np.dot(img[..., :3], [0.2989, 0.5870, 0.1140]).astype(img.dtype)
-                else:
-                    # Multi-channel - take first channel
-                    img = img[:, :, 0]
+                match img.shape[2]:
+                    case 3:
+                        # RGB - use luminance formula
+                        img = np.dot(img[..., :3], [0.2989, 0.5870, 0.1140]).astype(img.dtype)
+                    case 4:
+                        # RGBA - use RGB channels with luminance formula
+                        img = np.dot(img[..., :3], [0.2989, 0.5870, 0.1140]).astype(img.dtype)
+                    case _:
+                        # Multi-channel - take first channel
+                        img = img[:, :, 0]
         elif img.ndim == 1:
             raise ValueError(f"1D array not supported for image: {path}")
         elif img.ndim > 3:
@@ -285,8 +289,8 @@ class ImageProcessor:
         image_stack: np.ndarray,
         transform_type: str = "RIGID_BODY",
         reference: str = "first",
-        progress_callback: Optional[Callable[[int, int, str], bool]] = None,
-    ) -> Tuple[np.ndarray, np.ndarray, List[float]]:
+        progress_callback: Callable[[int, int, str], bool] | None = None,
+    ) -> tuple[np.ndarray, np.ndarray, list[float]]:
         """
         Align images using PyStackReg.
 
@@ -428,7 +432,7 @@ class ImageProcessor:
         apply_detrending: bool = True,
         use_max_projection: bool = True,
         preprocess_sigma: float = 1.0,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Detect neurons within a specified ROI using local maxima detection.
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.experiment_manager import Experiment
@@ -32,12 +32,12 @@ from ui.styles import get_mpl_theme
 class ROIIntensityPlotWidget(QWidget):
     """Widget for plotting ROI intensity over time with CSV export capability."""
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.intensity_data: Optional[np.ndarray] = None
-        self.frames_data: Optional[np.ndarray] = None
-        self.roi: Optional[ROI] = None
-        self.experiment: Optional["Experiment"] = None
+        self.intensity_data: np.ndarray | None = None
+        self.frames_data: np.ndarray | None = None
+        self.roi: ROI | None = None
+        self.experiment: "Experiment" | None = None
         self._hover_cid = None
 
         layout = QVBoxLayout(self)

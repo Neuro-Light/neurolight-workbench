@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Dict, Optional
-
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -13,7 +11,7 @@ class DataAnalyzer:
     def __init__(self, experiment: Experiment) -> None:
         self.experiment = experiment
 
-    def calculate_statistics(self, data: np.ndarray) -> Dict[str, float]:
+    def calculate_statistics(self, data: np.ndarray) -> dict[str, float]:
         return {
             "mean": float(np.mean(data)),
             "std": float(np.std(data)),
@@ -47,11 +45,11 @@ class DataAnalyzer:
     def extract_roi_intensity_time_series(
         self,
         frame_data: np.ndarray,
-        roi: Optional[ROI] = None,
-        roi_x: Optional[int] = None,
-        roi_y: Optional[int] = None,
-        roi_width: Optional[int] = None,
-        roi_height: Optional[int] = None,
+        roi: ROI | None = None,
+        roi_x: int | None = None,
+        roi_y: int | None = None,
+        roi_width: int | None = None,
+        roi_height: int | None = None,
     ) -> np.ndarray:
         """
         Extract mean pixel intensity within an ROI across all frames.
