@@ -166,11 +166,7 @@ class WorkflowManager(QObject):
             self.complete_current_step()
 
     def mark_step_ready(self, step: WorkflowStep) -> None:
-        """
-        Mark a step as ready to advance without immediately moving to the next step.
-
-        Used for steps that require manual confirmation via the "Next" button.
-        """
+       
         if step in self.completed_steps or step in self._ready_steps:
             return
         self._ready_steps.add(step)
@@ -182,12 +178,7 @@ class WorkflowManager(QObject):
         return step in self.completed_steps or step in self._ready_steps
 
     def attach_experiment(self, experiment: Experiment) -> None:
-        """
-        Attach the workflow manager to a different experiment object.
-
-        Used when the main window closes one experiment and loads another
-        without re-creating the manager.
-        """
+       
         self._experiment = experiment
         self.refresh_state()
 
@@ -485,7 +476,7 @@ class WorkflowStepper(QFrame):
         self._skip_align_button.setVisible(is_align_step)
 
     def _apply_step_style(self, button: QToolButton, status: StepStatus) -> None:
-        """Apply high-contrast styles to step buttons based on workflow status."""
+        
         palette = {
             StepStatus.ACTIVE: ("#111827", "#f97316", "#ffffff", "600"),
             StepStatus.COMPLETED: ("#064e3b", "#10b981", "#e0f2f1", "500"),
