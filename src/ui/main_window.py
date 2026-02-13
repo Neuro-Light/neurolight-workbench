@@ -225,8 +225,9 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    def set_current_experiment_path(self, path: Optional[str], *, persist_workflow: bool = True) -> None:
-        
+    def set_current_experiment_path(
+           self, path: Optional[str], *, persist_workflow: bool = True
+    ) -> None:        
         self.current_experiment_path = path
         if persist_workflow and path:
             self._save_workflow_progress()
@@ -298,7 +299,7 @@ class MainWindow(QMainWindow):
         )
 
     def _open_settings(self) -> None:
-        """Open the Preferences / Settings dialog."""
+        #Open the Preferences / Settings dialog.
         dlg = SettingsDialog(self)
         if dlg.exec() == QDialog.Accepted:
             # Theme was applied by SettingsDialog; redraw plots to match
@@ -306,7 +307,7 @@ class MainWindow(QMainWindow):
             self.analysis.get_roi_plot_widget().refresh_theme()
 
     def _open_experiment_settings(self) -> None:
-        """Open the Experiment Settings dialog to edit name, PI, and description."""
+        #Open the Experiment Settings dialog to edit name, PI, and description.
         if self.experiment is None or not self.current_experiment_path:
             QMessageBox.information(
                 self,
@@ -327,10 +328,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.critical(self, "Error", f"Failed to save: {e}")
 
     def closeEvent(self, event: QCloseEvent) -> None:
-        """
-        Handle window close event (when user clicks X button).
-        Shows a confirmation dialog before closing.
-        """
+       
         reply = QMessageBox.question(
             self,
             "Exit Application",
@@ -368,13 +366,7 @@ class MainWindow(QMainWindow):
             event.ignore()
 
     def _show_save_error_feedback(self, error_message: str) -> None:
-        """
-        Show non-blocking feedback when save fails during close.
-        Uses status bar message to inform user without blocking the close flow.
 
-        Args:
-            error_message: The error message string (also logged via logger.exception)
-        """
         log_path = _log_file
         status_message = f"Save failed during close. Error logged to: {log_path}"
 
@@ -462,7 +454,7 @@ class MainWindow(QMainWindow):
 
     def _apply_saved_display_settings(self) -> None:
         
-        if not hasattr(self, "viewer"):
+        if not hasattr(self, "viewer") or not hasattr(self.viewer, "set_exposure"):
             return
 
         display_settings = self.experiment.settings.get("display") or {}
