@@ -15,6 +15,7 @@ dependencies = [
     "pystackreg>=0.2.8",
     "tifffile>=2023.1.0",
     "scikit-image>=0.21.0",
+    "ruff>=0.1.0",
 ]
 
 [project.scripts]
@@ -22,7 +23,7 @@ neurolight = "src.main:main"
 
 [project.optional-dependencies]
 test = ["pytest>=7.0.0", "pytest-cov>=4.0.0"]
-dev = ["ruff>=0.1.0", "mypy>=1.0.0"]
+dev = ["mypy>=1.0.0"]
 build = ["pyinstaller>=6.0.0"]
 
 [build-system]

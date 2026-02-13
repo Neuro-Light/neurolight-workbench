@@ -6,12 +6,13 @@ import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import numpy as np
-
-# PyInstaller frozen apps on macOS (and sometimes Windows) have known issues with
-# ProcessPoolExecutor + spawn: infinite process loops, multiple GUI windows,
-# pickling failures. Disable multiprocessing when frozen.
-_FROZEN = getattr(sys, "frozen", False)
 from PySide6.QtCore import QThread, Signal
+
+'''PyInstaller frozen apps on macOS (and sometimes Windows) have known issues with
+ProcessPoolExecutor + spawn: infinite process loops, multiple GUI windows
+pickling failures. Disable multiprocessing when frozen.'''
+_FROZEN = getattr(sys, "frozen", False)
+
 
 # Below this threshold, process-spawn overhead exceeds the parallelism gain.
 _MIN_FRAMES_FOR_MP = 10
@@ -130,10 +131,7 @@ class AlignmentWorker(QThread):
             # ----------------------------------------------------------
             # Decide whether to use multiprocessing
             # ----------------------------------------------------------
-            use_mp = (
-                not _FROZEN
-                and num_frames >= _MIN_FRAMES_FOR_MP
-            )
+            use_mp = not _FROZEN and num_frames >= _MIN_FRAMES_FOR_MP
             if use_mp:
                 n_workers = max(1, min(os.cpu_count() or 1, num_frames))
                 # 'spawn' is the only start method safe with Qt on all
