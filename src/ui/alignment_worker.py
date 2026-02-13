@@ -8,9 +8,9 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import numpy as np
 from PySide6.QtCore import QThread, Signal
 
-'''PyInstaller frozen apps on macOS (and sometimes Windows) have known issues with
+"""PyInstaller frozen apps on macOS (and sometimes Windows) have known issues with
 ProcessPoolExecutor + spawn: infinite process loops, multiple GUI windows
-pickling failures. Disable multiprocessing when frozen.'''
+pickling failures. Disable multiprocessing when frozen."""
 _FROZEN = getattr(sys, "frozen", False)
 
 
