@@ -88,6 +88,7 @@ jobs:
           name: python-dist
           path: dist/
 
+  # Linux/Ubuntu exe build temporarily disabled (packaging issues).
   build-exe:
     needs: [ci-check]
     strategy:
@@ -100,9 +101,6 @@ jobs:
           - runner: macos-latest
             exe_name: neurolight-${{ github.ref_name }}-macos-universal
             artifact_name: exe-macos
-          - runner: ubuntu-latest
-            exe_name: neurolight-${{ github.ref_name }}-linux-x86_64
-            artifact_name: exe-linux
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -142,13 +140,6 @@ jobs:
           mkdir -p release-asset
           cp dist/neurolight "release-asset/${{ matrix.exe_name }}"
 
-      - name: Prepare release asset (Linux)
-        if: matrix.runner == 'ubuntu-latest'
-        shell: bash
-        run: |
-          mkdir -p release-asset
-          cp dist/neurolight "release-asset/${{ matrix.exe_name }}"
-
       - name: Upload executable artifact
         uses: actions/upload-artifact@v4
         with:
@@ -169,7 +160,7 @@ jobs:
       - name: Validate artifacts exist
         run: |
           missing=0
-          for dir in python-dist exe-windows exe-macos exe-linux; do
+          for dir in python-dist exe-windows exe-macos; do
             path="release-package/$dir"
             if [ ! -d "$path" ] || [ -z "$(ls -A "$path")" ]; then
               echo "::error::Missing or empty artifact directory: $path"
@@ -189,7 +180,6 @@ jobs:
           cp release-package/python-dist/* release-package/upload/
           cp release-package/exe-windows/* release-package/upload/
           cp release-package/exe-macos/* release-package/upload/
-          cp release-package/exe-linux/* release-package/upload/
 
       # GitHub release assets must be <= 2 GB per file (2147483648 bytes)
       - name: Drop assets over 2 GB and list sizes
