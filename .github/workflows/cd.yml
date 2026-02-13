@@ -191,6 +191,23 @@ jobs:
           cp release-package/exe-macos/* release-package/upload/
           cp release-package/exe-linux/* release-package/upload/
 
+      # GitHub release assets must be <= 2 GB per file (2147483648 bytes)
+      - name: Drop assets over 2 GB and list sizes
+        run: |
+          MAX_BYTES=2147483648
+          echo "Asset sizes (before dropping):"
+          for f in release-package/upload/*; do
+            [ -f "$f" ] || continue
+            sz=$(stat -c%s "$f" 2>/dev/null || stat -f%z "$f" 2>/dev/null)
+            printf "  %s: %s bytes\n" "$(basename "$f")" "$sz"
+            if [ "$sz" -gt "$MAX_BYTES" ]; then
+              echo "  -> REMOVING (exceeds ${MAX_BYTES} byte limit)"
+              rm -f "$f"
+            fi
+          done
+          echo "Remaining assets:"
+          ls -la release-package/upload/
+
       - name: Create GitHub Release and upload assets
         uses: softprops/action-gh-release@v2
         with:
