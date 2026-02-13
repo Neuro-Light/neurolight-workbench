@@ -52,4 +52,7 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    # Required for frozen apps on Windows (no-op elsewhere); must be first
+    # in the main block so child re-execution is handled correctly.
+    multiprocessing.freeze_support()
     sys.exit(main())
