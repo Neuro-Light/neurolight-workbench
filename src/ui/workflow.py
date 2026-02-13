@@ -166,7 +166,6 @@ class WorkflowManager(QObject):
             self.complete_current_step()
 
     def mark_step_ready(self, step: WorkflowStep) -> None:
-       
         if step in self.completed_steps or step in self._ready_steps:
             return
         self._ready_steps.add(step)
@@ -178,7 +177,6 @@ class WorkflowManager(QObject):
         return step in self.completed_steps or step in self._ready_steps
 
     def attach_experiment(self, experiment: Experiment) -> None:
-       
         self._experiment = experiment
         self.refresh_state()
 
@@ -352,7 +350,7 @@ class WorkflowStepper(QFrame):
 
             steps_row.addWidget(btn)
             if i < total_steps - 1:
-                arrow = QLabel("\U000021E8")
+                arrow = QLabel("\U000021e8")
                 arrow.setAlignment(Qt.AlignCenter)
                 arrow.setObjectName("workflowStepperArrow")
                 arrow.setStyleSheet(
@@ -464,9 +462,8 @@ class WorkflowStepper(QFrame):
         self._description_label.setText(current_meta.description)
 
         # Next button only enabled when the active step is marked ready (and not the final step)
-        can_advance = (
-            current != WorkflowStep.ANALYZE_GRAPHS
-            and self._manager.is_step_ready(current)
+        can_advance = current != WorkflowStep.ANALYZE_GRAPHS and self._manager.is_step_ready(
+            current
         )
         self._next_button.setEnabled(can_advance)
 
@@ -476,15 +473,12 @@ class WorkflowStepper(QFrame):
         self._skip_align_button.setVisible(is_align_step)
 
     def _apply_step_style(self, button: QToolButton, status: StepStatus) -> None:
-        
         palette = {
             StepStatus.ACTIVE: ("#111827", "#f97316", "#ffffff", "600"),
             StepStatus.COMPLETED: ("#064e3b", "#10b981", "#e0f2f1", "500"),
             StepStatus.LOCKED: ("#1f2937", "#4b5563", "#94a3b8", "400"),
         }
-        bg, border, text, weight = palette.get(
-            status, ("#1f2937", "#4b5563", "#94a3b8", "400")
-        )
+        bg, border, text, weight = palette.get(status, ("#1f2937", "#4b5563", "#94a3b8", "400"))
         style = (
             "QToolButton {{"
             "border-radius: 10px;"

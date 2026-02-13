@@ -183,7 +183,6 @@ class NeuronDetectionWidget(QWidget):
         self.save_experiment_callback = callback
 
     def reset_detection_state(self) -> None:
-        
         self.neuron_locations = None
         self.neuron_trajectories = None
         self.quality_mask = None
