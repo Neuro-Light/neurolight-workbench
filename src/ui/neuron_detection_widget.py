@@ -183,11 +183,7 @@ class NeuronDetectionWidget(QWidget):
         self.save_experiment_callback = callback
 
     def reset_detection_state(self) -> None:
-        """
-        Clear any detection results and return UI state to the default/blank state.
-
-        Called when switching to a new experiment so no previous detections leak over.
-        """
+        
         self.neuron_locations = None
         self.neuron_trajectories = None
         self.quality_mask = None
