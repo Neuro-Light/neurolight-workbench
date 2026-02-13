@@ -364,6 +364,13 @@ class MainWindow(QMainWindow):
             event.ignore()
 
     def _show_save_error_feedback(self, error_message: str) -> None:
+        """
+        Show non-blocking feedback when save fails during close.
+        Uses status bar message to inform user without blocking the close flow.
+
+        Args:
+            error_message: The error message string (also logged via logger.exception)
+        """
         log_path = _log_file
         status_message = f"Save failed during close. Error logged to: {log_path}"
 
