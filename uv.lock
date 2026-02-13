@@ -527,7 +527,6 @@ dependencies = [
     { name = "pillow" },
     { name = "pyside6" },
     { name = "pystackreg" },
-    { name = "ruff" },
     { name = "scikit-image" },
     { name = "scipy" },
     { name = "statsmodels" },
@@ -540,6 +539,7 @@ build = [
 ]
 dev = [
     { name = "mypy" },
+    { name = "ruff" },
 ]
 test = [
     { name = "pytest" },
@@ -559,7 +559,7 @@ requires-dist = [
     { name = "pystackreg", specifier = ">=0.2.8" },
     { name = "pytest", marker = "extra == 'test'", specifier = ">=7.0.0" },
     { name = "pytest-cov", marker = "extra == 'test'", specifier = ">=4.0.0" },
-    { name = "ruff", specifier = ">=0.1.0" },
+    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
     { name = "scikit-image", specifier = ">=0.21.0" },
     { name = "scipy", specifier = ">=1.11.0" },
     { name = "statsmodels", specifier = ">=0.14.0" },
