@@ -117,8 +117,9 @@ class WorkflowManager(QObject):
         self._experiment = experiment
         self._steps: List[WorkflowStep] = list(WorkflowStep)
 
-        self.current_step: WorkflowStep
+        self.current_step: WorkflowStep = WorkflowStep.LOAD_IMAGES
         self.completed_steps: Set[WorkflowStep] = set()
+        self._ready_steps: Set[WorkflowStep] = set()
 
         self._load_or_initialize_state()
 
@@ -140,11 +141,14 @@ class WorkflowManager(QObject):
         """
         return step == self.current_step or step in self.completed_steps
 
-    def complete_current_step(self) -> None:
-        """Mark the current step as complete and advance to the next, if any."""
-        # Ensure current step is marked complete (idempotent)
+    def complete_current_step(self) -> bool:
+        """Advance to the next step only when the current step is marked ready."""
+        if not self.is_step_ready(self.current_step):
+            return False
+
         if self.current_step not in self.completed_steps:
             self.completed_steps.add(self.current_step)
+        self._ready_steps.discard(self.current_step)
 
         next_step = self._get_next_step(self.current_step)
         if next_step is not None:
@@ -153,11 +157,45 @@ class WorkflowManager(QObject):
 
         self._persist_state()
         self.state_changed.emit()
+        return True
 
     def complete_step_if_current(self, step: WorkflowStep) -> None:
         """Convenience helper used by callers that know which step they satisfy."""
         if step == self.current_step:
+            self.mark_step_ready(step)
             self.complete_current_step()
+
+    def mark_step_ready(self, step: WorkflowStep) -> None:
+        """
+        Mark a step as ready to advance without immediately moving to the next step.
+
+        Used for steps that require manual confirmation via the "Next" button.
+        """
+        if step in self.completed_steps or step in self._ready_steps:
+            return
+        self._ready_steps.add(step)
+        if step == self.current_step:
+            self.state_changed.emit()
+
+    def is_step_ready(self, step: WorkflowStep) -> bool:
+        """Return True if the step has been completed or explicitly marked ready."""
+        return step in self.completed_steps or step in self._ready_steps
+
+    def attach_experiment(self, experiment: Experiment) -> None:
+        """
+        Attach the workflow manager to a different experiment object.
+
+        Used when the main window closes one experiment and loads another
+        without re-creating the manager.
+        """
+        self._experiment = experiment
+        self.refresh_state()
+
+    def refresh_state(self) -> None:
+        """Reload workflow progress from the current experiment."""
+        self._load_or_initialize_state()
+        self.step_changed.emit(self.current_step)
+        self.state_changed.emit()
 
     def reset_from_step(self, step: WorkflowStep) -> None:
         """
@@ -170,6 +208,7 @@ class WorkflowManager(QObject):
         indices = {s: STEP_DEFINITIONS[s].index for s in self.completed_steps}
         step_index = STEP_DEFINITIONS[step].index
         self.completed_steps = {s for s, idx in indices.items() if idx < step_index}
+        self._ready_steps = {s for s in self._ready_steps if STEP_DEFINITIONS[s].index < step_index}
 
         # If current step is downstream of the reset point, move it back
         if STEP_DEFINITIONS[self.current_step].index >= step_index:
@@ -196,6 +235,8 @@ class WorkflowManager(QObject):
         """Load workflow state from experiment.settings or infer from data."""
         settings = self._experiment.settings
         workflow_raw = settings.get("workflow") or {}
+        self.completed_steps.clear()
+        self._ready_steps.clear()
 
         # Attempt to load explicit workflow state if present
         current_name = workflow_raw.get("current_step")
@@ -306,6 +347,7 @@ class WorkflowStepper(QFrame):
             key=lambda item: item[1].index,
         )
 
+        total_steps = len(ordered_steps)
         for i, (step, meta) in enumerate(ordered_steps):
             btn = QToolButton()
             btn.setCheckable(True)
@@ -318,6 +360,15 @@ class WorkflowStepper(QFrame):
             self._step_buttons[step] = btn
 
             steps_row.addWidget(btn)
+            if i < total_steps - 1:
+                arrow = QLabel("\U000021E8")
+                arrow.setAlignment(Qt.AlignCenter)
+                arrow.setObjectName("workflowStepperArrow")
+                arrow.setStyleSheet(
+                    "color: #f97316; font-weight: 600; padding: 0 4px; font-size: 44px;"
+                )
+                arrow.setFixedWidth(28)
+                steps_row.addWidget(arrow)
 
         root_layout.addLayout(steps_row)
 
@@ -385,6 +436,7 @@ class WorkflowStepper(QFrame):
         is already aligned.
         """
         if self._manager.current_step == WorkflowStep.ALIGN_IMAGES:
+            self._manager.mark_step_ready(WorkflowStep.ALIGN_IMAGES)
             self._manager.complete_current_step()
 
     # ------------------------------------------------------------------
@@ -402,6 +454,7 @@ class WorkflowStepper(QFrame):
 
             button.setChecked(is_active)
             button.setEnabled(self._manager.can_navigate_to_step(step))
+            self._apply_step_style(button, status)
 
             # Simple visual encoding via dynamic properties (picked up by stylesheet if desired)
             button.setProperty("workflowStatus", status.name.lower())
@@ -419,10 +472,36 @@ class WorkflowStepper(QFrame):
         current_meta = STEP_DEFINITIONS[current]
         self._description_label.setText(current_meta.description)
 
-        # "Next" button is disabled only on the final step (no further progression)
-        self._next_button.setEnabled(current != WorkflowStep.ANALYZE_GRAPHS)
+        # Next button only enabled when the active step is marked ready (and not the final step)
+        can_advance = (
+            current != WorkflowStep.ANALYZE_GRAPHS
+            and self._manager.is_step_ready(current)
+        )
+        self._next_button.setEnabled(can_advance)
 
         # Show Align/Skip controls only on the alignment step
         is_align_step = current == WorkflowStep.ALIGN_IMAGES
         self._align_button.setVisible(is_align_step)
         self._skip_align_button.setVisible(is_align_step)
+
+    def _apply_step_style(self, button: QToolButton, status: StepStatus) -> None:
+        """Apply high-contrast styles to step buttons based on workflow status."""
+        palette = {
+            StepStatus.ACTIVE: ("#111827", "#f97316", "#ffffff", "600"),
+            StepStatus.COMPLETED: ("#064e3b", "#10b981", "#e0f2f1", "500"),
+            StepStatus.LOCKED: ("#1f2937", "#4b5563", "#94a3b8", "400"),
+        }
+        bg, border, text, weight = palette.get(
+            status, ("#1f2937", "#4b5563", "#94a3b8", "400")
+        )
+        style = (
+            "QToolButton {{"
+            "border-radius: 10px;"
+            "padding: 8px 6px;"
+            "background-color: {bg};"
+            "color: {fg};"
+            "border: 2px solid {border};"
+            "font-weight: {weight};"
+            "}}"
+        ).format(bg=bg, fg=text, border=border, weight=weight)
+        button.setStyleSheet(style)

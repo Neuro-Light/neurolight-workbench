@@ -37,7 +37,7 @@ def main() -> int:
     main_window = MainWindow(startup.experiment)
     # Carry over the .nexp path so autosaves and path updates persist
     try:
-        main_window.current_experiment_path = startup.experiment_path  # type: ignore[attr-defined]
+        main_window.set_current_experiment_path(startup.experiment_path)  # type: ignore[attr-defined]
     except Exception:
         pass
     main_window.show()

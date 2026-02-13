@@ -229,6 +229,9 @@ class ImageViewer(QWidget):
         self.next_btn.setEnabled(True)
         self.slider.setEnabled(True)
         self.roi_btn.setEnabled(True)
+        # Reset exposure/contrast sliders to neutral
+        self.set_exposure(0)
+        self.set_contrast(0)
         # Show upload button again
         self.upload_btn.show()
         self._center_upload_button()

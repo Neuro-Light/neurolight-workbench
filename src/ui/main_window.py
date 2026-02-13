@@ -128,6 +128,7 @@ class MainWindow(QMainWindow):
 
         # Guided workflow
         self.workflow_manager = WorkflowManager(self.experiment, self)
+        self.workflow_manager.state_changed.connect(self._save_workflow_progress)
         self.workflow_stepper = WorkflowStepper(self.workflow_manager, self)
         # Wire stepper actions
         self.workflow_stepper.requestAlignImages.connect(self._align_images)
@@ -214,6 +215,32 @@ class MainWindow(QMainWindow):
 
         # Apply initial state
         refresh_controls()
+
+    def _save_workflow_progress(self) -> None:
+        """
+        Persist workflow progress to disk whenever the manager state changes.
+
+        Automatically invoked via WorkflowManager.state_changed to keep the
+        experiment's workflow metadata in sync with user progress.
+        """
+        if not self.current_experiment_path:
+            return
+        try:
+            self.manager.save_experiment(self.experiment, self.current_experiment_path)
+        except Exception:
+            pass
+
+    def set_current_experiment_path(self, path: Optional[str], *, persist_workflow: bool = True) -> None:
+        """
+        Update the current experiment .nexp path and optionally persist workflow state.
+
+        Args:
+            path: Absolute path to the .nexp file or None if unknown.
+            persist_workflow: If True, workflow progress is saved immediately.
+        """
+        self.current_experiment_path = path
+        if persist_workflow and path:
+            self._save_workflow_progress()
 
     def _init_menu(self) -> None:
         menubar = self.menuBar()
@@ -444,8 +471,40 @@ class MainWindow(QMainWindow):
         # Auto-load image stack/ROI if experiment has saved data
         self._auto_load_experiment_data()
 
+    def _apply_saved_display_settings(self) -> None:
+        """
+        Apply saved exposure/contrast sliders from the experiment (or reset to neutral).
+
+        Ensures each experiment restores its own display adjustments while new experiments
+        start from the neutral (0/0) baseline.
+        """
+        if not hasattr(self, "viewer"):
+            return
+
+        display_settings = self.experiment.settings.get("display") or {}
+
+        def _normalize(value: Optional[int]) -> int:
+            try:
+                return max(-100, min(100, int(value)))  # type: ignore[arg-type]
+            except (TypeError, ValueError):
+                return 0
+
+        exposure = _normalize(display_settings.get("exposure"))
+        contrast = _normalize(display_settings.get("contrast"))
+
+        self.viewer.set_exposure(exposure)
+        self.viewer.set_contrast(contrast)
+
     def _auto_load_experiment_data(self) -> None:
         """Auto-load image stack, ROI, and display settings if experiment has saved data."""
+        # Always apply saved or neutral display settings up front
+        self._apply_saved_display_settings()
+        detection_widget = None
+        try:
+            detection_widget = self.analysis.get_neuron_detection_widget()
+            detection_widget.reset_detection_state()
+        except Exception:
+            detection_widget = None
         try:
             path = self.experiment.image_stack_path
             if path:
@@ -488,13 +547,6 @@ class MainWindow(QMainWindow):
                             )
                             QApplication.processEvents()
                             self.viewer.set_stack(p)
-
-                        # Load display settings (exposure, contrast)
-                        display_settings = self.experiment.settings.get("display", {})
-                        exposure = display_settings.get("exposure", 0)
-                        contrast = display_settings.get("contrast", 0)
-                        self.viewer.set_exposure(exposure)
-                        self.viewer.set_contrast(contrast)
 
                         if self.experiment.roi:
                             loading_dialog.update_status(
@@ -576,8 +628,7 @@ class MainWindow(QMainWindow):
         # After any auto-load attempt, refresh workflow state from experiment data
         # (e.g., if ROI or detection data already exist).
         try:
-            # This will infer state if needed and trigger UI updates
-            self.workflow_manager._load_or_initialize_state()  # type: ignore[attr-defined]
+            self.workflow_manager.refresh_state()
         except Exception:
             # Failing to refresh workflow should not break core functionality
             pass
@@ -699,7 +750,7 @@ class MainWindow(QMainWindow):
         self._capture_display_settings()
         try:
             self.manager.save_experiment(self.experiment, file_path)
-            self.current_experiment_path = file_path
+            self.set_current_experiment_path(file_path, persist_workflow=False)
             QMessageBox.information(self, "Saved", "Experiment saved successfully.")
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
@@ -746,7 +797,8 @@ class MainWindow(QMainWindow):
         if result == QDialog.Accepted and startup.experiment is not None:
             # User selected a new experiment - replace current experiment
             self.experiment = startup.experiment
-            self.current_experiment_path = startup.experiment_path
+            self.set_current_experiment_path(startup.experiment_path, persist_workflow=False)
+            self.workflow_manager.attach_experiment(self.experiment)
             self.setWindowTitle(f"Neurolight - {self.experiment.name}")
 
             # Reset viewer state
@@ -861,11 +913,19 @@ class MainWindow(QMainWindow):
     def _load_neuron_detection_data(self) -> None:
         """Load saved neuron detection data from experiment."""
         detection_data = self.experiment.get_neuron_detection_data()
+        try:
+            detection_widget = self.analysis.get_neuron_detection_widget()
+        except Exception:
+            detection_widget = None
+
+        if detection_widget is None:
+            return
+
         if detection_data is None:
+            detection_widget.reset_detection_state()
             return
 
         try:
-            detection_widget = self.analysis.get_neuron_detection_widget()
 
             # Check if we have all required data (mean_frame is optional - can be recalculated)
             if (
@@ -910,6 +970,8 @@ class MainWindow(QMainWindow):
         # Restart the timer (debounce: wait 500ms after last change before saving)
         self._display_settings_timer.stop()
         self._display_settings_timer.start(500)
+        if self.workflow_manager.current_step == WorkflowStep.EDIT_IMAGES:
+            self.workflow_manager.mark_step_ready(WorkflowStep.EDIT_IMAGES)
 
     def _flush_pending_display_settings(self) -> None:
         """
