@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from collections.abc import Callable
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Optional
 
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
@@ -47,8 +47,8 @@ class RecentExperimentRow(QWidget):
         name: str,
         path: str,
         on_open: Callable[[], None],
-        on_click: Optional[Callable[[], None]] = None,
-        parent: Optional[QWidget] = None,
+        on_click: Callable[[], None] | None = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("recentExperimentRow")
@@ -90,7 +90,7 @@ class RecentExperimentRow(QWidget):
 
 
 class NewExperimentDialog(QDialog):
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Neurolight - New Experiment")
         self.setModal(True)
@@ -99,7 +99,7 @@ class NewExperimentDialog(QDialog):
         self.name_edit = QLineEdit()
         self.pi_edit = QLineEdit()
         self.desc_edit = QPlainTextEdit()
-        self.date_edit = QLineEdit(datetime.utcnow().strftime("%Y-%m-%d"))
+        self.date_edit = QLineEdit(datetime.now(timezone.utc).strftime("%Y-%m-%d"))
 
         # Analysis type selection (future-proof for multiple analysis pipelines)
         self.analysis_combo = QComboBox()
@@ -140,7 +140,7 @@ class NewExperimentDialog(QDialog):
 
         self.setLayout(container)
 
-        self.output_path: Optional[str] = None
+        self.output_path: str | None = None
         self.metadata: dict = {}
 
     def _browse(self) -> None:
@@ -166,7 +166,7 @@ class NewExperimentDialog(QDialog):
             "name": name,
             "description": self.desc_edit.toPlainText().strip(),
             "principal_investigator": self.pi_edit.text().strip(),
-            "created_date": datetime.utcnow(),
+            "created_date": datetime.now(timezone.utc),
             "analysis_type": self.analysis_combo.currentData(),
         }
         self.accept()
@@ -179,8 +179,8 @@ class StartupDialog(QDialog):
         self.setWindowTitle("Neurolight - Experiment Manager")
         self.setModal(True)
         self.setMinimumWidth(520)
-        self.experiment: Optional[Experiment] = None
-        self.experiment_path: Optional[str] = None
+        self.experiment: Experiment | None = None
+        self.experiment_path: str | None = None
         self.manager = ExperimentManager()
 
         title = QLabel("Neurolight - Experiment Manager")
@@ -273,7 +273,7 @@ class StartupDialog(QDialog):
         if item is not None:
             self._open_recent(item)
 
-    def _show_options_for_path(self, path: str, options_button: Optional[QPushButton]) -> None:
+    def _show_options_for_path(self, path: str, options_button: QPushButton | None) -> None:
         menu = QMenu(self)
         menu.addAction("Delete", lambda: self._remove_from_list_for_path(path))
         menu.addAction("Export", lambda: self._export_for_path(path))

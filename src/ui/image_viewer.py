@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from pathlib import Path
-from typing import Optional
 
 import cv2
 import numpy as np
@@ -27,9 +26,9 @@ from utils.image_utils import numpy_to_qimage
 class _LRUCache:
     def __init__(self, capacity: int = 20) -> None:
         self.capacity = capacity
-        self.store: "OrderedDict[int, np.ndarray]" = OrderedDict()
+        self.store: OrderedDict[int, np.ndarray] = OrderedDict()
 
-    def get(self, key: int) -> Optional[np.ndarray]:
+    def get(self, key: int) -> np.ndarray | None:
         if key not in self.store:
             return None
         value = self.store.pop(key)
@@ -59,7 +58,7 @@ class ImageViewer(QWidget):
         self.cache = _LRUCache(20)
 
         # ROI state (selection/adjustment happens in ROISelectionDialog)
-        self.current_roi: Optional[ROI] = None
+        self.current_roi: ROI | None = None
 
         self.filename_label = QLabel(
             "Load image to see data"
@@ -197,7 +196,7 @@ class ImageViewer(QWidget):
             self.upload_btn.hide()
 
         # Determine directory path and emit
-        directory: Optional[str] = None
+        directory: str | None = None
         if isinstance(files, (list, tuple)) and files:
             directory = str(Path(files[0]).parent)
         elif isinstance(files, str):
@@ -505,7 +504,7 @@ class ImageViewer(QWidget):
             return
         self._open_roi_dialog(existing_roi=self.current_roi)
 
-    def _open_roi_dialog(self, existing_roi: "Optional[ROI]" = None) -> None:
+    def _open_roi_dialog(self, existing_roi: ROI | None = None) -> None:
         """Open the ROI selection dialog and handle the result."""
         from PySide6.QtWidgets import QDialog
 
@@ -540,7 +539,7 @@ class ImageViewer(QWidget):
         # Show/hide adjust button based on ROI existence
         self.adjust_roi_btn.setVisible(self.current_roi is not None)
 
-    def get_current_roi(self) -> Optional[ROI]:
+    def get_current_roi(self) -> ROI | None:
         """Get the current ROI object."""
         return self.current_roi
 

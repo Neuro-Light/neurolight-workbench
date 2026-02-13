@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional, Tuple, Union
 
 import cv2
 import numpy as np
@@ -29,7 +28,7 @@ class ROIHandle(Enum):
     VERTEX = 6  # Polygon vertex (use with vertex_index)
 
 
-HandleResult = Union[ROIHandle, Tuple[ROIHandle, int]]
+HandleResult = ROIHandle | tuple[ROIHandle, int]
 
 
 @dataclass
@@ -50,7 +49,7 @@ class ROI:
     width: int
     height: int
     shape: ROIShape = ROIShape.ELLIPSE
-    points: Optional[List[Tuple[int, int]]] = field(default=None)
+    points: list[tuple[int, int]] | None = field(default=None)
 
     def to_dict(self) -> dict:
         """Convert ROI to dictionary for serialization."""
@@ -94,7 +93,7 @@ class ROI:
             shape=shape,
         )
 
-    def get_center(self) -> Tuple[float, float]:
+    def get_center(self) -> tuple[float, float]:
         """Get center coordinates of ROI."""
         if self.shape == ROIShape.POLYGON and self.points and len(self.points) > 0:
             cx = sum(p[0] for p in self.points) / len(self.points)
@@ -102,7 +101,7 @@ class ROI:
             return (cx, cy)
         return (self.x + self.width / 2, self.y + self.height / 2)
 
-    def get_bounding_box(self) -> Tuple[int, int, int, int]:
+    def get_bounding_box(self) -> tuple[int, int, int, int]:
         """Return (x, y, width, height) bounding box."""
         if self.shape == ROIShape.POLYGON and self.points and len(self.points) > 0:
             x_coords = [p[0] for p in self.points]
@@ -157,12 +156,12 @@ class ROI:
 
     def adjust_with_handle(
         self,
-        handle: Union[ROIHandle, HandleResult],
+        handle: ROIHandle | HandleResult,
         dx: int,
         dy: int,
         image_width: int,
         image_height: int,
-        vertex_index: Optional[int] = None,
+        vertex_index: int | None = None,
     ) -> None:
         """
         Adjust ROI based on handle being dragged.

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 import numpy as np
 from matplotlib.backends.backend_qtagg import (
     FigureCanvasQTAgg as FigureCanvas,
@@ -32,11 +30,11 @@ from ui.styles import get_mpl_theme
 class NeuronTrajectoryPlotWidget(QWidget):
     """Widget for plotting individual neuron intensity trajectories over time."""
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.neuron_trajectories: Optional[np.ndarray] = None
-        self.quality_mask: Optional[np.ndarray] = None
-        self.neuron_locations: Optional[np.ndarray] = None
+        self.neuron_trajectories: np.ndarray | None = None
+        self.quality_mask: np.ndarray | None = None
+        self.neuron_locations: np.ndarray | None = None
         self._hover_cid = None
 
         layout = QVBoxLayout(self)
@@ -113,8 +111,8 @@ class NeuronTrajectoryPlotWidget(QWidget):
     def plot_trajectories(
         self,
         neuron_trajectories: np.ndarray,
-        quality_mask: Optional[np.ndarray] = None,
-        neuron_locations: Optional[np.ndarray] = None,
+        quality_mask: np.ndarray | None = None,
+        neuron_locations: np.ndarray | None = None,
     ) -> None:
         """
         Plot intensity trajectories for each detected neuron.

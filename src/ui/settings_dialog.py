@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -29,7 +27,7 @@ THEME_VALUES = (
 class SettingsDialog(QDialog):
     """Application settings dialog (theme, etc.)."""
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Preferences")
         self.setModal(True)

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 from PySide6.QtCore import QTimer, QUrl
@@ -65,7 +64,7 @@ if not logger.handlers:
 class _ExperimentSettingsDialog(QDialog):
     """Dialog to edit experiment name, principal investigator, and description."""
 
-    def __init__(self, experiment: Experiment, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, experiment: Experiment, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Experiment Settings")
         self.setModal(True)
@@ -108,20 +107,20 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.experiment = experiment
         self.manager = ExperimentManager()
-        self.current_experiment_path: Optional[str] = None
+        self.current_experiment_path: str | None = None
         self.image_processor = ImageProcessor(experiment)
-        self._alignment_worker: Optional[AlignmentWorker] = None
+        self._alignment_worker: AlignmentWorker | None = None
 
         # Cached references to controls affected by workflow gating
-        self._action_open_stack: Optional[QAction] = None
-        self._action_align_images: Optional[QAction] = None
+        self._action_open_stack: QAction | None = None
+        self._action_align_images: QAction | None = None
 
         # Initialize debounced save timer for display settings
         self._display_settings_timer = QTimer()
         self._display_settings_timer.setSingleShot(True)
         self._display_settings_timer.timeout.connect(self._persist_display_settings)
-        self._pending_exposure: Optional[int] = None
-        self._pending_contrast: Optional[int] = None
+        self._pending_exposure: int | None = None
+        self._pending_contrast: int | None = None
 
         self.setWindowTitle(f"Neurolight - {self.experiment.name}")
         self.resize(1200, 800)

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import (
@@ -157,8 +155,8 @@ class ROISelectionDialog(QDialog):
     def __init__(
         self,
         image: np.ndarray,
-        existing_roi: Optional[ROI] = None,
-        parent: Optional[QWidget] = None,
+        existing_roi: ROI | None = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("ROI Selection")
@@ -167,13 +165,13 @@ class ROISelectionDialog(QDialog):
         # ---- state ----
         self._image = image
         self._image_height, self._image_width = image.shape[:2]
-        self._polygon_points: List[QPointF] = []
-        self._preview_pos: Optional[QPointF] = None
-        self._current_roi: Optional[ROI] = existing_roi
+        self._polygon_points: list[QPointF] = []
+        self._preview_pos: QPointF | None = None
+        self._current_roi: ROI | None = existing_roi
         self._selection_mode: bool = existing_roi is None
         self._adjust_mode: bool = False
         self._dragging_handle: HandleResult = ROIHandle.NONE
-        self._last_drag_pos: Optional[QPointF] = None
+        self._last_drag_pos: QPointF | None = None
 
         # ---- build UI ----
         self._build_ui()
@@ -429,7 +427,7 @@ class ROISelectionDialog(QDialog):
         if self._current_roi is not None:
             self.accept()  # QDialog.Accepted
 
-    def get_roi(self) -> Optional[ROI]:
+    def get_roi(self) -> ROI | None:
         return self._current_roi
 
     # ------------------------------------------------------------------
