@@ -1,7 +1,12 @@
+import multiprocessing
 import sys
 from pathlib import Path
 
 from PySide6.QtCore import QTimer
+
+# Required for frozen apps on Windows (no-op elsewhere); helps avoid
+# multiprocessing issues when the app is packaged.
+multiprocessing.freeze_support()
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
 

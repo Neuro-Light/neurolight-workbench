@@ -2,9 +2,15 @@ from __future__ import annotations
 
 import multiprocessing
 import os
+import sys
 from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import numpy as np
+
+# PyInstaller frozen apps on macOS (and sometimes Windows) have known issues with
+# ProcessPoolExecutor + spawn: infinite process loops, multiple GUI windows,
+# pickling failures. Disable multiprocessing when frozen.
+_FROZEN = getattr(sys, "frozen", False)
 from PySide6.QtCore import QThread, Signal
 
 # Below this threshold, process-spawn overhead exceeds the parallelism gain.
@@ -124,7 +130,10 @@ class AlignmentWorker(QThread):
             # ----------------------------------------------------------
             # Decide whether to use multiprocessing
             # ----------------------------------------------------------
-            use_mp = num_frames >= _MIN_FRAMES_FOR_MP
+            use_mp = (
+                not _FROZEN
+                and num_frames >= _MIN_FRAMES_FOR_MP
+            )
             if use_mp:
                 n_workers = max(1, min(os.cpu_count() or 1, num_frames))
                 # 'spawn' is the only start method safe with Qt on all
@@ -145,6 +154,12 @@ class AlignmentWorker(QThread):
                 )
                 if tmats is None:
                     return  # cancelled
+            elif self._reference in ("first", "mean"):
+                tmats = self._register_sequential(
+                    sr, image_stack_uint16, transform_const, num_frames
+                )
+                if tmats is None:
+                    return  # cancelled
             else:
                 self.progress.emit(0, num_frames, "Computing transformation matrices...")
                 tmats = sr.register_stack(image_stack_uint16, reference=self._reference)
@@ -162,8 +177,11 @@ class AlignmentWorker(QThread):
                 if aligned_stack_uint16 is None:
                     return  # cancelled
             else:
-                self.progress.emit(0, num_frames, "Applying transformations...")
-                aligned_stack_uint16 = sr.transform_stack(image_stack_uint16, tmats=tmats)
+                aligned_stack_uint16 = self._transform_sequential(
+                    sr, image_stack_uint16, tmats, transform_const, num_frames
+                )
+                if aligned_stack_uint16 is None:
+                    return  # cancelled
 
             del image_stack_uint16
 
@@ -321,5 +339,53 @@ class AlignmentWorker(QThread):
                 num_frames,
                 f"Transformed {completed}/{num_frames} frames...",
             )
+
+        return np.stack(results)
+
+    def _register_sequential(self, sr, stack, transform_const, num_frames):
+        """Register every frame against a fixed reference, one at a time (with progress)."""
+        if self._reference == "mean":
+            ref_frame = np.mean(stack.astype(np.float32), axis=0)
+        else:  # 'first'
+            ref_frame = stack[0]
+
+        if num_frames <= 1:
+            tmat = sr.register(ref_frame, ref_frame)  # get shape
+            tmats = np.zeros((num_frames,) + tmat.shape)
+            tmats[0] = np.eye(tmat.shape[0], tmat.shape[1])
+            return tmats
+
+        # Identity for frame 0; register frames 1..n-1
+        first_tmat = sr.register(ref_frame, stack[1])
+        tmats = np.zeros((num_frames,) + first_tmat.shape)
+        tmats[0] = np.eye(first_tmat.shape[0], first_tmat.shape[1])
+        tmats[1] = first_tmat
+
+        for i in range(2, num_frames):
+            if self._check_cancel("registration"):
+                return None
+            self.progress.emit(
+                i,
+                num_frames - 1,
+                f"Registering frame {i + 1}/{num_frames}...",
+            )
+            tmats[i] = sr.register(ref_frame, stack[i])
+
+        return tmats
+
+    def _transform_sequential(self, sr, stack, tmats, transform_const, num_frames):
+        """Apply per-frame transformations one at a time (with progress)."""
+        results = []
+        for i in range(num_frames):
+            if self._check_cancel("transformation"):
+                return None
+            self.progress.emit(
+                i + 1,
+                num_frames,
+                f"Transforming frame {i + 1}/{num_frames}...",
+            )
+            result = sr.transform(stack[i], tmat=tmats[i])
+            np.clip(result, 0, 65535, out=result)
+            results.append(result.astype(np.uint16))
 
         return np.stack(results)
