@@ -217,12 +217,7 @@ class MainWindow(QMainWindow):
         refresh_controls()
 
     def _save_workflow_progress(self) -> None:
-        """
-        Persist workflow progress to disk whenever the manager state changes.
-
-        Automatically invoked via WorkflowManager.state_changed to keep the
-        experiment's workflow metadata in sync with user progress.
-        """
+        
         if not self.current_experiment_path:
             return
         try:
@@ -231,13 +226,7 @@ class MainWindow(QMainWindow):
             pass
 
     def set_current_experiment_path(self, path: Optional[str], *, persist_workflow: bool = True) -> None:
-        """
-        Update the current experiment .nexp path and optionally persist workflow state.
-
-        Args:
-            path: Absolute path to the .nexp file or None if unknown.
-            persist_workflow: If True, workflow progress is saved immediately.
-        """
+        
         self.current_experiment_path = path
         if persist_workflow and path:
             self._save_workflow_progress()
@@ -472,12 +461,7 @@ class MainWindow(QMainWindow):
         self._auto_load_experiment_data()
 
     def _apply_saved_display_settings(self) -> None:
-        """
-        Apply saved exposure/contrast sliders from the experiment (or reset to neutral).
-
-        Ensures each experiment restores its own display adjustments while new experiments
-        start from the neutral (0/0) baseline.
-        """
+        
         if not hasattr(self, "viewer"):
             return
 
