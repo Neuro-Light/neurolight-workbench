@@ -354,7 +354,7 @@ class WorkflowStepper(QFrame):
                 arrow.setAlignment(Qt.AlignCenter)
                 arrow.setObjectName("workflowStepperArrow")
                 arrow.setStyleSheet(
-                    "color: #f97316; font-weight: 600; padding: 0 4px; font-size: 44px;"
+                    "color: #f97316; font-weight: 600; padding: 0 4px; font-size: 38px;"
                 )
                 arrow.setFixedWidth(28)
                 steps_row.addWidget(arrow)
