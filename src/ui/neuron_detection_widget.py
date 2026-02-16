@@ -182,6 +182,23 @@ class NeuronDetectionWidget(QWidget):
         """Set callback function to save experiment when detection completes."""
         self.save_experiment_callback = callback
 
+    def reset_detection_state(self) -> None:
+        self.neuron_locations = None
+        self.neuron_trajectories = None
+        self.quality_mask = None
+        self.mean_frame = None
+        self.roi_mask = None
+
+        self.figure.clear()
+        self.canvas.draw()
+
+        self.stats_label.setText("Total Neurons: 0 | Good: 0 | Bad: 0")
+        self.export_locations_btn.setEnabled(False)
+        self.export_trajectories_btn.setEnabled(False)
+        self.export_all_btn.setEnabled(False)
+
+        self._update_ui_state()
+
     def load_detection_data(
         self,
         neuron_locations: np.ndarray,
