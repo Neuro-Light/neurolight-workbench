@@ -1,0 +1,199 @@
+from __future__ import annotations
+
+from typing import Optional
+
+import numpy as np
+from matplotlib.backends.backend_qtagg import (
+    FigureCanvasQTAgg as FigureCanvas,
+)
+from matplotlib.backends.backend_qtagg import (
+    NavigationToolbar2QT as NavigationToolbar,
+)
+from matplotlib.figure import Figure
+from PySide6.QtCore import Qt, QTime
+from PySide6.QtWidgets import (
+    QFormLayout,
+    QGroupBox,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QSpinBox,
+    QTimeEdit,
+    QVBoxLayout,
+    QWidget,
+)
+
+from ui.app_settings import get_theme
+from ui.styles import get_mpl_theme
+
+
+class RayLeighPlotWidget(QWidget):
+    """Widget for plotting peak neuron times on a 24-hour circular (RayLeigh) plot."""
+    # This plot is useful for visualizing the distribution of peak activity times across neurons,
+    # especially in circadian rhythm studies. Each point on the circle represents a neuron, and
+    # its angle corresponds to the time of day when that neuron is most active. 
+    def __init__(self, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.neuron_trajectories: Optional[np.ndarray] = None
+        self.quality_mask: Optional[np.ndarray] = None
+
+        layout = QVBoxLayout(self)
+        # Initial status label before data is loaded, with instructions for the user.
+        self.status_label = QLabel("No neuron trajectories available. Run detection first.")
+        self.status_label.setAlignment(Qt.AlignCenter)
+        self.status_label.setWordWrap(True)
+        layout.addWidget(self.status_label)
+
+        controls_group = QGroupBox("Time Settings")
+        controls_layout = QFormLayout()
+        # Time settings 
+        self.start_time_edit = QTimeEdit()
+        self.start_time_edit.setDisplayFormat("HH:mm")
+        self.start_time_edit.setTime(QTime(0, 0))
+        self.start_time_edit.setToolTip("Time of first frame (24-hour time)")
+        controls_layout.addRow("Experiment Start Time:", self.start_time_edit)
+        # Time between frames
+        self.interval_minutes_spin = QSpinBox()
+        self.interval_minutes_spin.setRange(1, 1440)
+        self.interval_minutes_spin.setValue(60)
+        self.interval_minutes_spin.setSuffix(" min")
+        self.interval_minutes_spin.setToolTip("Time between consecutive frames in minutes")
+        controls_layout.addRow("Interval Between Photos:", self.interval_minutes_spin)
+        # Button to plot
+        self.plot_btn = QPushButton("Plot Rayleigh Plot")
+        self.plot_btn.setEnabled(False)
+        self.plot_btn.clicked.connect(self._plot)
+        controls_layout.addRow(self.plot_btn)
+
+        controls_group.setLayout(controls_layout)
+        layout.addWidget(controls_group)
+
+        self.figure = Figure(figsize=(6, 6))
+        self.canvas = FigureCanvas(self.figure)
+        self.toolbar = NavigationToolbar(self.canvas, self)
+        self.toolbar.setObjectName("mpl_nav_toolbar")
+        layout.addWidget(self.toolbar)
+        layout.addWidget(self.canvas)
+
+    # This method is called by the main application when new neuron trajectory data is available.
+    def set_trajectory_data(
+        self,
+        neuron_trajectories: np.ndarray,
+        quality_mask: Optional[np.ndarray] = None,
+    ) -> None:
+        self.neuron_trajectories = neuron_trajectories
+        self.quality_mask = quality_mask
+
+        if neuron_trajectories is None or len(neuron_trajectories) == 0:
+            self.status_label.setText("No neuron trajectories to display.")
+            self.plot_btn.setEnabled(False)
+            return
+
+        num_neurons, num_frames = neuron_trajectories.shape
+        if quality_mask is not None:
+            num_good = np.sum(quality_mask)
+            num_bad = num_neurons - num_good
+            self.status_label.setText(
+                f"Ready to plot {num_neurons} neurons "
+                f"({num_good} good, {num_bad} bad) across {num_frames} frames"
+            )
+        else:
+            self.status_label.setText(
+                f"Ready to plot {num_neurons} neurons across {num_frames} frames"
+            )
+        self.plot_btn.setEnabled(True)
+        self._plot()
+    # themes to fit other diagrams in the app, and to support dark mode. It applies the theme colors to the figure background, axes background, ticks, title, spines, grid, and legend.
+    def _apply_theme(self, ax) -> None:
+        """Apply current app theme to figure and axes."""
+        theme = get_mpl_theme(get_theme())
+        self.figure.patch.set_facecolor(theme["figure_facecolor"])
+        ax.set_facecolor(theme["axes_facecolor"])
+        ax.tick_params(axis="both", colors=theme["text_color"])
+        ax.xaxis.label.set_color(theme["text_color"])
+        ax.yaxis.label.set_color(theme["text_color"])
+        ax.title.set_color(theme["text_color"])
+        for spine in ax.spines.values():
+            spine.set_color(theme["axes_edgecolor"])
+        ax.grid(True, alpha=0.35, color=theme["grid_color"])
+    # This method generates the Rayleigh plot based on the neuron trajectories and quality mask.
+    # It calculates the peak frame for each neuron, converts it to a time in minutes, and then 
+    # to an angle in radians. It adds a small radial jitter to reduce overplotting. 
+    # The neurons are colored based on their quality (good vs bad) if a quality mask is provided. 
+    # The plot is then styled according to the current theme and displayed on the canvas.
+    def _plot(self) -> None:
+        if self.neuron_trajectories is None or len(self.neuron_trajectories) == 0:
+            QMessageBox.warning(self, "No Data", "No neuron trajectories available.")
+            return
+
+        start_time = self.start_time_edit.time()
+        start_minutes = start_time.hour() * 60 + start_time.minute()
+        interval_minutes = int(self.interval_minutes_spin.value())
+
+        peak_frames = np.argmax(self.neuron_trajectories, axis=1)
+        peak_minutes = (start_minutes + peak_frames * interval_minutes) % (24 * 60)
+        theta = (peak_minutes / (24 * 60)) * (2 * np.pi)
+
+        # Slight radial jitter to reduce overplotting
+        # for separation of points that have the same peak time.
+        # for visuals clarity, not a data transformation.
+        jitter = np.array([1.0 - 0.04 * (i % 5) for i in range(len(theta))])
+
+        self.figure.clear()
+        ax = self.figure.add_subplot(111, projection="polar")
+        ax.set_theta_zero_location("N")
+        ax.set_theta_direction(-1)
+        ax.set_ylim(0, 1.05)
+        ax.set_yticks([])
+        ax.set_xticks([0, np.pi / 2, np.pi, 3 * np.pi / 2])
+        ax.set_xticklabels(["24", "6", "12", "18"])
+
+        theme = get_mpl_theme(get_theme())
+
+        if self.quality_mask is not None:
+            good_mask = self.quality_mask.astype(bool)
+            if np.any(good_mask):
+                ax.scatter(
+                    theta[good_mask],
+                    jitter[good_mask],
+                    s=35,
+                    color=theme["good_color"],
+                    alpha=0.8,
+                    label="Good Neurons",
+                )
+            if np.any(~good_mask):
+                ax.scatter(
+                    theta[~good_mask],
+                    jitter[~good_mask],
+                    s=35,
+                    color=theme["bad_color"],
+                    alpha=0.8,
+                    label="Bad Neurons",
+                )
+        else:
+            ax.scatter(
+                theta,
+                jitter,
+                s=35,
+                color=theme["neutral_color"],
+                alpha=0.8,
+                label="Neurons",
+            )
+
+        title_time = start_time.toString("HH:mm")
+        ax.set_title(
+            f"Peak Times (Modulo 24h)\nStart {title_time}  |  Interval {interval_minutes} min",
+            fontsize=12,
+        )
+        ax.legend(loc="lower left", bbox_to_anchor=(1.05, 0.1))
+        self._apply_theme(ax)
+        self.canvas.draw_idle()
+    # Error handling method to clear the plot and reset the state when there are issues with the data.
+        self.neuron_trajectories = None
+        self.quality_mask = None
+        self.status_label.setText("No neuron trajectories available. Run detection first.")
+        self.plot_btn.setEnabled(False)
+    def refresh_theme(self) -> None:
+        """Redraw the plot with the current app theme (e.g. after theme change)."""
+        if self.intensity_data is not None and self.roi is not None:
+            self.plot_intensity_time_series(self.intensity_data, self.roi)

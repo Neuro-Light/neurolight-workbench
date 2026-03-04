@@ -193,6 +193,31 @@ class NeuronTrajectoryPlotWidget(QWidget):
         intensity = float(np.mean(self.neuron_trajectories[:, frame_idx]))
         self.hover_label.setText(f"Frame {frame_idx}  ·  Intensity {intensity:.3f}")
 
+    def _get_displayed_neuron_indices(self) -> list[int]:
+        if self.neuron_trajectories is None or len(self.neuron_trajectories) == 0:
+            return []
+
+        num_neurons = self.neuron_trajectories.shape[0]
+        show_good = self.show_good_checkbox.isChecked()
+        show_bad = self.show_bad_checkbox.isChecked()
+        max_neurons = self.max_neurons_spin.value()
+
+        neurons_to_plot: list[int] = []
+        if self.quality_mask is not None:
+            if show_good:
+                good_indices = np.where(self.quality_mask)[0]
+                neurons_to_plot.extend(good_indices[:max_neurons].tolist())
+            if show_bad:
+                bad_indices = np.where(~self.quality_mask)[0]
+                neurons_to_plot.extend(bad_indices[:max_neurons].tolist())
+        else:
+            neurons_to_plot = list(range(min(num_neurons, max_neurons)))
+
+        if len(neurons_to_plot) > max_neurons:
+            neurons_to_plot = neurons_to_plot[:max_neurons]
+
+        return neurons_to_plot
+
     def _update_plot(self) -> None:
         """Update the trajectory plot based on current display options."""
         if self.neuron_trajectories is None or len(self.neuron_trajectories) == 0:
@@ -210,23 +235,10 @@ class NeuronTrajectoryPlotWidget(QWidget):
         # Get display options
         show_good = self.show_good_checkbox.isChecked()
         show_bad = self.show_bad_checkbox.isChecked()
-        max_neurons = self.max_neurons_spin.value()
         show_average = self.show_average_checkbox.isChecked()
 
         # Determine which neurons to display
-        neurons_to_plot = []
-        if self.quality_mask is not None:
-            if show_good:
-                good_indices = np.where(self.quality_mask)[0]
-                neurons_to_plot.extend(good_indices[:max_neurons].tolist())
-            if show_bad:
-                bad_indices = np.where(~self.quality_mask)[0]
-                neurons_to_plot.extend(bad_indices[:max_neurons].tolist())
-        else:
-            neurons_to_plot = list(range(min(num_neurons, max_neurons)))
-
-        if len(neurons_to_plot) > max_neurons:
-            neurons_to_plot = neurons_to_plot[:max_neurons]
+        neurons_to_plot = self._get_displayed_neuron_indices()
 
         # Plot individual neuron trajectories (theme-aware colors)
         if self.quality_mask is not None:
@@ -296,6 +308,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
             self.canvas.mpl_disconnect(self._hover_cid)
         self._hover_cid = self.canvas.mpl_connect("motion_notify_event", self._on_motion)
         self.canvas.draw_idle()
+
 
     def _export_to_png(self) -> None:
         """Save the current plot as a PNG image."""

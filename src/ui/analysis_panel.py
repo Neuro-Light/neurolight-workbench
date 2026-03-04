@@ -2,6 +2,7 @@ from PySide6.QtWidgets import QLabel, QTabWidget, QVBoxLayout, QWidget
 
 from ui.neuron_detection_widget import NeuronDetectionWidget
 from ui.neuron_trajectory_plot import NeuronTrajectoryPlotWidget
+from ui.rayleigh_plot import RayLeighPlotWidget
 from ui.roi_intensity_plot import ROIIntensityPlotWidget
 
 
@@ -11,8 +12,10 @@ class AnalysisPanel(QTabWidget):
         self.roi_plot_widget = ROIIntensityPlotWidget()
         self.neuron_detection_widget = NeuronDetectionWidget()
         self.neuron_trajectory_plot_widget = NeuronTrajectoryPlotWidget()
+        self.rayleigh_plot_widget = RayLeighPlotWidget()
         self._add_tab("Statistics")
         self._add_tab("Graphs", self.neuron_trajectory_plot_widget)
+        self._add_tab("RayLeigh Plot", self.rayleigh_plot_widget)
         self._add_tab("ROI Intensity", self.roi_plot_widget)
         self._add_tab("Detection", self.neuron_detection_widget)
 
@@ -36,3 +39,7 @@ class AnalysisPanel(QTabWidget):
     def get_neuron_trajectory_plot_widget(self) -> NeuronTrajectoryPlotWidget:
         """Get the neuron trajectory plot widget."""
         return self.neuron_trajectory_plot_widget
+
+    def get_rayleigh_plot_widget(self) -> RayLeighPlotWidget:
+        """Get the RayLeigh plot widget."""
+        return self.rayleigh_plot_widget
