@@ -246,7 +246,9 @@ class StartupDialog(QDialog):
                 parent=self.recent_list,
             )
             row.options_btn.clicked.connect(
-                lambda checked=False, p=path, b=row.options_btn: self._show_options_for_path(p, b)
+                lambda checked=False, p=path, b=row.options_btn: self._show_options_for_path(
+                    p, b
+                )
             )
             self.recent_list.setItemWidget(list_item, row)
         self.recent_list.clearSelection()
@@ -273,7 +275,9 @@ class StartupDialog(QDialog):
         if item is not None:
             self._open_recent(item)
 
-    def _show_options_for_path(self, path: str, options_button: Optional[QPushButton]) -> None:
+    def _show_options_for_path(
+        self, path: str, options_button: Optional[QPushButton]
+    ) -> None:
         menu = QMenu(self)
         menu.addAction("Delete", lambda: self._remove_from_list_for_path(path))
         menu.addAction("Export", lambda: self._export_for_path(path))
@@ -321,7 +325,10 @@ class StartupDialog(QDialog):
 
     def _load_existing(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Open Experiment", str(EXPERIMENTS_DIR), "Neurolight Experiment (*.nexp)"
+            self,
+            "Open Experiment",
+            str(EXPERIMENTS_DIR),
+            "Neurolight Experiment (*.nexp)",
         )
         if not file_path:
             return
@@ -333,7 +340,9 @@ class StartupDialog(QDialog):
             self.accept()
         except Exception as e:
             QMessageBox.warning(
-                self, "Load Failed", f"Failed to load experiment:\n{file_path}\n\n{str(e)}"
+                self,
+                "Load Failed",
+                f"Failed to load experiment:\n{file_path}\n\n{str(e)}",
             )
             self._refresh_recent()
 
@@ -382,7 +391,9 @@ class StartupDialog(QDialog):
         elif action == export_action:
             self._export_experiment(item)
 
-    def _delete_experiment(self, item: QListWidgetItem, delete_file: bool = False) -> None:
+    def _delete_experiment(
+        self, item: QListWidgetItem, delete_file: bool = False
+    ) -> None:
         """Delete an experiment from the list and optionally from disk."""
         path = item.data(Qt.UserRole)
         if not path:
@@ -409,12 +420,18 @@ class StartupDialog(QDialog):
                     )
                 else:
                     QMessageBox.information(
-                        self, "Removed", "Experiment has been removed from the recent list."
+                        self,
+                        "Removed",
+                        "Experiment has been removed from the recent list.",
                     )
             else:
-                QMessageBox.warning(self, "Delete Failed", "Failed to delete experiment.")
+                QMessageBox.warning(
+                    self, "Delete Failed", "Failed to delete experiment."
+                )
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"An error occurred while deleting:\n{str(e)}")
+            QMessageBox.critical(
+                self, "Error", f"An error occurred while deleting:\n{str(e)}"
+            )
 
     def _export_experiment(self, item: QListWidgetItem) -> None:
         """Export an experiment to a .nexp file."""
@@ -449,6 +466,10 @@ class StartupDialog(QDialog):
                     self, "Export Successful", f"Experiment exported to:\n{file_path}"
                 )
             else:
-                QMessageBox.warning(self, "Export Failed", "Failed to export experiment.")
+                QMessageBox.warning(
+                    self, "Export Failed", "Failed to export experiment."
+                )
         except Exception as e:
-            QMessageBox.critical(self, "Export Failed", f"Failed to export experiment:\n{str(e)}")
+            QMessageBox.critical(
+                self, "Export Failed", f"Failed to export experiment:\n{str(e)}"
+            )

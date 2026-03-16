@@ -52,7 +52,8 @@ if not logger.handlers:
 
     # Create formatter - logger.exception() automatically includes traceback
     formatter = logging.Formatter(
-        "%(asctime)s - %(name)s - %(levelname)s - %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
     file_handler.setFormatter(formatter)
 
@@ -65,7 +66,9 @@ if not logger.handlers:
 class _ExperimentSettingsDialog(QDialog):
     """Dialog to edit experiment name, principal investigator, and description."""
 
-    def __init__(self, experiment: Experiment, parent: Optional[QWidget] = None) -> None:
+    def __init__(
+        self, experiment: Experiment, parent: Optional[QWidget] = None
+    ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Experiment Settings")
         self.setModal(True)
@@ -315,7 +318,9 @@ class MainWindow(QMainWindow):
             self.experiment.principal_investigator = dlg.principal_investigator
             self.experiment.update_modified_date()
             try:
-                self.manager.save_experiment(self.experiment, self.current_experiment_path)
+                self.manager.save_experiment(
+                    self.experiment, self.current_experiment_path
+                )
                 QMessageBox.information(self, "Saved", "Experiment settings saved.")
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to save: {e}")
@@ -337,7 +342,10 @@ class MainWindow(QMainWindow):
 
         if reply == QMessageBox.Yes:
             # Stop alignment worker if running
-            if self._alignment_worker is not None and self._alignment_worker.isRunning():
+            if (
+                self._alignment_worker is not None
+                and self._alignment_worker.isRunning()
+            ):
                 self._alignment_worker.request_cancel()
                 self._alignment_worker.wait(5000)
             self._flush_pending_display_settings()
@@ -345,7 +353,9 @@ class MainWindow(QMainWindow):
             self._capture_display_settings()
             if self.current_experiment_path:
                 try:
-                    self.manager.save_experiment(self.experiment, self.current_experiment_path)
+                    self.manager.save_experiment(
+                        self.experiment, self.current_experiment_path
+                    )
                 except Exception as e:
                     logger.exception(
                         f"Failed to save experiment during close: {self.current_experiment_path}"
@@ -400,7 +410,9 @@ class MainWindow(QMainWindow):
         # Notify workflow manager when detection completes
         try:
             detection_widget.detectionCompleted.connect(
-                lambda: self.workflow_manager.complete_step_if_current(WorkflowStep.DETECT_NEURONS)
+                lambda: self.workflow_manager.complete_step_if_current(
+                    WorkflowStep.DETECT_NEURONS
+                )
             )
         except Exception:
             # In tests the widget may be heavily mocked; ignore connection errors
@@ -496,7 +508,9 @@ class MainWindow(QMainWindow):
                         saved_files = self.experiment.image_stack_files
                         if saved_files and len(saved_files) > 0:
                             # Verify files still exist
-                            existing_files = [f for f in saved_files if Path(f).exists()]
+                            existing_files = [
+                                f for f in saved_files if Path(f).exists()
+                            ]
                             if len(existing_files) > 0:
                                 loading_dialog.update_status(
                                     "Loading image stack...",
@@ -549,7 +563,8 @@ class MainWindow(QMainWindow):
                             def load_rois_and_plot():
                                 try:
                                     loading_dialog.update_status(
-                                        "Restoring ROIs and graphs...", "Loading analysis data"
+                                        "Restoring ROIs and graphs...",
+                                        "Loading analysis data",
                                     )
                                     QApplication.processEvents()
 
@@ -557,7 +572,9 @@ class MainWindow(QMainWindow):
                                         self.viewer.set_roi(roi_obj, key=rk)
                                         self._on_roi_selected(rk, roi_obj)
 
-                                    detection_data = self.experiment.get_neuron_detection_data()
+                                    detection_data = (
+                                        self.experiment.get_neuron_detection_data()
+                                    )
                                     if detection_data:
                                         loading_dialog.update_status(
                                             "Loading neuron detection data...",
@@ -608,7 +625,9 @@ class MainWindow(QMainWindow):
             pass
 
     def _open_image_stack(self) -> None:
-        directory = QFileDialog.getExistingDirectory(self, "Select Image Stack Folder", "")
+        directory = QFileDialog.getExistingDirectory(
+            self, "Select Image Stack Folder", ""
+        )
         if not directory:
             return
         self.viewer.set_stack(directory)
@@ -627,7 +646,9 @@ class MainWindow(QMainWindow):
         # Persist immediately if we know the path to the .nexp
         if self.current_experiment_path:
             try:
-                self.manager.save_experiment(self.experiment, self.current_experiment_path)
+                self.manager.save_experiment(
+                    self.experiment, self.current_experiment_path
+                )
             except Exception:
                 pass
 
@@ -677,9 +698,13 @@ class MainWindow(QMainWindow):
                 self._sync_rois_to_experiment()
                 self._capture_display_settings()
                 self._ensure_detection_data_saved()
-                self.manager.save_experiment(self.experiment, self.current_experiment_path)
+                self.manager.save_experiment(
+                    self.experiment, self.current_experiment_path
+                )
             except Exception as e:
-                logger.error(f"Failed to save neuron detection data: {e}", exc_info=True)
+                logger.error(
+                    f"Failed to save neuron detection data: {e}", exc_info=True
+                )
 
     def _save(self) -> None:
         if not self.current_experiment_path:
@@ -734,7 +759,9 @@ class MainWindow(QMainWindow):
         self._capture_display_settings()
         if self.current_experiment_path:
             try:
-                self.manager.save_experiment(self.experiment, self.current_experiment_path)
+                self.manager.save_experiment(
+                    self.experiment, self.current_experiment_path
+                )
             except Exception:
                 pass
 
@@ -748,7 +775,9 @@ class MainWindow(QMainWindow):
         if result == QDialog.Accepted and startup.experiment is not None:
             # User selected a new experiment - replace current experiment
             self.experiment = startup.experiment
-            self.set_current_experiment_path(startup.experiment_path, persist_workflow=False)
+            self.set_current_experiment_path(
+                startup.experiment_path, persist_workflow=False
+            )
             self.workflow_manager.attach_experiment(self.experiment)
             self.setWindowTitle(f"Neurolight - {self.experiment.name}")
 
@@ -790,7 +819,9 @@ class MainWindow(QMainWindow):
             self._capture_display_settings()
             if self.current_experiment_path:
                 try:
-                    self.manager.save_experiment(self.experiment, self.current_experiment_path)
+                    self.manager.save_experiment(
+                        self.experiment, self.current_experiment_path
+                    )
                 except Exception:
                     pass
             QApplication.quit()
@@ -843,7 +874,9 @@ class MainWindow(QMainWindow):
         self.analysis.get_neuron_detection_widget().set_roi_mask(roi_key, None)
         if self.current_experiment_path:
             try:
-                self.manager.save_experiment(self.experiment, self.current_experiment_path)
+                self.manager.save_experiment(
+                    self.experiment, self.current_experiment_path
+                )
             except Exception:
                 pass
 
@@ -875,7 +908,9 @@ class MainWindow(QMainWindow):
                     neuron_locations=detection_data["neuron_locations"],
                     neuron_trajectories=detection_data["neuron_trajectories"],
                     quality_mask=detection_data["quality_mask"],
-                    mean_frame=detection_data.get("mean_frame"),  # Optional - can be recalculated
+                    mean_frame=detection_data.get(
+                        "mean_frame"
+                    ),  # Optional - can be recalculated
                     detection_params=detection_data.get("detection_params"),
                 )
         except Exception:
@@ -942,7 +977,9 @@ class MainWindow(QMainWindow):
             # Persist to file if we have a path
             if self.current_experiment_path:
                 try:
-                    self.manager.save_experiment(self.experiment, self.current_experiment_path)
+                    self.manager.save_experiment(
+                        self.experiment, self.current_experiment_path
+                    )
                 except Exception:
                     pass
 
@@ -952,7 +989,9 @@ class MainWindow(QMainWindow):
         if self.current_experiment_path:
             try:
                 self._ensure_detection_data_saved()
-                self.manager.save_experiment(self.experiment, self.current_experiment_path)
+                self.manager.save_experiment(
+                    self.experiment, self.current_experiment_path
+                )
             except Exception:
                 pass
 
@@ -973,7 +1012,9 @@ class MainWindow(QMainWindow):
         """Crop the image stack to the active ROI and save as new stack."""
         current_roi = self.viewer.get_current_roi()
         if current_roi is None:
-            QMessageBox.warning(self, "No ROI Selected", "Please select an ROI before cropping.")
+            QMessageBox.warning(
+                self, "No ROI Selected", "Please select an ROI before cropping."
+            )
             return
 
         try:
@@ -1017,30 +1058,38 @@ class MainWindow(QMainWindow):
 
                     if frame_max > frame_min:
                         # Scale to 0-255
-                        normalized = (cropped_frame - frame_min) / (frame_max - frame_min)
+                        normalized = (cropped_frame - frame_min) / (
+                            frame_max - frame_min
+                        )
                         cropped_frame = (normalized * 255).astype(np.uint8)
                     else:
                         # Constant frame - convert to uint8 with proper scaling
                         if np.issubdtype(cropped_frame.dtype, np.floating):
                             # For float dtypes, scale to 0-255 range
-                            uint8_value = np.clip(np.round(frame_min * 255), 0, 255).astype(
-                                np.uint8
-                            )
+                            uint8_value = np.clip(
+                                np.round(frame_min * 255), 0, 255
+                            ).astype(np.uint8)
                         else:
                             # For integer dtypes, just clip to 0-255
                             uint8_value = np.clip(frame_min, 0, 255).astype(np.uint8)
-                        cropped_frame = np.full_like(cropped_frame, uint8_value, dtype=np.uint8)
+                        cropped_frame = np.full_like(
+                            cropped_frame, uint8_value, dtype=np.uint8
+                        )
 
                 # Save frame
                 img = Image.fromarray(cropped_frame)
                 img.save(str(output_file))
 
             QMessageBox.information(
-                self, "Cropping Complete", f"Cropped {len(cropped_stack)} frames to {output_dir}"
+                self,
+                "Cropping Complete",
+                f"Cropped {len(cropped_stack)} frames to {output_dir}",
             )
 
         except Exception as e:
-            QMessageBox.critical(self, "Cropping Error", f"Failed to crop image stack:\n{str(e)}")
+            QMessageBox.critical(
+                self, "Cropping Error", f"Failed to crop image stack:\n{str(e)}"
+            )
 
     def _align_images(self) -> None:
         """Align images in the stack using a background worker thread."""
@@ -1057,13 +1106,17 @@ class MainWindow(QMainWindow):
         num_frames = self.stack_handler.get_image_count()
         if num_frames == 0:
             QMessageBox.warning(
-                self, "No Images", "No image stack loaded. Please load an image stack first."
+                self,
+                "No Images",
+                "No image stack loaded. Please load an image stack first.",
             )
             return
 
         if num_frames < 2:
             QMessageBox.warning(
-                self, "Not Enough Images", "At least 2 images are required for alignment."
+                self,
+                "Not Enough Images",
+                "At least 2 images are required for alignment.",
             )
             return
 
@@ -1111,9 +1164,13 @@ class MainWindow(QMainWindow):
         self._alignment_worker = None
 
         avg_confidence = (
-            sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0.0
+            sum(confidence_scores) / len(confidence_scores)
+            if confidence_scores
+            else 0.0
         )
-        low_confidence_frames = [i for i, conf in enumerate(confidence_scores) if conf < 0.5]
+        low_confidence_frames = [
+            i for i, conf in enumerate(confidence_scores) if conf < 0.5
+        ]
 
         result_message = (
             f"Alignment complete!\n\n"
@@ -1185,7 +1242,9 @@ class MainWindow(QMainWindow):
             "Image alignment was cancelled. No changes were saved.",
         )
 
-    def _apply_exposure_contrast(self, arr: np.ndarray, exposure: int, contrast: int) -> np.ndarray:
+    def _apply_exposure_contrast(
+        self, arr: np.ndarray, exposure: int, contrast: int
+    ) -> np.ndarray:
         """
         Apply exposure and contrast adjustments to an image array.
         Uses the same logic as ImageViewer._apply_adjustments.
@@ -1229,7 +1288,12 @@ class MainWindow(QMainWindow):
         return new_arr
 
     def _apply_exposure_contrast_global(
-        self, arr: np.ndarray, exposure: int, contrast: int, global_min: float, global_range: float
+        self,
+        arr: np.ndarray,
+        exposure: int,
+        contrast: int,
+        global_min: float,
+        global_range: float,
     ) -> np.ndarray:
         """
         Apply exposure and contrast adjustments to an image array using global normalization.
@@ -1313,9 +1377,11 @@ class MainWindow(QMainWindow):
             "reference_index": params.get("reference_index", 0),
             "num_frames": len(aligned_stack),
             "confidence_scores": [float(conf) for conf in confidence_scores],
-            "average_confidence": float(sum(confidence_scores) / len(confidence_scores))
-            if confidence_scores
-            else 0.0,
+            "average_confidence": (
+                float(sum(confidence_scores) / len(confidence_scores))
+                if confidence_scores
+                else 0.0
+            ),
         }
 
         metadata_path = output_path / "alignment_metadata.json"
@@ -1341,7 +1407,9 @@ class MainWindow(QMainWindow):
             if self.current_experiment_path:
                 # Suggest a location near the original file
                 original_path = Path(self.current_experiment_path)
-                default_name = str(original_path.parent / f"{self.experiment.name}_export.nexp")
+                default_name = str(
+                    original_path.parent / f"{self.experiment.name}_export.nexp"
+                )
 
             file_path, _ = QFileDialog.getSaveFileName(
                 self,
@@ -1364,6 +1432,10 @@ class MainWindow(QMainWindow):
                     self, "Export Successful", f"Experiment exported to:\n{file_path}"
                 )
             else:
-                QMessageBox.warning(self, "Export Failed", "Failed to export experiment.")
+                QMessageBox.warning(
+                    self, "Export Failed", "Failed to export experiment."
+                )
         except Exception as e:
-            QMessageBox.critical(self, "Export Failed", f"Failed to export experiment:\n{str(e)}")
+            QMessageBox.critical(
+                self, "Export Failed", f"Failed to export experiment:\n{str(e)}"
+            )

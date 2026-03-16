@@ -71,9 +71,13 @@ class AlignmentDialog(QDialog):
         reference_layout = QFormLayout()
 
         self.reference_combo = QComboBox()
-        self.reference_combo.addItems(["First Frame", "Previous Frame", "Mean of All Frames"])
+        self.reference_combo.addItems(
+            ["First Frame", "Previous Frame", "Mean of All Frames"]
+        )
         self.reference_combo.setCurrentIndex(0)  # Default to First Frame
-        self.reference_combo.currentIndexChanged.connect(self._on_reference_strategy_changed)
+        self.reference_combo.currentIndexChanged.connect(
+            self._on_reference_strategy_changed
+        )
 
         reference_layout.addRow("Reference:", self.reference_combo)
         reference_group.setLayout(reference_layout)
@@ -97,7 +101,13 @@ class AlignmentDialog(QDialog):
         self.reference_index = value
 
     def _on_transform_changed(self, index: int):
-        transform_types = ["rigid_body", "translation", "scaled_rotation", "affine", "bilinear"]
+        transform_types = [
+            "rigid_body",
+            "translation",
+            "scaled_rotation",
+            "affine",
+            "bilinear",
+        ]
         self.transform_type = transform_types[index]
 
     def _on_reference_strategy_changed(self, index: int):

@@ -112,8 +112,12 @@ class _ROIGraphicsView(QGraphicsView):
         if self._panning:
             delta = event.position() - self._pan_start
             self._pan_start = event.position()
-            self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - int(delta.x()))
-            self.verticalScrollBar().setValue(self.verticalScrollBar().value() - int(delta.y()))
+            self.horizontalScrollBar().setValue(
+                self.horizontalScrollBar().value() - int(delta.x())
+            )
+            self.verticalScrollBar().setValue(
+                self.verticalScrollBar().value() - int(delta.y())
+            )
             event.accept()
             return
         scene_pos = self.mapToScene(event.position().toPoint())
@@ -231,7 +235,9 @@ class ROISelectionDialog(QDialog):
             swatch.setPixmap(pix)
 
             is_active = label_text == self._active_label
-            text_label = QLabel(f"<b>{label_text}</b> (editing)" if is_active else label_text)
+            text_label = QLabel(
+                f"<b>{label_text}</b> (editing)" if is_active else label_text
+            )
             info_row.addWidget(swatch)
             info_row.addWidget(text_label)
             info_row.addSpacing(12)
@@ -342,19 +348,30 @@ class ROISelectionDialog(QDialog):
             # Lines between placed points
             for i in range(len(pts) - 1):
                 line = self._scene.addLine(
-                    pts[i].x(), pts[i].y(), pts[i + 1].x(), pts[i + 1].y(), pen,
+                    pts[i].x(),
+                    pts[i].y(),
+                    pts[i + 1].x(),
+                    pts[i + 1].y(),
+                    pen,
                 )
                 line.setZValue(10)
             # Preview line from last point to cursor
             preview_line = self._scene.addLine(
-                pts[-1].x(), pts[-1].y(),
-                self._preview_pos.x(), self._preview_pos.y(), pen,
+                pts[-1].x(),
+                pts[-1].y(),
+                self._preview_pos.x(),
+                self._preview_pos.y(),
+                pen,
             )
             preview_line.setZValue(10)
         elif len(pts) >= 2:
             for i in range(len(pts) - 1):
                 line = self._scene.addLine(
-                    pts[i].x(), pts[i].y(), pts[i + 1].x(), pts[i + 1].y(), pen,
+                    pts[i].x(),
+                    pts[i].y(),
+                    pts[i + 1].x(),
+                    pts[i + 1].y(),
+                    pen,
                 )
                 line.setZValue(10)
 
@@ -362,7 +379,12 @@ class ROISelectionDialog(QDialog):
         r = 4
         for pt in pts:
             ellipse = self._scene.addEllipse(
-                pt.x() - r, pt.y() - r, 2 * r, 2 * r, vertex_pen, vertex_brush,
+                pt.x() - r,
+                pt.y() - r,
+                2 * r,
+                2 * r,
+                vertex_pen,
+                vertex_brush,
             )
             ellipse.setZValue(11)
 
@@ -387,8 +409,12 @@ class ROISelectionDialog(QDialog):
                 hs = 5
                 for pt in qpts:
                     rect = self._scene.addRect(
-                        pt.x() - hs, pt.y() - hs, 2 * hs, 2 * hs,
-                        handle_pen, handle_brush,
+                        pt.x() - hs,
+                        pt.y() - hs,
+                        2 * hs,
+                        2 * hs,
+                        handle_pen,
+                        handle_brush,
                     )
                     rect.setZValue(11)
 
@@ -538,7 +564,9 @@ class ROISelectionDialog(QDialog):
             self._last_drag_pos = None
             self._update_overlay()
 
-    def _handle_mouse_double_click(self, event: QMouseEvent, scene_pos: QPointF) -> None:
+    def _handle_mouse_double_click(
+        self, event: QMouseEvent, scene_pos: QPointF
+    ) -> None:
         if event.button() != Qt.LeftButton:
             return
         if self._selection_mode and len(self._polygon_points) >= 3:

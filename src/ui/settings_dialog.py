@@ -85,7 +85,9 @@ class SettingsDialog(QDialog):
             self._roi_swatches[roi_key] = swatch
             change_btn = QPushButton("Change...")
             change_btn.setFixedWidth(90)
-            change_btn.clicked.connect(lambda _checked=False, k=roi_key: self._pick_roi_color(k))
+            change_btn.clicked.connect(
+                lambda _checked=False, k=roi_key: self._pick_roi_color(k)
+            )
             row.addWidget(label)
             row.addWidget(swatch)
             row.addWidget(change_btn)
@@ -135,7 +137,9 @@ class SettingsDialog(QDialog):
 
     def _pick_roi_color(self, roi_key: str) -> None:
         current = QColor(self._roi_colors[roi_key])
-        color = QColorDialog.getColor(current, self, f"Choose {ROI_LABELS[roi_key]} Color")
+        color = QColorDialog.getColor(
+            current, self, f"Choose {ROI_LABELS[roi_key]} Color"
+        )
         if color.isValid():
             hex_color = color.name()
             self._roi_colors[roi_key] = hex_color

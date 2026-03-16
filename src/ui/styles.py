@@ -160,23 +160,27 @@ def get_mpl_theme(theme: str = "dark") -> dict:
     }
 
     if is_dark:
-        base.update({
-            "good_color": "#22c55e",
-            "bad_color": "#f87171",
-            "neutral_color": "#6BB3FF" if is_high_contrast else "#60a5fa",
-            "average_color": "#e2e8f0",
-            "average_good_color": "#4ade80",
-            "roi_line_color": roi_colors["roi_1"],
-        })
+        base.update(
+            {
+                "good_color": "#22c55e",
+                "bad_color": "#f87171",
+                "neutral_color": "#6BB3FF" if is_high_contrast else "#60a5fa",
+                "average_color": "#e2e8f0",
+                "average_good_color": "#4ade80",
+                "roi_line_color": roi_colors["roi_1"],
+            }
+        )
     else:
-        base.update({
-            "good_color": "green",
-            "bad_color": "red",
-            "neutral_color": "blue",
-            "average_color": "black",
-            "average_good_color": "darkgreen",
-            "roi_line_color": roi_colors["roi_1"],
-        })
+        base.update(
+            {
+                "good_color": "green",
+                "bad_color": "red",
+                "neutral_color": "blue",
+                "average_color": "black",
+                "average_good_color": "darkgreen",
+                "roi_line_color": roi_colors["roi_1"],
+            }
+        )
 
     return base
 

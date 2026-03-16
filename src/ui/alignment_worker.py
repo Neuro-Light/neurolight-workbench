@@ -49,7 +49,9 @@ class AlignmentWorker(QThread):
     """Worker thread that runs the image alignment pipeline off the main thread."""
 
     progress = Signal(int, int, str)  # (completed, total, message)
-    finished = Signal(object, object, object)  # (aligned_stack, tmats, confidence_scores)
+    finished = Signal(
+        object, object, object
+    )  # (aligned_stack, tmats, confidence_scores)
     error = Signal(str)
     cancelled = Signal()
 
@@ -106,7 +108,9 @@ class AlignmentWorker(QThread):
                 "affine": StackReg.AFFINE,
                 "bilinear": StackReg.BILINEAR,
             }
-            transform_const = transform_map.get(self._transform_type.lower(), StackReg.RIGID_BODY)
+            transform_const = transform_map.get(
+                self._transform_type.lower(), StackReg.RIGID_BODY
+            )
 
             sr = StackReg(transform_const)
 
@@ -120,7 +124,9 @@ class AlignmentWorker(QThread):
 
             if global_range > 0:
                 image_stack_uint16 = (
-                    (image_stack.astype(np.float32) - global_min) / global_range * 65535.0
+                    (image_stack.astype(np.float32) - global_min)
+                    / global_range
+                    * 65535.0
                 ).astype(np.uint16)
             else:
                 image_stack_uint16 = image_stack.astype(np.uint16)
@@ -159,7 +165,9 @@ class AlignmentWorker(QThread):
                 if tmats is None:
                     return  # cancelled
             else:
-                self.progress.emit(0, num_frames, "Computing transformation matrices...")
+                self.progress.emit(
+                    0, num_frames, "Computing transformation matrices..."
+                )
                 tmats = sr.register_stack(image_stack_uint16, reference=self._reference)
 
             if self._check_cancel("registration"):
@@ -193,7 +201,8 @@ class AlignmentWorker(QThread):
 
             if global_range > 0:
                 aligned_float = (
-                    aligned_stack_uint16.astype(np.float32) * (global_range / 65535.0) + global_min
+                    aligned_stack_uint16.astype(np.float32) * (global_range / 65535.0)
+                    + global_min
                 )
                 del aligned_stack_uint16
 

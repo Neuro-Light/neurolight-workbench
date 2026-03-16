@@ -39,7 +39,10 @@ class ROIIntensityPlotWidget(QWidget):
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self._intensity: Dict[str, Optional[np.ndarray]] = {"roi_1": None, "roi_2": None}
+        self._intensity: Dict[str, Optional[np.ndarray]] = {
+            "roi_1": None,
+            "roi_2": None,
+        }
         self._rois: Dict[str, Optional[ROI]] = {"roi_1": None, "roi_2": None}
         self.experiment: Optional["Experiment"] = None
         self._hover_cid = None
@@ -47,7 +50,9 @@ class ROIIntensityPlotWidget(QWidget):
         layout = QVBoxLayout(self)
 
         # Status label
-        self.status_label = QLabel("No ROI selected. Select an ROI in the image viewer.")
+        self.status_label = QLabel(
+            "No ROI selected. Select an ROI in the image viewer."
+        )
         self.status_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.status_label)
 
@@ -156,7 +161,9 @@ class ROIIntensityPlotWidget(QWidget):
         if not visible:
             has_any = any(d is not None for d in self._intensity.values())
             if has_any:
-                self.status_label.setText("All ROI traces hidden. Check a box above to show.")
+                self.status_label.setText(
+                    "All ROI traces hidden. Check a box above to show."
+                )
             else:
                 self.status_label.setText(
                     "No ROI selected. Select an ROI in the image viewer."
@@ -201,7 +208,9 @@ class ROIIntensityPlotWidget(QWidget):
 
         if self._hover_cid is not None:
             self.canvas.mpl_disconnect(self._hover_cid)
-        self._hover_cid = self.canvas.mpl_connect("motion_notify_event", self._on_motion)
+        self._hover_cid = self.canvas.mpl_connect(
+            "motion_notify_event", self._on_motion
+        )
         self.canvas.draw_idle()
 
     def _apply_theme(self, ax, theme: dict) -> None:
@@ -237,24 +246,34 @@ class ROIIntensityPlotWidget(QWidget):
 
     def _export_to_png(self) -> None:
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Plot as PNG", "roi_intensity.png", "PNG Files (*.png)",
+            self,
+            "Save Plot as PNG",
+            "roi_intensity.png",
+            "PNG Files (*.png)",
         )
         if not file_path:
             return
         try:
             self.figure.savefig(
-                file_path, dpi=150, facecolor=self.figure.get_facecolor(),
-                edgecolor="none", bbox_inches="tight",
+                file_path,
+                dpi=150,
+                facecolor=self.figure.get_facecolor(),
+                edgecolor="none",
+                bbox_inches="tight",
             )
-            QMessageBox.information(self, "Export Successful", f"Plot saved to:\n{file_path}")
+            QMessageBox.information(
+                self, "Export Successful", f"Plot saved to:\n{file_path}"
+            )
         except Exception as e:
             QMessageBox.critical(self, "Export Failed", f"Failed to save PNG:\n{e}")
 
     def _export_to_csv(self) -> None:
         experiment_name = self.experiment.name if self.experiment else "Experiment"
         file_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Intensity Data",
-            f"{experiment_name}_roi_intensity_data.csv", "CSV Files (*.csv)",
+            self,
+            "Save Intensity Data",
+            f"{experiment_name}_roi_intensity_data.csv",
+            "CSV Files (*.csv)",
         )
         if not file_path:
             return
@@ -282,7 +301,14 @@ class ROIIntensityPlotWidget(QWidget):
             data_to_save = np.column_stack([frames] + padded)
             header = ",".join(header_parts)
             fmt = ",".join(["%d"] + ["%.6f"] * len(padded))
-            np.savetxt(file_path, data_to_save, delimiter=",", header=header, comments="", fmt=fmt)
+            np.savetxt(
+                file_path,
+                data_to_save,
+                delimiter=",",
+                header=header,
+                comments="",
+                fmt=fmt,
+            )
             QMessageBox.information(
                 self, "Export Successful", f"Intensity data exported to:\n{file_path}"
             )

@@ -24,7 +24,9 @@ class Experiment:
     modified_date: datetime = field(default_factory=datetime.utcnow)
     image_stack_path: Optional[str] = None
     image_count: int = 0
-    image_stack_files: List[str] = field(default_factory=list)  # List of selected file paths
+    image_stack_files: List[str] = field(
+        default_factory=list
+    )  # List of selected file paths
     processing_history: List[Dict[str, Any]] = field(default_factory=list)
     analysis_results: Dict[str, Any] = field(default_factory=dict)
     settings: Dict[str, Any] = field(
@@ -46,9 +48,7 @@ class Experiment:
     # Each value is an ROI dict with keys x, y, width, height, shape, points.
     # Coordinates are in original image pixels, ensuring ROIs stay fixed to
     # the image region regardless of window size or scaling.
-    rois: Dict[str, Any] = field(
-        default_factory=lambda: {"roi_1": None, "roi_2": None}
-    )
+    rois: Dict[str, Any] = field(default_factory=lambda: {"roi_1": None, "roi_2": None})
 
     def to_json(self) -> Dict[str, Any]:
         return {
@@ -85,7 +85,9 @@ class Experiment:
         created = exp.get("created_date")
         modified = exp.get("modified_date")
         created_dt = datetime.fromisoformat(created) if created else datetime.utcnow()
-        modified_dt = datetime.fromisoformat(modified) if modified else datetime.utcnow()
+        modified_dt = (
+            datetime.fromisoformat(modified) if modified else datetime.utcnow()
+        )
         image_stack = exp.get("image_stack", {})
         # Load dual ROIs: prefer new "rois" key, fall back to legacy "roi" → roi_1
         rois_raw = exp.get("rois")
@@ -154,7 +156,9 @@ class Experiment:
                 if trajectories.size > 0:  # Only serialize if not empty
                     # Convert to base64-encoded string for efficiency
                     trajectories_bytes = trajectories.tobytes()
-                    trajectories_b64 = base64.b64encode(trajectories_bytes).decode("utf-8")
+                    trajectories_b64 = base64.b64encode(trajectories_bytes).decode(
+                        "utf-8"
+                    )
                     result["neuron_trajectories"] = {
                         "data": trajectories_b64,
                         "shape": list(trajectories.shape),
@@ -212,7 +216,9 @@ class Experiment:
 
         # Deserialize quality mask
         if "quality_mask" in data:
-            self._neuron_detection_data["quality_mask"] = np.array(data["quality_mask"], dtype=bool)
+            self._neuron_detection_data["quality_mask"] = np.array(
+                data["quality_mask"], dtype=bool
+            )
 
         # Note: mean_frame is NOT loaded - it will be recalculated when needed
         # This is fine since mean_frame is only used for visualization and can be
@@ -290,7 +296,9 @@ class ExperimentManager:
         self.add_to_recent(file_path, experiment.name)
         return experiment
 
-    def save_experiment(self, experiment: Experiment, file_path: Optional[str] = None) -> bool:
+    def save_experiment(
+        self, experiment: Experiment, file_path: Optional[str] = None
+    ) -> bool:
         if not file_path:
             raise ValueError("file_path is required for saving experiment")
         experiment.update_modified_date()
@@ -327,7 +335,11 @@ class ExperimentManager:
             invalid_paths = []
             for item in items:
                 path = item.get("path", "")
-                if path and os.path.isfile(path) and self.validate_experiment_file(path):
+                if (
+                    path
+                    and os.path.isfile(path)
+                    and self.validate_experiment_file(path)
+                ):
                     valid_items.append(item)
                 else:
                     invalid_paths.append(path)
@@ -357,7 +369,9 @@ class ExperimentManager:
         except Exception:
             data = {"recent": []}
         # Remove duplicates
-        data["recent"] = [e for e in data.get("recent", []) if e.get("path") != file_path]
+        data["recent"] = [
+            e for e in data.get("recent", []) if e.get("path") != file_path
+        ]
         data["recent"].insert(0, entry)
         data["recent"] = data["recent"][:20]
         with open(RECENT_FILE, "w", encoding="utf-8") as f:
@@ -372,7 +386,9 @@ class ExperimentManager:
         except Exception:
             data = {"recent": []}
         # Remove the entry
-        data["recent"] = [e for e in data.get("recent", []) if e.get("path") != file_path]
+        data["recent"] = [
+            e for e in data.get("recent", []) if e.get("path") != file_path
+        ]
         with open(RECENT_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2)
 

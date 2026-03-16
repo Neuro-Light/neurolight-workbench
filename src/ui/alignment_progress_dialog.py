@@ -55,7 +55,9 @@ class AlignmentProgressDialog(QDialog):
         self.status_label.setText(message)
         self.log_text.append(message)
         # Auto-scroll to bottom
-        self.log_text.verticalScrollBar().setValue(self.log_text.verticalScrollBar().maximum())
+        self.log_text.verticalScrollBar().setValue(
+            self.log_text.verticalScrollBar().maximum()
+        )
 
     def is_cancelled(self) -> bool:
         """Check if user cancelled the operation."""

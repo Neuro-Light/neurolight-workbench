@@ -108,13 +108,17 @@ class ImageViewer(QWidget):
 
         # Compact Previous / Next buttons using standard Qt media icons
         self.prev_btn = QPushButton()
-        self.prev_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaSeekBackward))
+        self.prev_btn.setIcon(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_MediaSeekBackward)
+        )
         self.prev_btn.setToolTip("Previous frame")
         self.prev_btn.setFixedWidth(32)
         self.prev_btn.setProperty("class", "primary")
 
         self.next_btn = QPushButton()
-        self.next_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaSeekForward))
+        self.next_btn.setIcon(
+            self.style().standardIcon(QStyle.StandardPixmap.SP_MediaSeekForward)
+        )
         self.next_btn.setToolTip("Next frame")
         self.next_btn.setFixedWidth(32)
         self.next_btn.setProperty("class", "primary")
@@ -229,6 +233,7 @@ class ImageViewer(QWidget):
             icon_pix = QPixmap(16, 16)
             icon_pix.fill(QColor(colors[key]))
             from PySide6.QtGui import QIcon
+
             self.roi_selector.addItem(QIcon(icon_pix), ROI_DISPLAY_NAMES[key], key)
         # Select the current active key
         idx = list(ROI_KEYS).index(self.active_roi_key)
@@ -242,6 +247,7 @@ class ImageViewer(QWidget):
             icon_pix = QPixmap(16, 16)
             icon_pix.fill(QColor(colors[key]))
             from PySide6.QtGui import QIcon
+
             self.roi_selector.setItemIcon(i, QIcon(icon_pix))
 
     def _on_roi_selector_changed(self, index: int) -> None:
@@ -317,7 +323,9 @@ class ImageViewer(QWidget):
         else:
             # Filter to only allow TIF and GIF files
             allowed_extensions = {".tif", ".tiff", ".gif"}
-            filtered_paths = [p for p in paths if Path(p).suffix.lower() in allowed_extensions]
+            filtered_paths = [
+                p for p in paths if Path(p).suffix.lower() in allowed_extensions
+            ]
 
             if filtered_paths:
                 self.set_stack(filtered_paths)
@@ -325,7 +333,9 @@ class ImageViewer(QWidget):
                 # Show message if no valid files were dropped
                 from PySide6.QtWidgets import QMessageBox
 
-                QMessageBox.warning(self, "Invalid Files", "Only TIF and GIF files are supported.")
+                QMessageBox.warning(
+                    self, "Invalid Files", "Only TIF and GIF files are supported."
+                )
 
     # Function to update the silder value so the user can see what value they have
     def _update_adjustment_labels(self) -> None:
@@ -385,7 +395,9 @@ class ImageViewer(QWidget):
         self._update_adjustment_labels()
         self._show_current()
         # Emit signal so MainWindow can save to experiment
-        self.displaySettingsChanged.emit(self.exposure_slider.value(), self.contrast_slider.value())
+        self.displaySettingsChanged.emit(
+            self.exposure_slider.value(), self.contrast_slider.value()
+        )
 
     # Function to convert to 8 bits
     def _ensure_uint8(self, arr: np.ndarray) -> np.ndarray:
@@ -551,7 +563,9 @@ class ImageViewer(QWidget):
         """Show or hide the exposure/contrast panel."""
         self.adjustments_panel.setVisible(self.display_options_btn.isChecked())
         self.display_options_btn.setText(
-            "Hide display options" if self.display_options_btn.isChecked() else "Display options"
+            "Hide display options"
+            if self.display_options_btn.isChecked()
+            else "Display options"
         )
 
     def _roi_action(self) -> None:

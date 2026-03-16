@@ -59,6 +59,8 @@ def main_window(app, sample_experiment):
     mock_viewer.stackLoaded.connect = Mock()
     mock_viewer.roiSelected = Mock()
     mock_viewer.roiSelected.connect = Mock()
+    mock_viewer.roiDeleted = Mock()
+    mock_viewer.roiDeleted.connect = Mock()
     mock_viewer.displaySettingsChanged = Mock()
     mock_viewer.displaySettingsChanged.connect = Mock()
 
@@ -145,7 +147,9 @@ class TestCloseExperiment:
             # Since user cancelled startup dialog, app should quit
             mock_quit.assert_called_once()
 
-    def test_close_experiment_loads_new_experiment(self, main_window, sample_experiment):
+    def test_close_experiment_loads_new_experiment(
+        self, main_window, sample_experiment
+    ):
         """Test that close experiment loads a new experiment when selected."""
         new_experiment = Experiment(
             name="New Experiment",
@@ -171,7 +175,9 @@ class TestCloseExperiment:
             patch.object(main_window, "setWindowTitle") as mock_set_title,
             patch.object(main_window.stack_handler, "files", create=True),
             patch.object(main_window.viewer, "reset") as mock_viewer_reset,
-            patch.object(main_window.analysis.roi_plot_widget, "clear_plot") as mock_clear_plot,
+            patch.object(
+                main_window.analysis.roi_plot_widget, "clear_plot"
+            ) as mock_clear_plot,
             patch("ui.main_window.DataAnalyzer"),
             patch("ui.main_window.QTimer") as mock_timer,
         ):

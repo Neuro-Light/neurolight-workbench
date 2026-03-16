@@ -42,7 +42,9 @@ class NeuronTrajectoryPlotWidget(QWidget):
         layout = QVBoxLayout(self)
 
         # Status label
-        self.status_label = QLabel("No neuron trajectories available. Run detection first.")
+        self.status_label = QLabel(
+            "No neuron trajectories available. Run detection first."
+        )
         self.status_label.setAlignment(Qt.AlignCenter)
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
@@ -67,7 +69,9 @@ class NeuronTrajectoryPlotWidget(QWidget):
         self.max_neurons_spin = QSpinBox()
         self.max_neurons_spin.setRange(1, 1000)
         self.max_neurons_spin.setValue(50)
-        self.max_neurons_spin.setToolTip("Maximum number of neurons to display (for performance)")
+        self.max_neurons_spin.setToolTip(
+            "Maximum number of neurons to display (for performance)"
+        )
         self.max_neurons_spin.valueChanged.connect(self._update_plot)
         options_layout.addRow("Max Neurons to Display:", self.max_neurons_spin)
 
@@ -264,11 +268,15 @@ class NeuronTrajectoryPlotWidget(QWidget):
                 )
 
         if show_average:
-            avg_color = theme.get("avg_trajectory_color", theme.get("average_color", "#e879f9"))
+            avg_color = theme.get(
+                "avg_trajectory_color", theme.get("average_color", "#e879f9")
+            )
             if self.quality_mask is not None and show_good:
                 good_indices = np.where(self.quality_mask)[0]
                 if len(good_indices) > 0:
-                    avg_trajectory = np.mean(self.neuron_trajectories[good_indices], axis=0)
+                    avg_trajectory = np.mean(
+                        self.neuron_trajectories[good_indices], axis=0
+                    )
                     ax.plot(
                         frames,
                         avg_trajectory,
@@ -278,7 +286,9 @@ class NeuronTrajectoryPlotWidget(QWidget):
                     )
             else:
                 if len(neurons_to_plot) > 0:
-                    avg_trajectory = np.mean(self.neuron_trajectories[neurons_to_plot], axis=0)
+                    avg_trajectory = np.mean(
+                        self.neuron_trajectories[neurons_to_plot], axis=0
+                    )
                     ax.plot(
                         frames,
                         avg_trajectory,
@@ -295,7 +305,9 @@ class NeuronTrajectoryPlotWidget(QWidget):
 
         if getattr(self, "_hover_cid", None) is not None:
             self.canvas.mpl_disconnect(self._hover_cid)
-        self._hover_cid = self.canvas.mpl_connect("motion_notify_event", self._on_motion)
+        self._hover_cid = self.canvas.mpl_connect(
+            "motion_notify_event", self._on_motion
+        )
         self.canvas.draw_idle()
 
     def _export_to_png(self) -> None:
@@ -368,13 +380,17 @@ class NeuronTrajectoryPlotWidget(QWidget):
             fmt_parts.extend(["%.6f"] * num_neurons)  # Trajectory values
             fmt = ",".join(fmt_parts)
 
-            np.savetxt(file_path, data, delimiter=",", header=header, comments="", fmt=fmt)
+            np.savetxt(
+                file_path, data, delimiter=",", header=header, comments="", fmt=fmt
+            )
 
             QMessageBox.information(
                 self, "Export Successful", f"Trajectory data exported to:\n{file_path}"
             )
         except Exception as e:
-            QMessageBox.critical(self, "Export Failed", f"Failed to export data:\n{str(e)}")
+            QMessageBox.critical(
+                self, "Export Failed", f"Failed to export data:\n{str(e)}"
+            )
 
     def refresh_theme(self) -> None:
         """Redraw the plot with the current app theme (e.g. after theme change)."""
@@ -391,7 +407,9 @@ class NeuronTrajectoryPlotWidget(QWidget):
         self.neuron_trajectories = None
         self.quality_mask = None
         self.neuron_locations = None
-        self.status_label.setText("No neuron trajectories available. Run detection first.")
+        self.status_label.setText(
+            "No neuron trajectories available. Run detection first."
+        )
         self.hover_label.setText("Hover over plot for frame and intensity.")
         self.export_btn.setEnabled(False)
         self.export_png_btn.setEnabled(False)
