@@ -29,9 +29,10 @@ from ui.styles import get_mpl_theme
 
 class RayLeighPlotWidget(QWidget):
     """Widget for plotting peak neuron times on a 24-hour circular (RayLeigh) plot."""
+
     # This plot is useful for visualizing the distribution of peak activity times across neurons,
     # especially in circadian rhythm studies. Each point on the circle represents a neuron, and
-    # its angle corresponds to the time of day when that neuron is most active. 
+    # its angle corresponds to the time of day when that neuron is most active.
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.neuron_trajectories: Optional[np.ndarray] = None
@@ -46,7 +47,7 @@ class RayLeighPlotWidget(QWidget):
 
         controls_group = QGroupBox("Time Settings")
         controls_layout = QFormLayout()
-        # Time settings 
+        # Time settings
         self.start_time_edit = QTimeEdit()
         self.start_time_edit.setDisplayFormat("HH:mm")
         self.start_time_edit.setTime(QTime(0, 0))
@@ -103,8 +104,9 @@ class RayLeighPlotWidget(QWidget):
             )
         self.plot_btn.setEnabled(True)
         self._plot()
-    # themes to fit other diagrams in the app, and to support dark mode. 
-    # It applies the theme colors to the figure background, axes background, 
+
+    # themes to fit other diagrams in the app, and to support dark mode.
+    # It applies the theme colors to the figure background, axes background,
     # ticks, title, spines, grid, and legend.
     def _apply_theme(self, ax) -> None:
         """Apply current app theme to figure and axes."""
@@ -118,10 +120,11 @@ class RayLeighPlotWidget(QWidget):
         for spine in ax.spines.values():
             spine.set_color(theme["axes_edgecolor"])
         ax.grid(True, alpha=0.35, color=theme["grid_color"])
+
     # This method generates the Rayleigh plot based on the neuron trajectories and quality mask.
-    # It calculates the peak frame for each neuron, converts it to a time in minutes, and then 
-    # to an angle in radians. It adds a small radial jitter to reduce overplotting. 
-    # The neurons are colored based on their quality (good vs bad) if a quality mask is provided. 
+    # It calculates the peak frame for each neuron, converts it to a time in minutes, and then
+    # to an angle in radians. It adds a small radial jitter to reduce overplotting.
+    # The neurons are colored based on their quality (good vs bad) if a quality mask is provided.
     # The plot is then styled according to the current theme and displayed on the canvas.
     def _plot(self) -> None:
         if self.neuron_trajectories is None or len(self.neuron_trajectories) == 0:
@@ -184,9 +187,8 @@ class RayLeighPlotWidget(QWidget):
 
         title_time = start_time.toString("HH:mm")
         ax.set_title(
-            "Peak Times (Modulo 24h)\n"
-            f"Start {title_time}  |  Interval {interval_minutes} min",
-              fontsize=12,
+            f"Peak Times (Modulo 24h)\nStart {title_time}  |  Interval {interval_minutes} min",
+            fontsize=12,
         )
         ax.legend(loc="lower left", bbox_to_anchor=(1.05, 0.1))
         self._apply_theme(ax)

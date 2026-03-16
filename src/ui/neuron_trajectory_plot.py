@@ -309,7 +309,6 @@ class NeuronTrajectoryPlotWidget(QWidget):
         self._hover_cid = self.canvas.mpl_connect("motion_notify_event", self._on_motion)
         self.canvas.draw_idle()
 
-
     def _export_to_png(self) -> None:
         """Save the current plot as a PNG image."""
         file_path, _ = QFileDialog.getSaveFileName(
