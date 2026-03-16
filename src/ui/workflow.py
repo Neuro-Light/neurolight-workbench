@@ -59,9 +59,7 @@ STEP_DEFINITIONS: Dict[WorkflowStep, StepMeta] = {
     WorkflowStep.EDIT_IMAGES: StepMeta(
         index=2,
         short_label="Edit Contrast & Exposure",
-        tooltip=(
-            "Adjust exposure and contrast so structures of interest are clearly visible."
-        ),
+        tooltip=("Adjust exposure and contrast so structures of interest are clearly visible."),
         description=(
             "Use the Display options panel to adjust exposure and "
             "contrast until neurons and background are clearly separated."
@@ -114,9 +112,7 @@ class WorkflowManager(QObject):
     step_changed = Signal(WorkflowStep)
     state_changed = Signal()
 
-    def __init__(
-        self, experiment: Experiment, parent: Optional[QObject] = None
-    ) -> None:
+    def __init__(self, experiment: Experiment, parent: Optional[QObject] = None) -> None:
         super().__init__(parent)
         self._experiment = experiment
         self._steps: List[WorkflowStep] = list(WorkflowStep)
@@ -201,9 +197,7 @@ class WorkflowManager(QObject):
         indices = {s: STEP_DEFINITIONS[s].index for s in self.completed_steps}
         step_index = STEP_DEFINITIONS[step].index
         self.completed_steps = {s for s, idx in indices.items() if idx < step_index}
-        self._ready_steps = {
-            s for s in self._ready_steps if STEP_DEFINITIONS[s].index < step_index
-        }
+        self._ready_steps = {s for s in self._ready_steps if STEP_DEFINITIONS[s].index < step_index}
 
         # If current step is downstream of the reset point, move it back
         if STEP_DEFINITIONS[self.current_step].index >= step_index:
@@ -320,9 +314,7 @@ class WorkflowStepper(QFrame):
     requestAlignImages = Signal()
     requestSkipAlignment = Signal()
 
-    def __init__(
-        self, manager: WorkflowManager, parent: Optional[QWidget] = None
-    ) -> None:
+    def __init__(self, manager: WorkflowManager, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._manager = manager
         self._step_buttons: Dict[WorkflowStep, QToolButton] = {}
@@ -375,9 +367,7 @@ class WorkflowStepper(QFrame):
 
         self._description_label = QLabel("")
         self._description_label.setWordWrap(True)
-        self._description_label.setSizePolicy(
-            QSizePolicy.Expanding, QSizePolicy.Preferred
-        )
+        self._description_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         bottom_row.addWidget(self._description_label, stretch=1)
 
         # Align Images button (shown only on ALIGN_IMAGES step)
@@ -474,9 +464,8 @@ class WorkflowStepper(QFrame):
         self._description_label.setText(current_meta.description)
 
         # Next button only enabled when the active step is marked ready (and not the final step)
-        can_advance = (
-            current != WorkflowStep.ANALYZE_GRAPHS
-            and self._manager.is_step_ready(current)
+        can_advance = current != WorkflowStep.ANALYZE_GRAPHS and self._manager.is_step_ready(
+            current
         )
         self._next_button.setEnabled(can_advance)
 
@@ -485,9 +474,7 @@ class WorkflowStepper(QFrame):
         self._align_button.setVisible(is_align_step)
         self._skip_align_button.setVisible(is_align_step)
 
-    def _apply_step_style(
-        self, button: QToolButton, status: StepStatus, is_current: bool
-    ) -> None:
+    def _apply_step_style(self, button: QToolButton, status: StepStatus, is_current: bool) -> None:
         if is_current:
             # Vivid highlight so the user always knows which step they're on
             bg = "#1e3a5f"

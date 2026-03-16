@@ -84,9 +84,7 @@ class ROI:
                 y = min(y_coords)
                 width = max(x_coords) - x + 1
                 height = max(y_coords) - y + 1
-                return cls(
-                    x=x, y=y, width=width, height=height, shape=shape, points=points
-                )
+                return cls(x=x, y=y, width=width, height=height, shape=shape, points=points)
 
         return cls(
             x=data.get("x", 0),
@@ -128,9 +126,7 @@ class ROI:
         normalized = ((px - cx) / rx) ** 2 + ((py - cy) / ry) ** 2
         return normalized <= 1.0
 
-    def get_handle_at_point(
-        self, px: int, py: int, handle_size: int = 8
-    ) -> HandleResult:
+    def get_handle_at_point(self, px: int, py: int, handle_size: int = 8) -> HandleResult:
         """
         Determine which handle (if any) is at the given point.
 
@@ -187,11 +183,7 @@ class ROI:
                     new_points.append((nx, ny))
                 self.points = new_points
                 self._update_bbox_from_points()
-            elif (
-                handle == ROIHandle.VERTEX
-                and vidx is not None
-                and 0 <= vidx < len(self.points)
-            ):
+            elif handle == ROIHandle.VERTEX and vidx is not None and 0 <= vidx < len(self.points):
                 vx, vy = self.points[vidx]
                 nx = max(0, min(image_width - 1, vx + dx))
                 ny = max(0, min(image_height - 1, vy + dy))
@@ -265,8 +257,6 @@ class ROI:
         ry = self.height / 2
         y_coords, x_coords = np.ogrid[:image_height, :image_width]
         if rx > 0 and ry > 0:
-            ellipse_mask = ((x_coords - cx) / rx) ** 2 + (
-                (y_coords - cy) / ry
-            ) ** 2 <= 1
+            ellipse_mask = ((x_coords - cx) / rx) ** 2 + ((y_coords - cy) / ry) ** 2 <= 1
             mask[ellipse_mask] = 255
         return mask

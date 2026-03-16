@@ -50,9 +50,7 @@ class ROIIntensityPlotWidget(QWidget):
         layout = QVBoxLayout(self)
 
         # Status label
-        self.status_label = QLabel(
-            "No ROI selected. Select an ROI in the image viewer."
-        )
+        self.status_label = QLabel("No ROI selected. Select an ROI in the image viewer.")
         self.status_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.status_label)
 
@@ -161,13 +159,9 @@ class ROIIntensityPlotWidget(QWidget):
         if not visible:
             has_any = any(d is not None for d in self._intensity.values())
             if has_any:
-                self.status_label.setText(
-                    "All ROI traces hidden. Check a box above to show."
-                )
+                self.status_label.setText("All ROI traces hidden. Check a box above to show.")
             else:
-                self.status_label.setText(
-                    "No ROI selected. Select an ROI in the image viewer."
-                )
+                self.status_label.setText("No ROI selected. Select an ROI in the image viewer.")
             self.canvas.draw_idle()
             self.export_btn.setEnabled(False)
             self.export_png_btn.setEnabled(False)
@@ -208,9 +202,7 @@ class ROIIntensityPlotWidget(QWidget):
 
         if self._hover_cid is not None:
             self.canvas.mpl_disconnect(self._hover_cid)
-        self._hover_cid = self.canvas.mpl_connect(
-            "motion_notify_event", self._on_motion
-        )
+        self._hover_cid = self.canvas.mpl_connect("motion_notify_event", self._on_motion)
         self.canvas.draw_idle()
 
     def _apply_theme(self, ax, theme: dict) -> None:
@@ -261,9 +253,7 @@ class ROIIntensityPlotWidget(QWidget):
                 edgecolor="none",
                 bbox_inches="tight",
             )
-            QMessageBox.information(
-                self, "Export Successful", f"Plot saved to:\n{file_path}"
-            )
+            QMessageBox.information(self, "Export Successful", f"Plot saved to:\n{file_path}")
         except Exception as e:
             QMessageBox.critical(self, "Export Failed", f"Failed to save PNG:\n{e}")
 

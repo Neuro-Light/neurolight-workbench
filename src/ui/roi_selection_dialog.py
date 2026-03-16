@@ -112,12 +112,8 @@ class _ROIGraphicsView(QGraphicsView):
         if self._panning:
             delta = event.position() - self._pan_start
             self._pan_start = event.position()
-            self.horizontalScrollBar().setValue(
-                self.horizontalScrollBar().value() - int(delta.x())
-            )
-            self.verticalScrollBar().setValue(
-                self.verticalScrollBar().value() - int(delta.y())
-            )
+            self.horizontalScrollBar().setValue(self.horizontalScrollBar().value() - int(delta.x()))
+            self.verticalScrollBar().setValue(self.verticalScrollBar().value() - int(delta.y()))
             event.accept()
             return
         scene_pos = self.mapToScene(event.position().toPoint())
@@ -235,9 +231,7 @@ class ROISelectionDialog(QDialog):
             swatch.setPixmap(pix)
 
             is_active = label_text == self._active_label
-            text_label = QLabel(
-                f"<b>{label_text}</b> (editing)" if is_active else label_text
-            )
+            text_label = QLabel(f"<b>{label_text}</b> (editing)" if is_active else label_text)
             info_row.addWidget(swatch)
             info_row.addWidget(text_label)
             info_row.addSpacing(12)
@@ -564,9 +558,7 @@ class ROISelectionDialog(QDialog):
             self._last_drag_pos = None
             self._update_overlay()
 
-    def _handle_mouse_double_click(
-        self, event: QMouseEvent, scene_pos: QPointF
-    ) -> None:
+    def _handle_mouse_double_click(self, event: QMouseEvent, scene_pos: QPointF) -> None:
         if event.button() != Qt.LeftButton:
             return
         if self._selection_mode and len(self._polygon_points) >= 3:
