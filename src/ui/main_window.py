@@ -414,13 +414,16 @@ class MainWindow(QMainWindow):
             # In tests the widget may be heavily mocked; ignore connection errors
             pass
 
-        # Connect detection widget to trajectory + RayLeigh plot widgets
+        # Connect detection widget to trajectory plots. Some tests use a
+        # lightweight AnalysisPanel double that does not expose every plot.
         trajectory_plot_widget = self.analysis.get_neuron_trajectory_plot_widget()
-        rayleigh_plot_widget = self.analysis.get_rayleigh_plot_widget()
+        rayleigh_plot_getter = getattr(self.analysis, "get_rayleigh_plot_widget", None)
+        rayleigh_plot_widget = rayleigh_plot_getter() if callable(rayleigh_plot_getter) else None
 
         def _update_neuron_plots(trajectories, quality_mask, locations) -> None:
             trajectory_plot_widget.plot_trajectories(trajectories, quality_mask, locations)
-            rayleigh_plot_widget.set_trajectory_data(trajectories, quality_mask)
+            if rayleigh_plot_widget is not None:
+                rayleigh_plot_widget.set_trajectory_data(trajectories, quality_mask)
 
         detection_widget.set_trajectory_plot_callback(_update_neuron_plots)
 

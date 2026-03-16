@@ -104,7 +104,8 @@ class RayLeighPlotWidget(QWidget):
         self.plot_btn.setEnabled(True)
         self._plot()
     # themes to fit other diagrams in the app, and to support dark mode. 
-    # It applies the theme colors to the figure background, axes background, ticks, title, spines, grid, and legend.
+    # It applies the theme colors to the figure background, axes background, 
+    # ticks, title, spines, grid, and legend.
     def _apply_theme(self, ax) -> None:
         """Apply current app theme to figure and axes."""
         theme = get_mpl_theme(get_theme())
