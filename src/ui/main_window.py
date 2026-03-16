@@ -48,7 +48,7 @@ _log_file.parent.mkdir(parents=True, exist_ok=True)
 if not logger.handlers:
     # Create file handler with append mode
     file_handler = logging.FileHandler(_log_file, encoding="utf-8", mode="a")
-    file_handler.setLevel(logging.ERROR)
+    file_handler.setLevel(logging.WARNING)
 
     # Create formatter - logger.exception() automatically includes traceback
     formatter = logging.Formatter(
@@ -59,7 +59,7 @@ if not logger.handlers:
 
     # Add handler to logger
     logger.addHandler(file_handler)
-    logger.setLevel(logging.ERROR)
+    logger.setLevel(logging.WARNING)
     logger.propagate = False  # Prevent duplicate logs
 
 
@@ -536,7 +536,14 @@ class MainWindow(QMainWindow):
                                     continue
                                 try:
                                     loaded_rois[roi_key] = ROI.from_dict(roi_data)
-                                except Exception:
+                                except Exception as exc:
+                                    logger.warning(
+                                        "ROI.from_dict failed for %s (data=%r): %s; "
+                                        "using default ellipse fallback",
+                                        roi_key,
+                                        roi_data,
+                                        exc,
+                                    )
                                     loaded_rois[roi_key] = ROI(
                                         x=roi_data.get("x", 0),
                                         y=roi_data.get("y", 0),

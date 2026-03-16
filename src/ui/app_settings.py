@@ -80,8 +80,15 @@ def get_roi_colors() -> Dict[str, str]:
     }
 
 
+_ALLOWED_ROI_KEYS = {k.replace("_color", "") for k in DEFAULTS if k.endswith("_color") and k.startswith("roi_")}
+
+
 def set_roi_color(roi_key: str, hex_color: str) -> None:
     """Persist a single ROI color.  *roi_key* is ``"roi_1"`` or ``"roi_2"``."""
+    if roi_key not in _ALLOWED_ROI_KEYS:
+        raise ValueError(
+            f"Invalid roi_key {roi_key!r}; expected one of {sorted(_ALLOWED_ROI_KEYS)}"
+        )
     settings = load_settings()
     settings[f"{roi_key}_color"] = hex_color
     save_settings(settings)

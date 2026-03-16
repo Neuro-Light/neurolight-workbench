@@ -7,7 +7,7 @@ from typing import Dict, Optional
 import cv2
 import numpy as np
 from PySide6.QtCore import QPointF, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPen, QPixmap, QPolygonF
+from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap, QPolygonF
 from PySide6.QtWidgets import (
     QComboBox,
     QGroupBox,
@@ -22,11 +22,9 @@ from PySide6.QtWidgets import (
 
 from core.roi import ROI, ROIShape
 from ui.app_settings import get_roi_colors
+from ui.constants import ROI_DISPLAY_NAMES, ROI_KEYS
 from utils.file_handler import ImageStackHandler
 from utils.image_utils import numpy_to_qimage
-
-ROI_KEYS = ("roi_1", "roi_2")
-ROI_DISPLAY_NAMES = {"roi_1": "ROI 1", "roi_2": "ROI 2"}
 
 
 class _LRUCache:
@@ -228,8 +226,6 @@ class ImageViewer(QWidget):
         for key in ROI_KEYS:
             icon_pix = QPixmap(16, 16)
             icon_pix.fill(QColor(colors[key]))
-            from PySide6.QtGui import QIcon
-
             self.roi_selector.addItem(QIcon(icon_pix), ROI_DISPLAY_NAMES[key], key)
         # Select the current active key
         idx = list(ROI_KEYS).index(self.active_roi_key)
@@ -242,8 +238,6 @@ class ImageViewer(QWidget):
         for i, key in enumerate(ROI_KEYS):
             icon_pix = QPixmap(16, 16)
             icon_pix.fill(QColor(colors[key]))
-            from PySide6.QtGui import QIcon
-
             self.roi_selector.setItemIcon(i, QIcon(icon_pix))
 
     def _on_roi_selector_changed(self, index: int) -> None:

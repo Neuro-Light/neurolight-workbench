@@ -28,10 +28,8 @@ from PySide6.QtWidgets import (
 
 from core.roi import ROI, ROIShape
 from ui.app_settings import get_roi_colors, get_theme
+from ui.constants import ROI_DISPLAY_NAMES, ROI_KEYS
 from ui.styles import get_mpl_theme
-
-ROI_KEYS = ("roi_1", "roi_2")
-ROI_DISPLAY_NAMES = {"roi_1": "ROI 1", "roi_2": "ROI 2"}
 
 
 class ROIIntensityPlotWidget(QWidget):
@@ -284,9 +282,8 @@ class ROIIntensityPlotWidget(QWidget):
             frames = np.arange(max_len)
             padded = []
             for c in columns:
-                if len(c) < max_len:
-                    c = np.pad(c, (0, max_len - len(c)), constant_values=np.nan)
-                padded.append(c)
+                padded_col = np.pad(c, (0, max_len - len(c)), constant_values=np.nan) if len(c) < max_len else c
+                padded.append(padded_col)
 
             data_to_save = np.column_stack([frames] + padded)
             header = ",".join(header_parts)
