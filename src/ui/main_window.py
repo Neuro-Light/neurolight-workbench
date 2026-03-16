@@ -160,31 +160,24 @@ class MainWindow(QMainWindow):
             if hasattr(self, "viewer") and hasattr(self.viewer, "upload_btn"):
                 self.viewer.upload_btn.setEnabled(enable_load)
 
-            # Step 2: Edit Contrast & Exposure
-            enable_edit = current == WorkflowStep.EDIT_IMAGES
+            # Step 2: Edit Contrast & Exposure — show/hide entire display panel
+            show_edit = current == WorkflowStep.EDIT_IMAGES
             if hasattr(self, "viewer"):
-                for attr in (
-                    "display_options_btn",
-                    "adjustments_panel",
-                    "exposure_slider",
-                    "contrast_slider",
-                ):
-                    widget = getattr(self.viewer, attr, None)
-                    if widget is not None:
-                        widget.setEnabled(enable_edit)
+                panel = getattr(self.viewer, "display_controls_panel", None)
+                if panel is not None:
+                    panel.setVisible(show_edit)
 
             # Step 3: Align Images
             enable_align = current == WorkflowStep.ALIGN_IMAGES
             if self._action_align_images is not None:
                 self._action_align_images.setEnabled(enable_align)
 
-            # Step 4: Select ROI
-            enable_roi = current == WorkflowStep.SELECT_ROI
+            # Step 4: Select ROI — show/hide entire ROI controls panel
+            show_roi = current == WorkflowStep.SELECT_ROI
             if hasattr(self, "viewer"):
-                for attr in ("roi_btn", "adjust_roi_btn"):
-                    widget = getattr(self.viewer, attr, None)
-                    if widget is not None:
-                        widget.setEnabled(enable_roi)
+                panel = getattr(self.viewer, "roi_controls_panel", None)
+                if panel is not None:
+                    panel.setVisible(show_roi)
 
             # Step 5: Detect Neurons
             enable_detect = current == WorkflowStep.DETECT_NEURONS
@@ -298,12 +291,13 @@ class MainWindow(QMainWindow):
         )
 
     def _open_settings(self) -> None:
-        # Open the Preferences / Settings dialog.
         dlg = SettingsDialog(self)
         if dlg.exec() == QDialog.Accepted:
-            # Theme was applied by SettingsDialog; redraw plots to match
+            # Theme / colours were applied; refresh all visuals
             self.analysis.get_neuron_trajectory_plot_widget().refresh_theme()
             self.analysis.get_roi_plot_widget().refresh_theme()
+            self.viewer.refresh_roi_selector_icons()
+            self.viewer._show_current()  # redraw ROI overlays with new colours
 
     def _open_experiment_settings(self) -> None:
         # Open the Experiment Settings dialog to edit name, PI, and description.
@@ -326,6 +320,12 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to save: {e}")
 
+    def _sync_rois_to_experiment(self) -> None:
+        """Copy both ROIs from the viewer into the experiment for persistence."""
+        for key in ("roi_1", "roi_2"):
+            roi = self.viewer.get_current_roi(key)
+            self.experiment.rois[key] = roi.to_dict() if roi is not None else None
+
     def closeEvent(self, event: QCloseEvent) -> None:
         reply = QMessageBox.question(
             self,
@@ -340,24 +340,16 @@ class MainWindow(QMainWindow):
             if self._alignment_worker is not None and self._alignment_worker.isRunning():
                 self._alignment_worker.request_cancel()
                 self._alignment_worker.wait(5000)
-            # Flush any pending display settings before exiting
             self._flush_pending_display_settings()
-            # Save current ROI to experiment before exiting
-            current_roi = self.viewer.get_current_roi()
-            if current_roi is not None:
-                self.experiment.roi = current_roi.to_dict()
-            # Capture current display settings before exiting
+            self._sync_rois_to_experiment()
             self._capture_display_settings()
-            # Save to file if we have a path
             if self.current_experiment_path:
                 try:
                     self.manager.save_experiment(self.experiment, self.current_experiment_path)
                 except Exception as e:
-                    # Log the full exception with traceback
                     logger.exception(
                         f"Failed to save experiment during close: {self.current_experiment_path}"
                     )
-                    # Show non-blocking user feedback
                     self._show_save_error_feedback(str(e))
             event.accept()
         else:
@@ -425,9 +417,10 @@ class MainWindow(QMainWindow):
         # Connect detection widget to save experiment callback
         detection_widget.set_save_experiment_callback(self._save_neuron_detection)
 
-        # Connect ROI selection to analysis and saving
+        # Connect ROI selection to analysis and saving (signal: str, ROI)
         self.viewer.roiSelected.connect(self._on_roi_selected)
         self.viewer.roiSelected.connect(self._save_roi_to_experiment)
+        self.viewer.roiDeleted.connect(self._on_roi_deleted)
 
         # Connect display settings changes to debounced saving
         self.viewer.displaySettingsChanged.connect(self._on_display_settings_changed)
@@ -527,38 +520,43 @@ class MainWindow(QMainWindow):
                             QApplication.processEvents()
                             self.viewer.set_stack(p)
 
-                        if self.experiment.roi:
+                        # Load both ROIs from experiment.rois
+                        has_any_roi = any(
+                            self.experiment.rois.get(k) for k in ("roi_1", "roi_2")
+                        )
+                        if has_any_roi:
                             loading_dialog.update_status(
-                                "Loading ROI...", "Restoring ROI selection"
+                                "Loading ROIs...", "Restoring ROI selections"
                             )
                             QApplication.processEvents()
 
-                            roi_data = self.experiment.roi
+                            loaded_rois: dict = {}
+                            for roi_key in ("roi_1", "roi_2"):
+                                roi_data = self.experiment.rois.get(roi_key)
+                                if roi_data is None:
+                                    continue
+                                try:
+                                    loaded_rois[roi_key] = ROI.from_dict(roi_data)
+                                except Exception:
+                                    loaded_rois[roi_key] = ROI(
+                                        x=roi_data.get("x", 0),
+                                        y=roi_data.get("y", 0),
+                                        width=roi_data.get("width", 100),
+                                        height=roi_data.get("height", 100),
+                                        shape=ROIShape.ELLIPSE,
+                                    )
 
-                            # Convert dict to ROI object
-                            try:
-                                roi = ROI.from_dict(roi_data)
-                            except Exception:
-                                # Fallback for malformed data - use same defaults as from_dict()
-                                roi = ROI(
-                                    x=roi_data.get("x", 0),
-                                    y=roi_data.get("y", 0),
-                                    width=roi_data.get("width", 100),
-                                    height=roi_data.get("height", 100),
-                                    shape=ROIShape.ELLIPSE,
-                                )
-
-                            def load_roi_and_plot():
+                            def load_rois_and_plot():
                                 try:
                                     loading_dialog.update_status(
-                                        "Restoring ROI and graphs...", "Loading analysis data"
+                                        "Restoring ROIs and graphs...", "Loading analysis data"
                                     )
                                     QApplication.processEvents()
 
-                                    self.viewer.set_roi(roi)
-                                    self._on_roi_selected(roi)
+                                    for rk, roi_obj in loaded_rois.items():
+                                        self.viewer.set_roi(roi_obj, key=rk)
+                                        self._on_roi_selected(rk, roi_obj)
 
-                                    # Load neuron detection data if available
                                     detection_data = self.experiment.get_neuron_detection_data()
                                     if detection_data:
                                         loading_dialog.update_status(
@@ -568,15 +566,12 @@ class MainWindow(QMainWindow):
                                         QApplication.processEvents()
                                         self._load_neuron_detection_data()
 
-                                    # Close loading dialog
                                     loading_dialog.close_dialog()
                                 except Exception:
                                     loading_dialog.close_dialog()
-                                    # Silently fail - data might be corrupted
 
-                            QTimer.singleShot(200, load_roi_and_plot)
+                            QTimer.singleShot(200, load_rois_and_plot)
                         else:
-                            # No ROI, just close the dialog
                             loading_dialog.close_dialog()
                     except Exception:
                         loading_dialog.close_dialog()
@@ -679,31 +674,19 @@ class MainWindow(QMainWindow):
         """Save experiment when neuron detection completes."""
         if self.current_experiment_path:
             try:
-                # Save current ROI to experiment before saving
-                current_roi = self.viewer.get_current_roi()
-                if current_roi is not None:
-                    self.experiment.roi = current_roi.to_dict()
-                # Capture current display settings before saving
+                self._sync_rois_to_experiment()
                 self._capture_display_settings()
-                # Ensure neuron detection data is saved
                 self._ensure_detection_data_saved()
                 self.manager.save_experiment(self.experiment, self.current_experiment_path)
             except Exception as e:
-                # Log error for debugging
                 logger.error(f"Failed to save neuron detection data: {e}", exc_info=True)
-                pass  # Silently fail for auto-save
 
     def _save(self) -> None:
         if not self.current_experiment_path:
             self._save_as()
             return
-        # Flush any pending display settings immediately
         self._flush_pending_display_settings()
-        # Save current ROI to experiment before saving
-        current_roi = self.viewer.get_current_roi()
-        if current_roi is not None:
-            self.experiment.roi = current_roi.to_dict()
-        # Capture current display settings before saving
+        self._sync_rois_to_experiment()
         self._capture_display_settings()
         try:
             self.manager.save_experiment(self.experiment, self.current_experiment_path)
@@ -719,13 +702,8 @@ class MainWindow(QMainWindow):
             return
         if not file_path.endswith(".nexp"):
             file_path += ".nexp"
-        # Flush any pending display settings immediately
         self._flush_pending_display_settings()
-        # Save current ROI to experiment before saving
-        current_roi = self.viewer.get_current_roi()
-        if current_roi is not None:
-            self.experiment.roi = current_roi.to_dict()
-        # Capture current display settings before saving
+        self._sync_rois_to_experiment()
         self._capture_display_settings()
         try:
             self.manager.save_experiment(self.experiment, file_path)
@@ -751,15 +729,9 @@ class MainWindow(QMainWindow):
         if reply == QMessageBox.No:
             return
 
-        # Flush any pending display settings immediately
         self._flush_pending_display_settings()
-        # Save current ROI to experiment before closing
-        current_roi = self.viewer.get_current_roi()
-        if current_roi is not None:
-            self.experiment.roi = current_roi.to_dict()
-        # Capture current display settings before closing
+        self._sync_rois_to_experiment()
         self._capture_display_settings()
-        # Save to file if we have a path
         if self.current_experiment_path:
             try:
                 self.manager.save_experiment(self.experiment, self.current_experiment_path)
@@ -813,15 +785,9 @@ class MainWindow(QMainWindow):
         )
 
         if reply == QMessageBox.Yes:
-            # Flush any pending display settings immediately
             self._flush_pending_display_settings()
-            # Save current ROI to experiment before exiting
-            current_roi = self.viewer.get_current_roi()
-            if current_roi is not None:
-                self.experiment.roi = current_roi.to_dict()
-            # Capture current display settings before exiting
+            self._sync_rois_to_experiment()
             self._capture_display_settings()
-            # Save to file if we have a path
             if self.current_experiment_path:
                 try:
                     self.manager.save_experiment(self.experiment, self.current_experiment_path)
@@ -829,10 +795,9 @@ class MainWindow(QMainWindow):
                     pass
             QApplication.quit()
 
-    def _on_roi_selected(self, roi: ROI) -> None:
-        """Handle ROI selection and extract intensity time series."""
+    def _on_roi_selected(self, roi_key: str, roi: ROI) -> None:
+        """Handle ROI selection and extract intensity time series for *roi_key*."""
         try:
-            # Load all frames as numpy array (reusing Jupyter notebook approach)
             frame_data = self.stack_handler.get_all_frames_as_array()
             if frame_data is None:
                 QMessageBox.warning(
@@ -842,52 +807,45 @@ class MainWindow(QMainWindow):
                 )
                 return
 
-            # Rescale frame data (reusing approach from Jupyter notebook)
-            # frame_data = NTF.rescale(frames, 0.0, 1.0)
-            # We'll keep it in original range but normalize if needed
             frame_min = np.min(frame_data)
             frame_max = np.max(frame_data)
             if frame_max > 1.0:
-                # Normalize to 0-1 range like in Jupyter notebook
                 frame_data = (
                     (frame_data - frame_min) / (frame_max - frame_min)
                     if frame_max != frame_min
                     else frame_data
                 )
 
-            # Extract ROI intensity time series (mask-based for polygon and ellipse)
             intensity_data = self.data_analyzer.extract_roi_intensity_time_series(
                 frame_data, roi=roi
             )
 
-            # Plot in the ROI Intensity tab
             roi_plot_widget = self.analysis.get_roi_plot_widget()
-            roi_plot_widget.plot_intensity_time_series(intensity_data, roi=roi)
+            roi_plot_widget.plot_intensity_time_series(roi_key, intensity_data, roi=roi)
 
-            # Update detection widget with ROI mask
             detection_widget = self.analysis.get_neuron_detection_widget()
             if frame_data.ndim == 3:
                 _, height, width = frame_data.shape
-                # Create ROI mask (uint8 with 0 and 255) and convert to boolean
                 roi_mask_uint8 = roi.create_mask(width, height)
-                roi_mask = (roi_mask_uint8 > 0).astype(bool)  # Convert 0/255 to False/True
-                detection_widget.set_roi_mask(roi_mask)
-                # Also update frame data in case it wasn't set before
+                roi_mask = (roi_mask_uint8 > 0).astype(bool)
+                detection_widget.set_roi_mask(roi_key, roi_mask)
                 detection_widget.set_frame_data(frame_data)
 
-            # Switch to ROI Intensity tab
-            for i in range(self.analysis.count()):
-                if self.analysis.tabText(i) == "ROI Intensity":
-                    self.analysis.setCurrentIndex(i)
-                    break
-
-            # Update workflow: ROI selection completes the ROI step and
-            # invalidates any downstream detection/analysis steps.
-            self.workflow_manager.complete_step_if_current(WorkflowStep.SELECT_ROI)
-            self.workflow_manager.reset_from_step(WorkflowStep.DETECT_NEURONS)
+            self.workflow_manager.mark_step_ready(WorkflowStep.SELECT_ROI)
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to analyze ROI:\n{str(e)}")
+
+    def _on_roi_deleted(self, roi_key: str) -> None:
+        """Handle ROI deletion: clear data from plot, detection, and experiment."""
+        self.experiment.rois[roi_key] = None
+        self.analysis.get_roi_plot_widget().clear_roi(roi_key)
+        self.analysis.get_neuron_detection_widget().set_roi_mask(roi_key, None)
+        if self.current_experiment_path:
+            try:
+                self.manager.save_experiment(self.experiment, self.current_experiment_path)
+            except Exception:
+                pass
 
     def _load_neuron_detection_data(self) -> None:
         """Load saved neuron detection data from experiment."""
@@ -988,27 +946,12 @@ class MainWindow(QMainWindow):
                 except Exception:
                     pass
 
-    def _save_roi_to_experiment(self, roi: ROI) -> None:
-        """
-        Save ROI to experiment and persist to .nexp file.
-
-        This method is called when a user selects an ROI in the image viewer.
-        Coordinates are in original image pixel space (not widget/display space).
-        This ensures the ROI stays fixed to the correct image region when:
-        - The window is resized
-        - The experiment is loaded on a different screen resolution
-        - The image scaling changes
-
-        The ROI is automatically saved to the .nexp file so it persists across sessions.
-        """
-        # Store ROI in image pixel space (not display coordinates)
-        # These coordinates are saved to the .nexp file and remain constant
-        self.experiment.roi = roi.to_dict()
+    def _save_roi_to_experiment(self, roi_key: str, roi: ROI) -> None:
+        """Save a specific ROI to experiment and persist to .nexp file."""
+        self.experiment.rois[roi_key] = roi.to_dict()
         if self.current_experiment_path:
             try:
-                # Ensure neuron detection data is preserved when saving ROI
                 self._ensure_detection_data_saved()
-                # Persist ROI to .nexp file immediately
                 self.manager.save_experiment(self.experiment, self.current_experiment_path)
             except Exception:
                 pass
@@ -1018,13 +961,8 @@ class MainWindow(QMainWindow):
             return
         if not self.current_experiment_path:
             return
-        # Flush any pending display settings immediately
         self._flush_pending_display_settings()
-        # Save current ROI to experiment before auto-saving
-        current_roi = self.viewer.get_current_roi()
-        if current_roi is not None:
-            self.experiment.roi = current_roi.to_dict()
-        # Capture current display settings before auto-saving
+        self._sync_rois_to_experiment()
         self._capture_display_settings()
         try:
             self.manager.save_experiment(self.experiment, self.current_experiment_path)
@@ -1032,7 +970,7 @@ class MainWindow(QMainWindow):
             pass
 
     def _crop_stack_to_roi(self) -> None:
-        """Crop the image stack to the current ROI and save as new stack."""
+        """Crop the image stack to the active ROI and save as new stack."""
         current_roi = self.viewer.get_current_roi()
         if current_roi is None:
             QMessageBox.warning(self, "No ROI Selected", "Please select an ROI before cropping.")
@@ -1394,15 +1332,8 @@ class MainWindow(QMainWindow):
     def _export_experiment(self) -> None:
         """Export the current experiment to a .nexp file."""
         try:
-            # Flush any pending display settings before exporting
             self._flush_pending_display_settings()
-
-            # Save current ROI to experiment before exporting
-            current_roi = self.viewer.get_current_roi()
-            if current_roi is not None:
-                self.experiment.roi = current_roi.to_dict()
-
-            # Capture current display settings before exporting
+            self._sync_rois_to_experiment()
             self._capture_display_settings()
 
             # Get export location

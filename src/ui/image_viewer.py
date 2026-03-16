@@ -2,13 +2,14 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Optional
 
 import cv2
 import numpy as np
 from PySide6.QtCore import QPointF, Qt, Signal
-from PySide6.QtGui import QPainter, QPen, QPixmap, QPolygonF
+from PySide6.QtGui import QColor, QPainter, QPen, QPixmap, QPolygonF
 from PySide6.QtWidgets import (
+    QComboBox,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -20,8 +21,12 @@ from PySide6.QtWidgets import (
 )
 
 from core.roi import ROI, ROIShape
+from ui.app_settings import get_roi_colors
 from utils.file_handler import ImageStackHandler
 from utils.image_utils import numpy_to_qimage
+
+ROI_KEYS = ("roi_1", "roi_2")
+ROI_DISPLAY_NAMES = {"roi_1": "ROI 1", "roi_2": "ROI 2"}
 
 
 class _LRUCache:
@@ -46,8 +51,9 @@ class _LRUCache:
 
 class ImageViewer(QWidget):
     stackLoaded = Signal(str)
-    roiSelected = Signal(object)  # Emits ROI object
-    roiChanged = Signal(object)  # Emits ROI object when adjusted
+    roiSelected = Signal(str, object)  # Emits (roi_key, ROI object)
+    roiChanged = Signal(str, object)  # Emits (roi_key, ROI object) when adjusted
+    roiDeleted = Signal(str)  # Emits roi_key when an ROI is deleted
     displaySettingsChanged = Signal(
         int, int
     )  # Emits (exposure, contrast) when display settings change
@@ -58,12 +64,11 @@ class ImageViewer(QWidget):
         self.index = 0
         self.cache = _LRUCache(20)
 
-        # ROI state (selection/adjustment happens in ROISelectionDialog)
-        self.current_roi: Optional[ROI] = None
+        # Dual ROI state
+        self.current_rois: Dict[str, Optional[ROI]] = {"roi_1": None, "roi_2": None}
+        self.active_roi_key: str = "roi_1"
 
-        self.filename_label = QLabel(
-            "Load image to see data"
-        )  # label for user to see if no image are selected
+        self.filename_label = QLabel("Load image to see data")
         self.filename_label.setAlignment(Qt.AlignCenter)
         self.filename_label.setWordWrap(True)
         self.filename_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
@@ -76,7 +81,6 @@ class ImageViewer(QWidget):
         # Upload button (visible when no images loaded)
         self.upload_btn = QPushButton("Open Images")
         self.upload_btn.setProperty("class", "primary")
-        # Add standard Qt file open icon
         icon = self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon)
         self.upload_btn.setIcon(icon)
         self.upload_btn.clicked.connect(self._open_upload_dialog)
@@ -98,58 +102,89 @@ class ImageViewer(QWidget):
         self.upload_btn.setParent(self.image_label)
         self.upload_btn.show()
 
-        # Schedule button centering after layout is complete
         from PySide6.QtCore import QTimer
 
         QTimer.singleShot(0, self._center_upload_button)
 
-        self.prev_btn = QPushButton("Previous")
-        self.next_btn = QPushButton("Next")
-        self.roi_btn = QPushButton("Select ROI")
-        self.adjust_roi_btn = QPushButton("Adjust ROI")
-        self.adjust_roi_btn.setVisible(False)  # Hidden until ROI exists
+        # Compact Previous / Next buttons using standard Qt media icons
+        self.prev_btn = QPushButton()
+        self.prev_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaSeekBackward))
+        self.prev_btn.setToolTip("Previous frame")
+        self.prev_btn.setFixedWidth(32)
+        self.prev_btn.setProperty("class", "primary")
+
+        self.next_btn = QPushButton()
+        self.next_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaSeekForward))
+        self.next_btn.setToolTip("Next frame")
+        self.next_btn.setFixedWidth(32)
+        self.next_btn.setProperty("class", "primary")
+
+        # Single ROI action button: "Select ROI 1" / "Adjust ROI 1"
+        self.roi_btn = QPushButton("Select ROI 1")
+        self.roi_btn.clicked.connect(self._roi_action)
+
+        # Delete ROI button (only visible when an ROI exists)
+        self.delete_roi_btn = QPushButton("Delete ROI 1")
+        self.delete_roi_btn.setVisible(False)
+        self.delete_roi_btn.clicked.connect(self._delete_active_roi)
 
         self.prev_btn.clicked.connect(self.prev_image)
         self.next_btn.clicked.connect(self.next_image)
-        self.roi_btn.clicked.connect(self._toggle_roi_mode)
-        self.adjust_roi_btn.clicked.connect(self._toggle_adjustment_mode)
+
+        # ROI selector dropdown
+        self.roi_selector = QComboBox()
+        self.roi_selector.setToolTip("Choose which ROI to create or edit")
+        self._populate_roi_selector()
+        self.roi_selector.currentIndexChanged.connect(self._on_roi_selector_changed)
 
         self.slider = QSlider(Qt.Horizontal)
         self.slider.valueChanged.connect(self._on_slider)
 
-        # Frame slider row: label, slider, frame index (e.g. "1 / 100")
         self.frame_index_label = QLabel("— / —")
         self.frame_index_label.setMinimumWidth(48)
 
-        ## Exposure/Contrast: in a collapsible panel, hidden by default
         self.exposure_label = QLabel("Exposure: 0")
-        # Adds the slider movement as a horizontal slider "vertical setting also"
         self.exposure_slider = QSlider(Qt.Horizontal)
-        # Setting the value in the slider, set value to -100 - 100 for more accuracy
         self.exposure_slider.setRange(-100, 100)
-        # The slider will start 0 at the load in
         self.exposure_slider.setValue(0)
-        # Handle the changeing value for the exposure slider
         self.exposure_slider.valueChanged.connect(self._on_adjustment_changed)
 
-        # Label text at inital load for the contrast
         self.contrast_label = QLabel("Contrast: 0")
-        # Adds the slider movement as a horizontal slider "vertical setting also"
         self.contrast_slider = QSlider(Qt.Horizontal)
-        # Setting the values in the slider, set value to -100 - 100 for more accuracy
         self.contrast_slider.setRange(-100, 100)
-        # Slider will start at 0 on load in
         self.contrast_slider.setValue(0)
-        # handle the changing value for the contrast slider
         self.contrast_slider.valueChanged.connect(self._on_adjustment_changed)
 
-        nav = QHBoxLayout()
-        nav.addWidget(self.prev_btn)
-        nav.addWidget(self.next_btn)
-        nav.addWidget(self.roi_btn)
-        nav.addWidget(self.adjust_roi_btn)
+        # ROI controls container (shown only during Select ROI workflow step)
+        self.roi_controls_panel = QWidget()
+        roi_panel_layout = QVBoxLayout(self.roi_controls_panel)
+        roi_panel_layout.setContentsMargins(0, 0, 0, 0)
+        roi_panel_layout.setSpacing(4)
 
-        # Display options panel (exposure/contrast) - hidden until "Display options" is clicked
+        roi_row = QHBoxLayout()
+        roi_row.addWidget(QLabel("Active ROI:"))
+        roi_row.addWidget(self.roi_selector, 1)
+        roi_panel_layout.addLayout(roi_row)
+
+        roi_btn_row = QHBoxLayout()
+        roi_btn_row.addWidget(self.roi_btn)
+        roi_btn_row.addWidget(self.delete_roi_btn)
+        roi_panel_layout.addLayout(roi_btn_row)
+
+        self.roi_controls_panel.setVisible(False)
+
+        # Display options panel (shown only during Edit Images workflow step)
+        self.display_controls_panel = QWidget()
+        display_panel_layout = QVBoxLayout(self.display_controls_panel)
+        display_panel_layout.setContentsMargins(0, 0, 0, 0)
+        display_panel_layout.setSpacing(2)
+
+        self.display_options_btn = QPushButton("Display options")
+        self.display_options_btn.setCheckable(True)
+        self.display_options_btn.setChecked(False)
+        self.display_options_btn.clicked.connect(self._toggle_display_options)
+        display_panel_layout.addWidget(self.display_options_btn)
+
         self.adjustments_panel = QWidget()
         adjustments_layout = QVBoxLayout(self.adjustments_panel)
         adjustments_layout.setContentsMargins(0, 4, 0, 0)
@@ -158,31 +193,63 @@ class ImageViewer(QWidget):
         adjustments_layout.addWidget(self.contrast_label)
         adjustments_layout.addWidget(self.contrast_slider)
         self.adjustments_panel.setVisible(False)
+        display_panel_layout.addWidget(self.adjustments_panel)
 
-        self.display_options_btn = QPushButton("Display options")
-        self.display_options_btn.setCheckable(True)
-        self.display_options_btn.setChecked(False)
-        self.display_options_btn.clicked.connect(self._toggle_display_options)
+        self.display_controls_panel.setVisible(False)
+
+        # Frame row: prev, slider, index, next — all on one line
+        frame_row = QHBoxLayout()
+        frame_row.addWidget(self.prev_btn)
+        frame_row.addWidget(self.slider, 1)
+        frame_row.addWidget(self.frame_index_label)
+        frame_row.addWidget(self.next_btn)
 
         layout = QVBoxLayout(self)
         layout.addWidget(self.preview_group, 1)
-        layout.addLayout(nav)
-        # Frame row: label, slider, index
-        frame_row = QHBoxLayout()
-        frame_row.addWidget(QLabel("Frame:"))
-        frame_row.addWidget(self.slider, 1)
-        frame_row.addWidget(self.frame_index_label)
+        layout.addWidget(self.roi_controls_panel)
         layout.addLayout(frame_row)
-        layout.addWidget(self.display_options_btn)
-        layout.addWidget(self.adjustments_panel)
-        # Metadata label should be compact (stretch factor 0, max height)
+        layout.addWidget(self.display_controls_panel)
         self.filename_label.setMaximumHeight(50)
         layout.addWidget(self.filename_label, 0)
-        # adjust the labels on sliders to go to 0 on load
         self._update_adjustment_labels()
 
         self.setAcceptDrops(True)
         self.setFocusPolicy(Qt.StrongFocus)
+
+    # ------------------------------------------------------------------
+    # ROI selector helpers
+    # ------------------------------------------------------------------
+
+    def _populate_roi_selector(self) -> None:
+        """Fill the ROI dropdown with coloured icons."""
+        self.roi_selector.blockSignals(True)
+        self.roi_selector.clear()
+        colors = get_roi_colors()
+        for key in ROI_KEYS:
+            icon_pix = QPixmap(16, 16)
+            icon_pix.fill(QColor(colors[key]))
+            from PySide6.QtGui import QIcon
+            self.roi_selector.addItem(QIcon(icon_pix), ROI_DISPLAY_NAMES[key], key)
+        # Select the current active key
+        idx = list(ROI_KEYS).index(self.active_roi_key)
+        self.roi_selector.setCurrentIndex(idx)
+        self.roi_selector.blockSignals(False)
+
+    def refresh_roi_selector_icons(self) -> None:
+        """Rebuild dropdown icons after ROI colour change in Preferences."""
+        colors = get_roi_colors()
+        for i, key in enumerate(ROI_KEYS):
+            icon_pix = QPixmap(16, 16)
+            icon_pix.fill(QColor(colors[key]))
+            from PySide6.QtGui import QIcon
+            self.roi_selector.setItemIcon(i, QIcon(icon_pix))
+
+    def _on_roi_selector_changed(self, index: int) -> None:
+        if index < 0:
+            return
+        self.active_roi_key = self.roi_selector.itemData(index)
+        self._update_roi_button_text()
+        self._show_current()
 
     def set_stack(self, files) -> None:
         self.handler.load_image_stack(files)
@@ -212,27 +279,22 @@ class ImageViewer(QWidget):
 
     def reset(self) -> None:
         """Reset the viewer to initial state."""
-        # Clear handler files and reset navigation
         self.handler.files = []
         self.index = 0
-        # Reset cache and ROI state
         self.cache = _LRUCache(20)
-        self.current_roi = None
-        # Reset UI labels and slider
+        self.current_rois = {"roi_1": None, "roi_2": None}
+        self.active_roi_key = "roi_1"
+        self._populate_roi_selector()
         self.image_label.clear()
         self.filename_label.setText("Load image to see data")
         self.frame_index_label.setText("— / —")
         self.slider.setRange(0, 0)
         self._update_roi_button_text()
-        # Re-enable all controls
         self.prev_btn.setEnabled(True)
         self.next_btn.setEnabled(True)
         self.slider.setEnabled(True)
-        self.roi_btn.setEnabled(True)
-        # Reset exposure/contrast sliders to neutral
         self.set_exposure(0)
         self.set_contrast(0)
-        # Show upload button again
         self.upload_btn.show()
         self._center_upload_button()
 
@@ -376,24 +438,35 @@ class ImageViewer(QWidget):
             scale = 1.0
 
         # ============================================================
-        # ROI: Draw saved ROI overlay
+        # ROI: Draw both ROI overlays
         # ============================================================
-        if self.current_roi is not None:
+        roi_colors = get_roi_colors()
+        for roi_key in ROI_KEYS:
+            roi = self.current_rois.get(roi_key)
+            if roi is None:
+                continue
             painter = QPainter(scaled_pix)
-            pen = QPen(Qt.green, 2, Qt.SolidLine)
+            color = QColor(roi_colors[roi_key])
+            is_active = roi_key == self.active_roi_key
+            if is_active:
+                pen = QPen(color, 2, Qt.SolidLine)
+            else:
+                color.setAlpha(140)
+                pen = QPen(color, 2, Qt.DashLine)
+            pen.setCosmetic(False)
             painter.setPen(pen)
             painter.setBrush(Qt.NoBrush)
 
-            if self.current_roi.shape == ROIShape.POLYGON and self.current_roi.points:
+            if roi.shape == ROIShape.POLYGON and roi.points:
                 qpts = [
-                    QPointF(int(p[0] * scale), int(p[1] * scale)) for p in self.current_roi.points
+                    QPointF(int(p[0] * scale), int(p[1] * scale)) for p in roi.points
                 ]
                 painter.drawPolygon(QPolygonF(qpts))
             else:
-                x_scaled = int(self.current_roi.x * scale)
-                y_scaled = int(self.current_roi.y * scale)
-                w_scaled = int(self.current_roi.width * scale)
-                h_scaled = int(self.current_roi.height * scale)
+                x_scaled = int(roi.x * scale)
+                y_scaled = int(roi.y * scale)
+                w_scaled = int(roi.width * scale)
+                h_scaled = int(roi.height * scale)
                 painter.drawEllipse(x_scaled, y_scaled, w_scaled, h_scaled)
             painter.end()
 
@@ -481,32 +554,33 @@ class ImageViewer(QWidget):
             "Hide display options" if self.display_options_btn.isChecked() else "Display options"
         )
 
-    def _toggle_roi_mode(self) -> None:
-        """Open ROI selection dialog for precise polygon drawing."""
+    def _roi_action(self) -> None:
+        """Open ROI dialog: create new if none exists, adjust if one does."""
         if self.handler.get_image_count() == 0:
             return
+        existing = self.current_rois.get(self.active_roi_key)
+        self._open_roi_dialog(existing_roi=existing)
 
+    def _delete_active_roi(self) -> None:
+        """Delete the active ROI after confirmation."""
         from PySide6.QtWidgets import QMessageBox
 
-        # If there's an existing ROI, confirm before starting new selection
-        if self.current_roi is not None:
-            reply = QMessageBox.question(
-                self,
-                "Create New ROI",
-                "Creating a new ROI will replace the existing one. Continue?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
-            )
-            if reply == QMessageBox.No:
-                return
-
-        self._open_roi_dialog(existing_roi=None)
-
-    def _toggle_adjustment_mode(self) -> None:
-        """Open ROI selection dialog with existing ROI for adjustment."""
-        if self.current_roi is None:
+        key = self.active_roi_key
+        name = ROI_DISPLAY_NAMES[key]
+        if self.current_rois.get(key) is None:
             return
-        self._open_roi_dialog(existing_roi=self.current_roi)
+        reply = QMessageBox.question(
+            self,
+            f"Delete {name}",
+            f"Are you sure you want to delete {name}?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            self.current_rois[key] = None
+            self._update_roi_button_text()
+            self._show_current()
+            self.roiDeleted.emit(key)
 
     def _open_roi_dialog(self, existing_roi: "Optional[ROI]" = None) -> None:
         """Open the ROI selection dialog and handle the result."""
@@ -514,72 +588,76 @@ class ImageViewer(QWidget):
 
         from ui.roi_selection_dialog import ROISelectionDialog
 
-        # Get current image (with exposure/contrast applied)
         img = self.cache.get(self.index)
         if img is None:
             img = self.handler.get_image_at_index(self.index)
         preview_img = self._ensure_uint8(img)
 
+        # Determine the other ROI (for overlay in the dialog)
+        other_key = "roi_2" if self.active_roi_key == "roi_1" else "roi_1"
+        other_roi = self.current_rois.get(other_key)
+        roi_colors = get_roi_colors()
+
         dialog = ROISelectionDialog(
             image=preview_img,
             existing_roi=existing_roi,
             parent=self,
+            roi_color=roi_colors[self.active_roi_key],
+            active_roi_label=ROI_DISPLAY_NAMES[self.active_roi_key],
+            other_roi=other_roi,
+            other_roi_color=roi_colors[other_key],
+            other_roi_label=ROI_DISPLAY_NAMES[other_key],
         )
         if dialog.exec() == QDialog.Accepted:
             roi = dialog.get_roi()
             if roi is not None:
-                self.current_roi = roi
-                self.roiSelected.emit(self.current_roi)
+                self.current_rois[self.active_roi_key] = roi
+                self.roiSelected.emit(self.active_roi_key, roi)
                 self._update_roi_button_text()
                 self._show_current()
 
     def _update_roi_button_text(self) -> None:
-        """Update ROI button text based on current state."""
-        if self.current_roi is not None:
-            self.roi_btn.setText("New ROI")
+        """Update ROI button text based on active key and current state."""
+        name = ROI_DISPLAY_NAMES[self.active_roi_key]
+        active_roi = self.current_rois.get(self.active_roi_key)
+        if active_roi is not None:
+            self.roi_btn.setText(f"Adjust {name}")
         else:
-            self.roi_btn.setText("Select ROI")
+            self.roi_btn.setText(f"Select {name}")
+        self.delete_roi_btn.setVisible(active_roi is not None)
+        if active_roi is not None:
+            self.delete_roi_btn.setText(f"Delete {name}")
 
-        # Show/hide adjust button based on ROI existence
-        self.adjust_roi_btn.setVisible(self.current_roi is not None)
+    def get_current_roi(self, key: Optional[str] = None) -> Optional[ROI]:
+        """Get an ROI by key (defaults to active key)."""
+        if key is None:
+            key = self.active_roi_key
+        return self.current_rois.get(key)
 
-    def get_current_roi(self) -> Optional[ROI]:
-        """Get the current ROI object."""
-        return self.current_roi
+    def get_all_rois(self) -> Dict[str, Optional[ROI]]:
+        """Return both ROIs."""
+        return dict(self.current_rois)
 
     def get_exposure(self) -> int:
-        """Get the current exposure value (-100 to 100)."""
         return self.exposure_slider.value()
 
     def get_contrast(self) -> int:
-        """Get the current contrast value (-100 to 100)."""
         return self.contrast_slider.value()
 
     def set_exposure(self, value: int) -> None:
-        """Set the exposure value (-100 to 100)."""
-        # Block signals to avoid triggering save during load
         self.exposure_slider.blockSignals(True)
         self.exposure_slider.setValue(value)
         self.exposure_slider.blockSignals(False)
         self._update_adjustment_labels()
 
     def set_contrast(self, value: int) -> None:
-        """Set the contrast value (-100 to 100)."""
-        # Block signals to avoid triggering save during load
         self.contrast_slider.blockSignals(True)
         self.contrast_slider.setValue(value)
         self.contrast_slider.blockSignals(False)
         self._update_adjustment_labels()
 
-    def set_roi(self, roi: ROI) -> None:
-        """
-        Set the ROI from a saved ROI object.
-
-        This method is called when loading an experiment with a saved ROI.
-        The coordinates are in original image pixel space, not display/widget space.
-        """
-        self.current_roi = roi
-        # Update button text
+    def set_roi(self, roi: ROI, key: str = "roi_1") -> None:
+        """Set an ROI from a saved ROI object (e.g. when loading an experiment)."""
+        self.current_rois[key] = roi
         self._update_roi_button_text()
-        # Redraw to show the ROI with correct scaling
         self._show_current()

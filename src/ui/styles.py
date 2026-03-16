@@ -137,41 +137,48 @@ def get_mpl_theme(theme: str = "dark") -> dict:
     """Return matplotlib-friendly theme colors (facecolor, text, grid, line colors).
     Use for Figure/axes to match app theme (dark, light, dark_high_contrast, light_high_contrast).
     """
+    from ui.app_settings import get_avg_trajectory_color, get_roi_colors
+
     c = _palette(theme)
     is_dark = theme in (THEME_DARK, THEME_DARK_HIGH_CONTRAST)
     is_high_contrast = theme in (THEME_DARK_HIGH_CONTRAST, THEME_LIGHT_HIGH_CONTRAST)
+
+    roi_colors = get_roi_colors()
+    avg_traj_color = get_avg_trajectory_color()
+
+    base: dict = {
+        "figure_facecolor": c["surface"],
+        "axes_facecolor": c["surface"],
+        "axes_edgecolor": c["border"],
+        "text_color": c["text"],
+        "grid_color": c["border"],
+        "legend_facecolor": c["surface_alt"],
+        "legend_edgecolor": c["border"],
+        "roi_1_line_color": roi_colors["roi_1"],
+        "roi_2_line_color": roi_colors["roi_2"],
+        "avg_trajectory_color": avg_traj_color,
+    }
+
     if is_dark:
-        return {
-            "figure_facecolor": c["surface"],
-            "axes_facecolor": c["surface"],
-            "axes_edgecolor": c["border"],
-            "text_color": c["text"],
-            "grid_color": c["border"],
-            "legend_facecolor": c["surface_alt"],
-            "legend_edgecolor": c["border"],
+        base.update({
             "good_color": "#22c55e",
             "bad_color": "#f87171",
             "neutral_color": "#6BB3FF" if is_high_contrast else "#60a5fa",
             "average_color": "#e2e8f0",
             "average_good_color": "#4ade80",
-            "roi_line_color": "#6BB3FF" if is_high_contrast else "#60a5fa",
-        }
+            "roi_line_color": roi_colors["roi_1"],
+        })
     else:
-        return {
-            "figure_facecolor": c["surface"],
-            "axes_facecolor": c["surface"],
-            "axes_edgecolor": c["border"],
-            "text_color": c["text"],
-            "grid_color": c["border"],
-            "legend_facecolor": c["surface_alt"],
-            "legend_edgecolor": c["border"],
+        base.update({
             "good_color": "green",
             "bad_color": "red",
             "neutral_color": "blue",
             "average_color": "black",
             "average_good_color": "darkgreen",
-            "roi_line_color": "blue",
-        }
+            "roi_line_color": roi_colors["roi_1"],
+        })
+
+    return base
 
 
 def get_stylesheet(theme: str = "dark") -> str:
@@ -845,12 +852,12 @@ def get_stylesheet(theme: str = "dark") -> str:
         font-size: {FONT_SIZE_SMALL};
     }}
 
-    /* Active/current step – emphasize with blue outline and stronger text */
+    /* Active/current step – vivid blue outline so the user always knows where they are */
     QFrame[objectName="workflowStepper"] QToolButton[workflowStatus="active"] {{
-        border: 2px solid {c["primary"]};
+        border: 3px solid {c["primary"]};
         background-color: {c["surface"]};
         color: {c["primary"]};
-        font-weight: 600;
+        font-weight: 700;
     }}
 
     /* Completed steps – soft green accent with checkmark text already set in code */

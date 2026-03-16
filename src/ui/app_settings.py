@@ -11,6 +11,9 @@ SETTINGS_FILE = CONFIG_DIR / "settings.json"
 
 DEFAULTS: Dict[str, Any] = {
     "theme": "dark",
+    "roi_1_color": "#0077BB",
+    "roi_2_color": "#EE7733",
+    "avg_trajectory_color": "#e879f9",
 }
 
 
@@ -65,4 +68,33 @@ def set_theme(theme: str) -> None:
     settings["theme"] = theme
     if "high_contrast" in settings:
         del settings["high_contrast"]
+    save_settings(settings)
+
+
+def get_roi_colors() -> Dict[str, str]:
+    """Return ROI colors as ``{"roi_1": "#hex", "roi_2": "#hex"}``."""
+    settings = load_settings()
+    return {
+        "roi_1": settings.get("roi_1_color", DEFAULTS["roi_1_color"]),
+        "roi_2": settings.get("roi_2_color", DEFAULTS["roi_2_color"]),
+    }
+
+
+def set_roi_color(roi_key: str, hex_color: str) -> None:
+    """Persist a single ROI color.  *roi_key* is ``"roi_1"`` or ``"roi_2"``."""
+    settings = load_settings()
+    settings[f"{roi_key}_color"] = hex_color
+    save_settings(settings)
+
+
+def get_avg_trajectory_color() -> str:
+    """Return the configured average trajectory line colour."""
+    settings = load_settings()
+    return settings.get("avg_trajectory_color", DEFAULTS["avg_trajectory_color"])
+
+
+def set_avg_trajectory_color(hex_color: str) -> None:
+    """Persist the average trajectory line colour."""
+    settings = load_settings()
+    settings["avg_trajectory_color"] = hex_color
     save_settings(settings)

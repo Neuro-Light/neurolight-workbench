@@ -43,7 +43,6 @@ class _ROIGraphicsView(QGraphicsView):
     """QGraphicsView subclass that provides mouse-wheel zoom, pan,
     polygon drawing, and ROI adjustment interactions."""
 
-    # Zoom limits
     MIN_ZOOM = 0.1
     MAX_ZOOM = 30.0
 
@@ -66,7 +65,6 @@ class _ROIGraphicsView(QGraphicsView):
     # ----- zoom -----
 
     def wheelEvent(self, event: QWheelEvent) -> None:  # noqa: N802
-        """Zoom in/out with mouse wheel."""
         angle = event.angleDelta().y()
         if angle == 0:
             return
@@ -95,10 +93,9 @@ class _ROIGraphicsView(QGraphicsView):
 
     def fit_view(self) -> None:
         self.fitInView(self.sceneRect(), Qt.KeepAspectRatio)
-        # Recalculate zoom factor from the current transform
         self._zoom_factor = self.transform().m11()
 
-    # ----- pan via middle-button or Space+left-button -----
+    # ----- pan via middle-button -----
 
     def mousePressEvent(self, event: QMouseEvent) -> None:  # noqa: N802
         if event.button() == Qt.MiddleButton:
@@ -107,8 +104,6 @@ class _ROIGraphicsView(QGraphicsView):
             self.setCursor(Qt.ClosedHandCursor)
             event.accept()
             return
-
-        # Forward to dialog logic for ROI interaction
         scene_pos = self.mapToScene(event.position().toPoint())
         self._dialog._handle_mouse_press(event, scene_pos)
         event.accept()
@@ -121,7 +116,6 @@ class _ROIGraphicsView(QGraphicsView):
             self.verticalScrollBar().setValue(self.verticalScrollBar().value() - int(delta.y()))
             event.accept()
             return
-
         scene_pos = self.mapToScene(event.position().toPoint())
         self._dialog._handle_mouse_move(event, scene_pos)
         event.accept()
@@ -132,7 +126,6 @@ class _ROIGraphicsView(QGraphicsView):
             self.setCursor(Qt.ArrowCursor)
             event.accept()
             return
-
         scene_pos = self.mapToScene(event.position().toPoint())
         self._dialog._handle_mouse_release(event, scene_pos)
         event.accept()
@@ -152,16 +145,26 @@ class _ROIGraphicsView(QGraphicsView):
 
 
 class ROISelectionDialog(QDialog):
-    """Modal dialog for ROI polygon selection with zoom and pan."""
+    """Modal dialog for ROI polygon selection with zoom and pan.
+
+    Supports showing a second (other) ROI as a dimmed overlay so the user
+    can see both regions while editing one.
+    """
 
     def __init__(
         self,
         image: np.ndarray,
         existing_roi: Optional[ROI] = None,
         parent: Optional[QWidget] = None,
+        *,
+        roi_color: str = "#22c55e",
+        active_roi_label: str = "ROI 1",
+        other_roi: Optional[ROI] = None,
+        other_roi_color: str = "#f59e0b",
+        other_roi_label: str = "ROI 2",
     ) -> None:
         super().__init__(parent)
-        self.setWindowTitle("ROI Selection")
+        self.setWindowTitle(f"ROI Selection — {active_roi_label}")
         self.setModal(True)
 
         # ---- state ----
@@ -175,17 +178,19 @@ class ROISelectionDialog(QDialog):
         self._dragging_handle: HandleResult = ROIHandle.NONE
         self._last_drag_pos: Optional[QPointF] = None
 
+        # Configurable colours and labels
+        self._roi_color = QColor(roi_color)
+        self._active_label = active_roi_label
+        self._other_roi = other_roi
+        self._other_roi_color = QColor(other_roi_color)
+        self._other_label = other_roi_label
+
         # ---- build UI ----
         self._build_ui()
-
-        # ---- load image into scene ----
         self._load_image()
-
-        # ---- if existing ROI, draw it ----
         self._update_overlay()
         self._update_button_states()
 
-        # ---- size dialog ----
         screen = QApplication.primaryScreen()
         if screen:
             geom = screen.availableGeometry()
@@ -206,14 +211,36 @@ class ROISelectionDialog(QDialog):
         self._view.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         layout.addWidget(self._view, 1)
 
-        # --- Status bar ---
+        # --- Bottom info row: status text + ROI legend ---
+        info_row = QHBoxLayout()
+
         self._status_label = QLabel(self._status_text())
-        layout.addWidget(self._status_label)
+        self._status_label.setWordWrap(True)
+        info_row.addWidget(self._status_label, 1)
+
+        info_row.addSpacing(24)
+
+        for label_text, color in (
+            (self._active_label, self._roi_color),
+            (self._other_label, self._other_roi_color),
+        ):
+            swatch = QLabel()
+            swatch.setFixedSize(14, 14)
+            pix = QPixmap(14, 14)
+            pix.fill(color)
+            swatch.setPixmap(pix)
+
+            is_active = label_text == self._active_label
+            text_label = QLabel(f"<b>{label_text}</b> (editing)" if is_active else label_text)
+            info_row.addWidget(swatch)
+            info_row.addWidget(text_label)
+            info_row.addSpacing(12)
+
+        layout.addLayout(info_row)
 
         # --- Toolbar ---
         toolbar = QHBoxLayout()
 
-        # Zoom buttons
         self._zoom_in_btn = QPushButton("Zoom In (+)")
         self._zoom_out_btn = QPushButton("Zoom Out (-)")
         self._fit_btn = QPushButton("Fit to View")
@@ -226,7 +253,6 @@ class ROISelectionDialog(QDialog):
 
         toolbar.addStretch()
 
-        # ROI action buttons
         self._complete_btn = QPushButton("Complete Polygon")
         self._complete_btn.clicked.connect(self._complete_polygon)
 
@@ -256,7 +282,6 @@ class ROISelectionDialog(QDialog):
         self._pixmap_item = QGraphicsPixmapItem(pix)
         self._scene.addItem(self._pixmap_item)
         self._scene.setSceneRect(QRectF(0, 0, pix.width(), pix.height()))
-        # Fit after a short delay so the view has its final size
         from PySide6.QtCore import QTimer
 
         QTimer.singleShot(0, self._on_fit_view)
@@ -265,15 +290,17 @@ class ROISelectionDialog(QDialog):
         self._view.fit_view()
 
     # ------------------------------------------------------------------
-    # Overlay drawing (ROI polygon on the scene)
+    # Overlay drawing
     # ------------------------------------------------------------------
 
     def _update_overlay(self) -> None:
-        """Redraw ROI overlay items on the scene."""
-        # Remove old overlay items (everything except the pixmap)
+        """Redraw all overlay items on the scene."""
         for item in list(self._scene.items()):
             if item is not self._pixmap_item:
                 self._scene.removeItem(item)
+
+        # Draw the *other* ROI first (dimmed) so the active one draws on top
+        self._draw_other_roi_overlay()
 
         if self._selection_mode and self._polygon_points:
             self._draw_selection_overlay()
@@ -282,58 +309,70 @@ class ROISelectionDialog(QDialog):
 
         self._status_label.setText(self._status_text())
 
+    def _draw_other_roi_overlay(self) -> None:
+        """Draw the other ROI as a translucent dashed polygon."""
+        roi = self._other_roi
+        if roi is None:
+            return
+        if not (roi.shape == ROIShape.POLYGON and roi.points):
+            return
+        color = QColor(self._other_roi_color)
+        color.setAlpha(100)
+        pen = QPen(color, 2, Qt.DashLine)
+        pen.setCosmetic(True)
+        qpts = [QPointF(p[0], p[1]) for p in roi.points]
+        polygon = self._scene.addPolygon(QPolygonF(qpts), pen, QBrush(Qt.NoBrush))
+        polygon.setZValue(5)
+
     def _draw_selection_overlay(self) -> None:
-        """Draw the polygon being constructed (red dashed)."""
-        pen = QPen(QColor(255, 50, 50), 2, Qt.DashLine)
-        pen.setCosmetic(True)  # constant width regardless of zoom
-        vertex_pen = QPen(QColor(255, 50, 50), 1)
+        """Draw the polygon being constructed using the active ROI colour."""
+        color = QColor(self._roi_color)
+        pen = QPen(color, 2, Qt.DashLine)
+        pen.setCosmetic(True)
+        vertex_pen = QPen(color, 1)
         vertex_pen.setCosmetic(True)
-        vertex_brush = QBrush(QColor(255, 100, 100, 180))
+        lighter = QColor(color)
+        lighter.setAlpha(180)
+        vertex_brush = QBrush(lighter)
 
         pts = self._polygon_points
 
-        # Edges
-        if len(pts) >= 2:
+        # Draw edges from first point onward (including single-point → cursor)
+        if len(pts) >= 1 and self._preview_pos is not None:
+            # Lines between placed points
             for i in range(len(pts) - 1):
                 line = self._scene.addLine(
-                    pts[i].x(),
-                    pts[i].y(),
-                    pts[i + 1].x(),
-                    pts[i + 1].y(),
-                    pen,
+                    pts[i].x(), pts[i].y(), pts[i + 1].x(), pts[i + 1].y(), pen,
                 )
                 line.setZValue(10)
-            # Preview line to cursor
-            if self._preview_pos is not None:
-                preview_line = self._scene.addLine(
-                    pts[-1].x(),
-                    pts[-1].y(),
-                    self._preview_pos.x(),
-                    self._preview_pos.y(),
-                    pen,
+            # Preview line from last point to cursor
+            preview_line = self._scene.addLine(
+                pts[-1].x(), pts[-1].y(),
+                self._preview_pos.x(), self._preview_pos.y(), pen,
+            )
+            preview_line.setZValue(10)
+        elif len(pts) >= 2:
+            for i in range(len(pts) - 1):
+                line = self._scene.addLine(
+                    pts[i].x(), pts[i].y(), pts[i + 1].x(), pts[i + 1].y(), pen,
                 )
-                preview_line.setZValue(10)
+                line.setZValue(10)
 
         # Vertices
-        r = 4  # radius in scene units (will stay visually small because cosmetic pen)
+        r = 4
         for pt in pts:
             ellipse = self._scene.addEllipse(
-                pt.x() - r,
-                pt.y() - r,
-                2 * r,
-                2 * r,
-                vertex_pen,
-                vertex_brush,
+                pt.x() - r, pt.y() - r, 2 * r, 2 * r, vertex_pen, vertex_brush,
             )
             ellipse.setZValue(11)
 
     def _draw_roi_overlay(self) -> None:
-        """Draw the finalised ROI (green solid)."""
+        """Draw the finalised ROI using the active ROI colour."""
         roi = self._current_roi
         if roi is None:
             return
 
-        pen = QPen(QColor(0, 220, 0), 2, Qt.SolidLine)
+        pen = QPen(self._roi_color, 2, Qt.SolidLine)
         pen.setCosmetic(True)
 
         if roi.shape == ROIShape.POLYGON and roi.points:
@@ -341,20 +380,15 @@ class ROISelectionDialog(QDialog):
             polygon = self._scene.addPolygon(QPolygonF(qpts), pen, QBrush(Qt.NoBrush))
             polygon.setZValue(10)
 
-            # Adjustment handles
             if self._adjust_mode:
                 handle_pen = QPen(QColor(255, 255, 0), 2)
                 handle_pen.setCosmetic(True)
                 handle_brush = QBrush(QColor(0, 255, 255, 180))
-                hs = 5  # half-size of handle square in scene pixels
+                hs = 5
                 for pt in qpts:
                     rect = self._scene.addRect(
-                        pt.x() - hs,
-                        pt.y() - hs,
-                        2 * hs,
-                        2 * hs,
-                        handle_pen,
-                        handle_brush,
+                        pt.x() - hs, pt.y() - hs, 2 * hs, 2 * hs,
+                        handle_pen, handle_brush,
                     )
                     rect.setZValue(11)
 
@@ -401,7 +435,6 @@ class ROISelectionDialog(QDialog):
         if len(self._polygon_points) < 3:
             return
         pts = list(self._polygon_points)
-        # Remove duplicate close-to-first point
         if len(pts) > 3:
             dx = abs(pts[-1].x() - pts[0].x())
             dy = abs(pts[-1].y() - pts[0].y())
@@ -427,7 +460,7 @@ class ROISelectionDialog(QDialog):
 
     def _accept(self) -> None:
         if self._current_roi is not None:
-            self.accept()  # QDialog.Accepted
+            self.accept()
 
     def get_roi(self) -> Optional[ROI]:
         return self._current_roi
@@ -438,12 +471,9 @@ class ROISelectionDialog(QDialog):
 
     def _handle_mouse_press(self, event: QMouseEvent, scene_pos: QPointF) -> None:
         x, y = scene_pos.x(), scene_pos.y()
-
-        # Clamp to image bounds
         x = max(0, min(self._image_width - 1, x))
         y = max(0, min(self._image_height - 1, y))
 
-        # --- right-click ---
         if event.button() == Qt.RightButton:
             if self._selection_mode and self._polygon_points:
                 self._polygon_points.pop()
@@ -466,7 +496,6 @@ class ROISelectionDialog(QDialog):
         if event.button() != Qt.LeftButton:
             return
 
-        # --- adjustment drag start ---
         if self._adjust_mode and self._current_roi is not None:
             handle = self._current_roi.get_handle_at_point(int(x), int(y), 8)
             if handle != ROIHandle.NONE:
@@ -474,7 +503,6 @@ class ROISelectionDialog(QDialog):
                 self._last_drag_pos = QPointF(x, y)
                 return
 
-        # --- selection mode: add point ---
         if self._selection_mode:
             self._polygon_points.append(QPointF(x, y))
             self._update_overlay()
@@ -485,7 +513,6 @@ class ROISelectionDialog(QDialog):
         x = max(0, min(self._image_width - 1, x))
         y = max(0, min(self._image_height - 1, y))
 
-        # Adjustment drag
         if (
             self._adjust_mode
             and self._dragging_handle != ROIHandle.NONE
@@ -501,7 +528,6 @@ class ROISelectionDialog(QDialog):
             self._update_overlay()
             return
 
-        # Selection preview
         if self._selection_mode and self._polygon_points:
             self._preview_pos = QPointF(x, y)
             self._update_overlay()
@@ -516,12 +542,6 @@ class ROISelectionDialog(QDialog):
         if event.button() != Qt.LeftButton:
             return
         if self._selection_mode and len(self._polygon_points) >= 3:
-            # The preceding mousePressEvent already appended a point for this
-            # same click.  Only remove it when it is truly a duplicate of the
-            # previous vertex (same coordinates); this avoids breaking the
-            # triangle case where the double-click *is* the third distinct
-            # point.  (_complete_polygon has its own close-to-first dedup
-            # which stays unchanged.)
             if len(self._polygon_points) >= 2:
                 last = self._polygon_points[-1]
                 prev = self._polygon_points[-2]
@@ -542,7 +562,6 @@ class ROISelectionDialog(QDialog):
             self.reject()
             event.accept()
             return
-        # Pass plus/minus as zoom shortcuts
         if key == Qt.Key.Key_Plus or key == Qt.Key.Key_Equal:
             self._view.zoom_in()
             event.accept()

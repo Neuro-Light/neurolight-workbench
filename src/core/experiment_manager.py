@@ -42,12 +42,13 @@ class Experiment:
             },
         }
     )
-    # Store ROI coordinates in image pixel space (not widget/display space)
-    # Format: {"x": int, "y": int, "width": int, "height": int, "shape": str}
-    # where shape is "ellipse" (rectangle kept for legacy compatibility only)
-    # These coordinates are in original image pixels, ensuring ROI stays fixed to
-    # the image region regardless of window size or scaling
-    roi: Optional[Dict[str, Any]] = None
+    # Dual ROI storage: {"roi_1": <dict or None>, "roi_2": <dict or None>}
+    # Each value is an ROI dict with keys x, y, width, height, shape, points.
+    # Coordinates are in original image pixels, ensuring ROIs stay fixed to
+    # the image region regardless of window size or scaling.
+    rois: Dict[str, Any] = field(
+        default_factory=lambda: {"roi_1": None, "roi_2": None}
+    )
 
     def to_json(self) -> Dict[str, Any]:
         return {
@@ -69,9 +70,10 @@ class Experiment:
                 "processing": {"history": self.processing_history},
                 "analysis": {"results": self.analysis_results, "plots": []},
                 "settings": self.settings,
-                # Save ROI coordinates to .nexp file
-                # Coordinates are in image pixel space, not display/widget space
-                "roi": self.roi,
+                # Dual ROI storage (new format)
+                "rois": self.rois,
+                # Backward compat: write roi_1 as legacy "roi" so older versions can read it
+                "roi": self.rois.get("roi_1"),
                 # Save neuron detection data if available
                 "neuron_detection": self._serialize_neuron_detection(),
             },
@@ -85,6 +87,17 @@ class Experiment:
         created_dt = datetime.fromisoformat(created) if created else datetime.utcnow()
         modified_dt = datetime.fromisoformat(modified) if modified else datetime.utcnow()
         image_stack = exp.get("image_stack", {})
+        # Load dual ROIs: prefer new "rois" key, fall back to legacy "roi" → roi_1
+        rois_raw = exp.get("rois")
+        if isinstance(rois_raw, dict):
+            rois = {
+                "roi_1": rois_raw.get("roi_1"),
+                "roi_2": rois_raw.get("roi_2"),
+            }
+        else:
+            legacy_roi = exp.get("roi")
+            rois = {"roi_1": legacy_roi, "roi_2": None}
+
         experiment = Experiment(
             name=exp.get("name", "Unnamed"),
             description=exp.get("description", ""),
@@ -93,14 +106,11 @@ class Experiment:
             modified_date=modified_dt,
             image_stack_path=image_stack.get("path") or None,
             image_count=int(image_stack.get("count") or 0),
-            image_stack_files=image_stack.get("file_list", []),  # Load saved file list
+            image_stack_files=image_stack.get("file_list", []),
             processing_history=exp.get("processing", {}).get("history", []),
             analysis_results=exp.get("analysis", {}).get("results", {}),
             settings=exp.get("settings", {}),
-            # Load ROI coordinates from .nexp file
-            # Coordinates are in image pixel space and will be converted to display
-            # coordinates when drawing (see image_viewer.py _show_current method)
-            roi=exp.get("roi"),
+            rois=rois,
         )
         # Load neuron detection data if available
         neuron_detection = exp.get("neuron_detection")

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Dict, Optional
 
 if TYPE_CHECKING:
     from core.experiment_manager import Experiment
@@ -14,7 +14,9 @@ from matplotlib.backends.backend_qtagg import (
 )
 from matplotlib.figure import Figure
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import (
+    QCheckBox,
     QFileDialog,
     QHBoxLayout,
     QLabel,
@@ -25,29 +27,54 @@ from PySide6.QtWidgets import (
 )
 
 from core.roi import ROI, ROIShape
-from ui.app_settings import get_theme
+from ui.app_settings import get_roi_colors, get_theme
 from ui.styles import get_mpl_theme
+
+ROI_KEYS = ("roi_1", "roi_2")
+ROI_DISPLAY_NAMES = {"roi_1": "ROI 1", "roi_2": "ROI 2"}
 
 
 class ROIIntensityPlotWidget(QWidget):
-    """Widget for plotting ROI intensity over time with CSV export capability."""
+    """Widget for plotting ROI intensity over time for up to two ROIs."""
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
-        self.intensity_data: Optional[np.ndarray] = None
-        self.frames_data: Optional[np.ndarray] = None
-        self.roi: Optional[ROI] = None
+        self._intensity: Dict[str, Optional[np.ndarray]] = {"roi_1": None, "roi_2": None}
+        self._rois: Dict[str, Optional[ROI]] = {"roi_1": None, "roi_2": None}
         self.experiment: Optional["Experiment"] = None
         self._hover_cid = None
 
         layout = QVBoxLayout(self)
 
-        # Label for status
+        # Status label
         self.status_label = QLabel("No ROI selected. Select an ROI in the image viewer.")
         self.status_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.status_label)
 
-        # Matplotlib figure and canvas (theme applied when plotting)
+        # Toggle checkboxes for each ROI (with colour indicators)
+        toggle_row = QHBoxLayout()
+        self._checkboxes: Dict[str, QCheckBox] = {}
+        colors = get_roi_colors()
+        for key in ROI_KEYS:
+            cb = QCheckBox(ROI_DISPLAY_NAMES[key])
+            cb.setChecked(True)
+            cb.toggled.connect(self._replot)
+            self._checkboxes[key] = cb
+
+            swatch = QLabel()
+            swatch.setFixedSize(12, 12)
+            pix = QPixmap(12, 12)
+            pix.fill(QColor(colors[key]))
+            swatch.setPixmap(pix)
+
+            toggle_row.addWidget(swatch)
+            toggle_row.addWidget(cb)
+            toggle_row.addSpacing(12)
+
+        toggle_row.addStretch()
+        layout.addLayout(toggle_row)
+
+        # Matplotlib figure and canvas
         self.figure = Figure(figsize=(8, 6))
         self.canvas = FigureCanvas(self.figure)
         self.toolbar = NavigationToolbar(self.canvas, self)
@@ -55,12 +82,12 @@ class ROIIntensityPlotWidget(QWidget):
         layout.addWidget(self.toolbar)
         layout.addWidget(self.canvas)
 
-        # Hover label for coordinates
+        # Hover label
         self.hover_label = QLabel("Hover over plot for frame and intensity.")
         self.hover_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.hover_label)
 
-        # Buttons layout
+        # Export buttons
         button_layout = QHBoxLayout()
 
         self.export_png_btn = QPushButton("Export PNG...")
@@ -76,9 +103,108 @@ class ROIIntensityPlotWidget(QWidget):
 
         layout.addLayout(button_layout)
 
-    def _apply_theme(self, ax) -> None:
-        """Apply current app theme to figure and axes."""
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def plot_intensity_time_series(
+        self, roi_key: str, intensity_data: np.ndarray, roi: ROI
+    ) -> None:
+        """Store intensity data for *roi_key* and redraw."""
+        self._intensity[roi_key] = intensity_data
+        self._rois[roi_key] = roi
+        self._replot()
+
+    def clear_roi(self, roi_key: str) -> None:
+        """Remove a single ROI's data and replot."""
+        self._intensity[roi_key] = None
+        self._rois[roi_key] = None
+        self._replot()
+
+    def clear_plot(self) -> None:
+        """Clear everything and reset state."""
+        if self._hover_cid is not None:
+            self.canvas.mpl_disconnect(self._hover_cid)
+            self._hover_cid = None
+        self.figure.clear()
+        self.canvas.draw()
+        self._intensity = {"roi_1": None, "roi_2": None}
+        self._rois = {"roi_1": None, "roi_2": None}
+        self.status_label.setText("No ROI selected. Select an ROI in the image viewer.")
+        self.hover_label.setText("Hover over plot for frame and intensity.")
+        self.export_btn.setEnabled(False)
+        self.export_png_btn.setEnabled(False)
+
+    def refresh_theme(self) -> None:
+        """Redraw the plot with the current app theme / ROI colours."""
+        self._replot()
+
+    # ------------------------------------------------------------------
+    # Internal plotting
+    # ------------------------------------------------------------------
+
+    def _replot(self) -> None:
+        """Redraw the graph based on available data and checkbox state."""
+        self.figure.clear()
+
+        visible: Dict[str, np.ndarray] = {}
+        for key in ROI_KEYS:
+            data = self._intensity.get(key)
+            if data is not None and self._checkboxes[key].isChecked():
+                visible[key] = data
+
+        if not visible:
+            has_any = any(d is not None for d in self._intensity.values())
+            if has_any:
+                self.status_label.setText("All ROI traces hidden. Check a box above to show.")
+            else:
+                self.status_label.setText(
+                    "No ROI selected. Select an ROI in the image viewer."
+                )
+            self.canvas.draw_idle()
+            self.export_btn.setEnabled(False)
+            self.export_png_btn.setEnabled(False)
+            return
+
         theme = get_mpl_theme(get_theme())
+        ax = self.figure.add_subplot(111)
+
+        color_map = {
+            "roi_1": theme["roi_1_line_color"],
+            "roi_2": theme["roi_2_line_color"],
+        }
+
+        for key, data in visible.items():
+            frames = np.arange(len(data))
+            roi = self._rois.get(key)
+            label = ROI_DISPLAY_NAMES[key]
+            if roi is not None and roi.shape == ROIShape.POLYGON and roi.points:
+                label += f" ({len(roi.points)} pts)"
+            ax.plot(frames, data, linewidth=2, color=color_map[key], label=label)
+
+        ax.set_xlabel("Frame Number", fontsize=12)
+        ax.set_ylabel("Mean Pixel Intensity", fontsize=12)
+        ax.set_title("ROI Intensity Over Time", fontsize=14)
+        if len(visible) > 1:
+            ax.legend(loc="best")
+        self._apply_theme(ax, theme)
+
+        # Status text
+        parts = []
+        for key, data in visible.items():
+            name = ROI_DISPLAY_NAMES[key]
+            parts.append(f"{name}: {len(data)} frames, mean {np.mean(data):.2f}")
+        self.status_label.setText(" | ".join(parts))
+
+        self.export_btn.setEnabled(True)
+        self.export_png_btn.setEnabled(True)
+
+        if self._hover_cid is not None:
+            self.canvas.mpl_disconnect(self._hover_cid)
+        self._hover_cid = self.canvas.mpl_connect("motion_notify_event", self._on_motion)
+        self.canvas.draw_idle()
+
+    def _apply_theme(self, ax, theme: dict) -> None:
         self.figure.patch.set_facecolor(theme["figure_facecolor"])
         ax.set_facecolor(theme["axes_facecolor"])
         ax.tick_params(axis="both", colors=theme["text_color"])
@@ -90,148 +216,75 @@ class ROIIntensityPlotWidget(QWidget):
         ax.grid(True, alpha=0.35, color=theme["grid_color"])
 
     def _on_motion(self, event) -> None:
-        """Show frame and intensity under cursor."""
-        if (
-            self.intensity_data is None
-            or event.inaxes is None
-            or event.xdata is None
-            or event.ydata is None
-        ):
+        if event.inaxes is None or event.xdata is None:
             self.hover_label.setText("Hover over plot for frame and intensity.")
             return
         frame_idx = int(round(event.xdata))
-        n = len(self.intensity_data)
-        if frame_idx < 0 or frame_idx >= n:
-            self.hover_label.setText("Hover over plot for frame and intensity.")
-            return
-        self.hover_label.setText(
-            f"Frame {frame_idx}  ·  Intensity {self.intensity_data[frame_idx]:.3f}"
-        )
-
-    def plot_intensity_time_series(self, intensity_data: np.ndarray, roi: ROI) -> None:
-        """
-        Plot mean intensity time series for the selected ROI.
-
-        Args:
-            intensity_data: 1D numpy array of mean intensities across frames
-            roi: ROI object (polygon or ellipse)
-        """
-        self.intensity_data = intensity_data
-        self.roi = roi
-
-        # Clear previous plot
-        self.figure.clear()
-        ax = self.figure.add_subplot(111)
-        theme = get_mpl_theme(get_theme())
-
-        frames = np.arange(len(intensity_data))
-        ax.plot(frames, intensity_data, linewidth=2, color=theme["roi_line_color"])
-        ax.set_xlabel("Frame Number", fontsize=12)
-        ax.set_ylabel("Mean Pixel Intensity", fontsize=12)
-
-        if roi.shape == ROIShape.POLYGON and roi.points:
-            roi_desc = f"Polygon ({len(roi.points)} points)"
+        parts = []
+        for key in ROI_KEYS:
+            data = self._intensity.get(key)
+            if data is not None and self._checkboxes[key].isChecked():
+                if 0 <= frame_idx < len(data):
+                    parts.append(f"{ROI_DISPLAY_NAMES[key]}: {data[frame_idx]:.3f}")
+        if parts:
+            self.hover_label.setText(f"Frame {frame_idx}  ·  " + "  ·  ".join(parts))
         else:
-            roi_desc = f"({roi.x}, {roi.y}) {roi.width}x{roi.height}"
-        ax.set_title(f"ROI Intensity Over Time\n{roi_desc}", fontsize=14)
-        self._apply_theme(ax)
+            self.hover_label.setText("Hover over plot for frame and intensity.")
 
-        self.status_label.setText(
-            f"{roi_desc} | Frames: {len(intensity_data)} | "
-            f"Mean Intensity: {np.mean(intensity_data):.2f}"
-        )
-        self.export_btn.setEnabled(True)
-        self.export_png_btn.setEnabled(True)
-
-        if self._hover_cid is not None:
-            self.canvas.mpl_disconnect(self._hover_cid)
-        self._hover_cid = self.canvas.mpl_connect("motion_notify_event", self._on_motion)
-        self.canvas.draw_idle()
+    # ------------------------------------------------------------------
+    # Export
+    # ------------------------------------------------------------------
 
     def _export_to_png(self) -> None:
-        """Save the current plot as a PNG image."""
         file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save Plot as PNG",
-            "roi_intensity.png",
-            "PNG Files (*.png)",
+            self, "Save Plot as PNG", "roi_intensity.png", "PNG Files (*.png)",
         )
         if not file_path:
             return
         try:
             self.figure.savefig(
-                file_path,
-                dpi=150,
-                facecolor=self.figure.get_facecolor(),
-                edgecolor="none",
-                bbox_inches="tight",
+                file_path, dpi=150, facecolor=self.figure.get_facecolor(),
+                edgecolor="none", bbox_inches="tight",
             )
-            QMessageBox.information(
-                self,
-                "Export Successful",
-                f"Plot saved to:\n{file_path}",
-            )
+            QMessageBox.information(self, "Export Successful", f"Plot saved to:\n{file_path}")
         except Exception as e:
-            QMessageBox.critical(
-                self,
-                "Export Failed",
-                f"Failed to save PNG:\n{str(e)}",
-            )
+            QMessageBox.critical(self, "Export Failed", f"Failed to save PNG:\n{e}")
 
     def _export_to_csv(self) -> None:
-        """Export intensity data to CSV file."""
-        if self.intensity_data is None:
-            QMessageBox.warning(self, "No Data", "No intensity data to export.")
-            return
-
-        # Check for experiment name properly set
         experiment_name = self.experiment.name if self.experiment else "Experiment"
-
-        # Get save location
         file_path, _ = QFileDialog.getSaveFileName(
-            self,
-            "Save Intensity Data",
-            f"{experiment_name}_roi_intensity_data.csv",
-            "CSV Files (*.csv)",
+            self, "Save Intensity Data",
+            f"{experiment_name}_roi_intensity_data.csv", "CSV Files (*.csv)",
         )
-
         if not file_path:
             return
-
         try:
-            # Create CSV with frame numbers and intensities
-            # Format: Frame, Intensity
-            data_to_save = np.column_stack(
-                [np.arange(len(self.intensity_data)), self.intensity_data]
-            )
+            columns = []
+            header_parts = ["Frame"]
+            for key in ROI_KEYS:
+                data = self._intensity.get(key)
+                if data is not None:
+                    columns.append(data)
+                    header_parts.append(f"{ROI_DISPLAY_NAMES[key]}_Mean_Intensity")
 
-            # Save with header
-            header = "Frame,Mean_Intensity"
-            np.savetxt(
-                file_path, data_to_save, delimiter=",", header=header, comments="", fmt="%d,%.6f"
-            )
+            if not columns:
+                QMessageBox.warning(self, "No Data", "No intensity data to export.")
+                return
 
+            max_len = max(len(c) for c in columns)
+            frames = np.arange(max_len)
+            padded = []
+            for c in columns:
+                if len(c) < max_len:
+                    c = np.pad(c, (0, max_len - len(c)), constant_values=np.nan)
+                padded.append(c)
+
+            data_to_save = np.column_stack([frames] + padded)
+            header = ",".join(header_parts)
+            fmt = ",".join(["%d"] + ["%.6f"] * len(padded))
+            np.savetxt(file_path, data_to_save, delimiter=",", header=header, comments="", fmt=fmt)
             QMessageBox.information(
                 self, "Export Successful", f"Intensity data exported to:\n{file_path}"
             )
         except Exception as e:
-            QMessageBox.critical(self, "Export Failed", f"Failed to export data:\n{str(e)}")
-
-    def refresh_theme(self) -> None:
-        """Redraw the plot with the current app theme (e.g. after theme change)."""
-        if self.intensity_data is not None and self.roi is not None:
-            self.plot_intensity_time_series(self.intensity_data, self.roi)
-
-    def clear_plot(self) -> None:
-        """Clear the plot and reset state."""
-        if self._hover_cid is not None:
-            self.canvas.mpl_disconnect(self._hover_cid)
-            self._hover_cid = None
-        self.figure.clear()
-        self.canvas.draw()
-        self.intensity_data = None
-        self.roi = None
-        self.status_label.setText("No ROI selected. Select an ROI in the image viewer.")
-        self.hover_label.setText("Hover over plot for frame and intensity.")
-        self.export_btn.setEnabled(False)
-        self.export_png_btn.setEnabled(False)
+            QMessageBox.critical(self, "Export Failed", f"Failed to export data:\n{e}")

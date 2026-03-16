@@ -13,6 +13,7 @@ from matplotlib.figure import Figure
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
+    QComboBox,
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
@@ -26,11 +27,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+_DETECT_ROI1 = "Detect ROI 1"
+_DETECT_ROI2 = "Detect ROI 2"
+_DETECT_BOTH = "Detect Both ROIs"
+
 
 class NeuronDetectionWidget(QWidget):
     """Widget for detecting and visualizing neurons within a selected ROI."""
 
-    # Emitted when neuron detection finishes successfully
     detectionCompleted = Signal()
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
@@ -39,7 +43,7 @@ class NeuronDetectionWidget(QWidget):
         self.neuron_trajectories: Optional[np.ndarray] = None
         self.quality_mask: Optional[np.ndarray] = None
         self.mean_frame: Optional[np.ndarray] = None
-        self.roi_mask: Optional[np.ndarray] = None
+        self.roi_masks: Dict[str, Optional[np.ndarray]] = {"roi_1": None, "roi_2": None}
         self.experiment: Optional["Experiment"] = None
         self.image_processor: Optional["ImageProcessor"] = None
         self.frame_data: Optional[np.ndarray] = None
@@ -51,6 +55,16 @@ class NeuronDetectionWidget(QWidget):
         self.status_label.setAlignment(Qt.AlignCenter)
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
+
+        # Detection mode selector
+        mode_row = QHBoxLayout()
+        mode_row.addWidget(QLabel("Detection target:"))
+        self.detect_mode_combo = QComboBox()
+        self.detect_mode_combo.addItems([_DETECT_ROI1, _DETECT_ROI2, _DETECT_BOTH])
+        self.detect_mode_combo.setToolTip("Choose which ROI(s) to run neuron detection on")
+        self.detect_mode_combo.currentIndexChanged.connect(lambda _: self._update_ui_state())
+        mode_row.addWidget(self.detect_mode_combo, 1)
+        layout.addLayout(mode_row)
 
         # Parameters group
         params_group = QGroupBox("Detection Parameters")
@@ -169,9 +183,9 @@ class NeuronDetectionWidget(QWidget):
         self.frame_data = frame_data
         self._update_ui_state()
 
-    def set_roi_mask(self, roi_mask: Optional[np.ndarray]) -> None:
-        """Set the ROI mask (2D boolean array)."""
-        self.roi_mask = roi_mask
+    def set_roi_mask(self, roi_key: str, roi_mask: Optional[np.ndarray]) -> None:
+        """Set the ROI mask for *roi_key* (``"roi_1"`` or ``"roi_2"``)."""
+        self.roi_masks[roi_key] = roi_mask
         self._update_ui_state()
 
     def set_trajectory_plot_callback(self, callback) -> None:
@@ -187,7 +201,7 @@ class NeuronDetectionWidget(QWidget):
         self.neuron_trajectories = None
         self.quality_mask = None
         self.mean_frame = None
-        self.roi_mask = None
+        self.roi_masks = {"roi_1": None, "roi_2": None}
 
         self.figure.clear()
         self.canvas.draw()
@@ -212,23 +226,20 @@ class NeuronDetectionWidget(QWidget):
         self.neuron_trajectories = neuron_trajectories
         self.quality_mask = quality_mask
 
-        # Recalculate mean_frame if not provided (it's not saved to reduce file size)
+        # Recalculate mean_frame if not provided
+        effective_mask = self._effective_mask()
         if mean_frame is not None:
             self.mean_frame = mean_frame
-        elif self.frame_data is not None and self.roi_mask is not None:
-            # Recalculate mean_frame from frame_data and ROI mask
+        elif self.frame_data is not None and effective_mask is not None:
             roi_region_stack = np.zeros_like(self.frame_data)
             for t in range(self.frame_data.shape[0]):
-                roi_region_stack[t] = self.frame_data[t] * self.roi_mask.astype(
+                roi_region_stack[t] = self.frame_data[t] * effective_mask.astype(
                     self.frame_data.dtype
                 )
-
-            # Rescale to 0-1 for visualization
             frame_min = np.min(roi_region_stack)
             frame_max = np.max(roi_region_stack)
             if frame_max > frame_min:
                 roi_region_stack = (roi_region_stack - frame_min) / (frame_max - frame_min)
-
             self.mean_frame = np.mean(roi_region_stack, axis=0)
         else:
             self.mean_frame = None
@@ -270,11 +281,26 @@ class NeuronDetectionWidget(QWidget):
                 self.neuron_trajectories, self.quality_mask, self.neuron_locations
             )
 
+    def _effective_mask(self) -> Optional[np.ndarray]:
+        """Return the combined boolean mask for the currently selected detection mode."""
+        mode = self.detect_mode_combo.currentText()
+        m1 = self.roi_masks.get("roi_1")
+        m2 = self.roi_masks.get("roi_2")
+        if mode == _DETECT_ROI1:
+            return m1
+        if mode == _DETECT_ROI2:
+            return m2
+        # Both
+        if m1 is not None and m2 is not None:
+            return m1 | m2
+        return m1 if m1 is not None else m2
+
     def _update_ui_state(self) -> None:
-        """Update UI state based on available data."""
+        """Update UI state based on available data and selected mode."""
+        mask = self._effective_mask()
         has_data = (
             self.frame_data is not None
-            and self.roi_mask is not None
+            and mask is not None
             and self.image_processor is not None
         )
         self.detect_btn.setEnabled(has_data)
@@ -282,21 +308,24 @@ class NeuronDetectionWidget(QWidget):
         if not has_data:
             if self.frame_data is None:
                 self.status_label.setText("No image stack loaded. Load an image stack first.")
-            elif self.roi_mask is None:
-                self.status_label.setText("No ROI selected. Select an ROI in the image viewer.")
+            elif mask is None:
+                mode = self.detect_mode_combo.currentText()
+                self.status_label.setText(
+                    f"No ROI mask available for \"{mode}\". Select the required ROI first."
+                )
             else:
                 self.status_label.setText("Ready to detect neurons.")
 
     def _run_detection(self) -> None:
-        """Run neuron detection on the current ROI."""
-        if self.frame_data is None or self.roi_mask is None or self.image_processor is None:
+        """Run neuron detection using the selected detection mode."""
+        effective = self._effective_mask()
+        if self.frame_data is None or effective is None or self.image_processor is None:
             QMessageBox.warning(
                 self, "Missing Data", "Please load an image stack and select an ROI first."
             )
             return
 
         try:
-            # Get parameters
             cell_size = self.cell_size_spin.value()
             num_peaks = self.num_peaks_spin.value()
             correlation_threshold = self.correlation_threshold_spin.value()
@@ -305,7 +334,6 @@ class NeuronDetectionWidget(QWidget):
             use_max_projection = self.max_projection_checkbox.isChecked()
             preprocess_sigma = self.preprocess_sigma_spin.value()
 
-            # Run detection
             self.detect_btn.setEnabled(False)
             self.status_label.setText("Detecting neurons...")
             QMessageBox.information(
@@ -315,7 +343,7 @@ class NeuronDetectionWidget(QWidget):
             (self.neuron_locations, self.neuron_trajectories, self.quality_mask) = (
                 self.image_processor.detect_neurons_in_roi(
                     self.frame_data,
-                    self.roi_mask,
+                    effective,
                     cell_size=cell_size,
                     num_peaks=num_peaks,
                     correlation_threshold=correlation_threshold,
@@ -326,10 +354,9 @@ class NeuronDetectionWidget(QWidget):
                 )
             )
 
-            # Calculate mean frame for visualization
             roi_region_stack = np.zeros_like(self.frame_data)
             for t in range(self.frame_data.shape[0]):
-                roi_region_stack[t] = self.frame_data[t] * self.roi_mask.astype(
+                roi_region_stack[t] = self.frame_data[t] * effective.astype(
                     self.frame_data.dtype
                 )
 
@@ -583,6 +610,7 @@ class NeuronDetectionWidget(QWidget):
         self.neuron_trajectories = None
         self.quality_mask = None
         self.mean_frame = None
+        self.roi_masks = {"roi_1": None, "roi_2": None}
         self.figure.clear()
         self.canvas.draw()
         self.stats_label.setText("")

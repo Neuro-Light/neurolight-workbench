@@ -264,6 +264,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
                 )
 
         if show_average:
+            avg_color = theme.get("avg_trajectory_color", theme.get("average_color", "#e879f9"))
             if self.quality_mask is not None and show_good:
                 good_indices = np.where(self.quality_mask)[0]
                 if len(good_indices) > 0:
@@ -271,7 +272,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
                     ax.plot(
                         frames,
                         avg_trajectory,
-                        color=theme["average_good_color"],
+                        color=avg_color,
                         linewidth=2.5,
                         label="Average (Good Neurons)",
                     )
@@ -281,7 +282,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
                     ax.plot(
                         frames,
                         avg_trajectory,
-                        color=theme["average_color"],
+                        color=avg_color,
                         linewidth=2.5,
                         label="Average",
                     )
