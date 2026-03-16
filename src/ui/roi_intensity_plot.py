@@ -282,7 +282,10 @@ class ROIIntensityPlotWidget(QWidget):
             frames = np.arange(max_len)
             padded = []
             for c in columns:
-                padded_col = np.pad(c, (0, max_len - len(c)), constant_values=np.nan) if len(c) < max_len else c
+                if len(c) < max_len:
+                    padded_col = np.pad(c, (0, max_len - len(c)), constant_values=np.nan)
+                else:
+                    padded_col = c
                 padded.append(padded_col)
 
             data_to_save = np.column_stack([frames] + padded)
