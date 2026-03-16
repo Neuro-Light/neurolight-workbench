@@ -103,7 +103,8 @@ class RayLeighPlotWidget(QWidget):
             )
         self.plot_btn.setEnabled(True)
         self._plot()
-    # themes to fit other diagrams in the app, and to support dark mode. It applies the theme colors to the figure background, axes background, ticks, title, spines, grid, and legend.
+    # themes to fit other diagrams in the app, and to support dark mode. 
+    # It applies the theme colors to the figure background, axes background, ticks, title, spines, grid, and legend.
     def _apply_theme(self, ax) -> None:
         """Apply current app theme to figure and axes."""
         theme = get_mpl_theme(get_theme())
@@ -182,18 +183,15 @@ class RayLeighPlotWidget(QWidget):
 
         title_time = start_time.toString("HH:mm")
         ax.set_title(
-            f"Peak Times (Modulo 24h)\nStart {title_time}  |  Interval {interval_minutes} min",
-            fontsize=12,
+            "Peak Times (Modulo 24h)\n"
+            f"Start {title_time}  |  Interval {interval_minutes} min",
+              fontsize=12,
         )
         ax.legend(loc="lower left", bbox_to_anchor=(1.05, 0.1))
         self._apply_theme(ax)
         self.canvas.draw_idle()
-    # Error handling method to clear the plot and reset the state when there are issues with the data.
-        self.neuron_trajectories = None
-        self.quality_mask = None
-        self.status_label.setText("No neuron trajectories available. Run detection first.")
-        self.plot_btn.setEnabled(False)
+
     def refresh_theme(self) -> None:
         """Redraw the plot with the current app theme (e.g. after theme change)."""
-        if self.intensity_data is not None and self.roi is not None:
-            self.plot_intensity_time_series(self.intensity_data, self.roi)
+        if self.neuron_trajectories is not None and len(self.neuron_trajectories) > 0:
+            self._plot()
