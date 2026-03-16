@@ -81,9 +81,7 @@ def get_roi_colors() -> Dict[str, str]:
 
 
 _ALLOWED_ROI_KEYS = {
-    k.replace("_color", "")
-    for k in DEFAULTS
-    if k.endswith("_color") and k.startswith("roi_")
+    k.replace("_color", "") for k in DEFAULTS if k.endswith("_color") and k.startswith("roi_")
 }
 
 
