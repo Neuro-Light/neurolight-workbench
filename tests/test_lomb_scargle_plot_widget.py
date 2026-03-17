@@ -95,8 +95,9 @@ def test_axis_period_mode_annotates_using_period(app):
     mock_ax.spines = {}
     w.figure.add_subplot = Mock(return_value=mock_ax)
 
-    with patch("ui.lomb_scargle_plot.compute_lomb_scargle", side_effect=lambda t, y, 
-                                            **kw: _mock_ls_result(peak_frequency=2.0)):
+    with patch(
+        "ui.lomb_scargle_plot.compute_lomb_scargle", side_effect=lambda t, y, **kw: _mock_ls_result(peak_frequency=2.0)
+    ):
         # Select period mode
         w.axis_mode_combo.setCurrentIndex(1)  # "Period"
         # Only analyze ROI 1
@@ -130,4 +131,3 @@ def test_clear_all_resets_state(app):
     assert w._last_frequency is None
     assert w.export_png_btn.isEnabled() is False
     assert w.export_csv_btn.isEnabled() is False
-

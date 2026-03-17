@@ -73,4 +73,3 @@ def test_compute_lomb_scargle_flags_uneven_sampling():
     y = np.sin(2.0 * np.pi * 0.8 * t)
     out = compute_lomb_scargle(t, y, num_freqs=500)
     assert out["uneven_sampling"] is True
-
