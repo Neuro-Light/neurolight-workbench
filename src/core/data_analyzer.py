@@ -8,6 +8,8 @@ import numpy as np
 from core.experiment_manager import Experiment
 from core.roi import ROI
 
+from scipy.signal import lombscargle
+
 
 class DataAnalyzer:
     def __init__(self, experiment: Experiment) -> None:
@@ -95,3 +97,52 @@ class DataAnalyzer:
             roi_region = frame_data[t, y1:y2, x1:x2]
             roi_intensities[t] = np.mean(roi_region)
         return roi_intensities
+
+    def compute_lomb_scargle_periodogram(
+        self,
+        intensity: np.ndarray,
+        dt: float = 1.0,
+        min_period: Optional[float] = None,
+        max_period: Optional[float] = None,
+        oversampling: float = 5.0,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Compute Lomb–Scargle periodogram for a regularly sampled time series.
+
+        Args:
+            intensity: 1D array of values y(t).
+            dt: Sampling interval in time units (e.g. seconds between frames).
+            min_period: Minimum period to consider; defaults to 2 * dt.
+            max_period: Maximum period to consider; defaults to len(intensity) * dt / 2.
+            oversampling: Frequency grid oversampling factor.
+
+        Returns:
+            periods: 1D array of periods (same time units as dt).
+            power: 1D array of Lomb–Scargle power values.
+        """
+        y = np.asarray(intensity, dtype=float)
+        n = y.size
+        if n < 3:
+            raise ValueError("Need at least 3 points for Lomb–Scargle analysis.")
+
+        t = np.arange(n, dtype=float) * dt
+
+        if min_period is None:
+            min_period = 2.0 * dt
+        if max_period is None:
+            max_period = (n * dt) / 2.0
+
+        min_freq = 1.0 / max_period
+        max_freq = 1.0 / min_period
+
+        num_freqs = max(int(oversampling * n), 1)
+        freqs = np.linspace(min_freq, max_freq, num_freqs)
+        angular_freqs = 2.0 * np.pi * freqs
+
+        y_centered = y - np.mean(y)
+        power = lombscargle(t, y_centered, angular_freqs, normalize=True)
+
+        with np.errstate(divide="ignore"):
+            periods = 1.0 / freqs
+
+        return periods, power

@@ -110,6 +110,7 @@ class MainWindow(QMainWindow):
         self.manager = ExperimentManager()
         self.current_experiment_path: Optional[str] = None
         self.image_processor = ImageProcessor(experiment)
+        self.data_analyzer = DataAnalyzer(experiment)
         self._alignment_worker: Optional[AlignmentWorker] = None
 
         # Cached references to controls affected by workflow gating
@@ -386,7 +387,16 @@ class MainWindow(QMainWindow):
 
         # Right panel: analysis dashboard
         self.analysis = AnalysisPanel()
-        self.analysis.get_roi_plot_widget().experiment = self.experiment
+        roi_plot_widget = self.analysis.get_roi_plot_widget()
+        roi_plot_widget.experiment = self.experiment
+        roi_plot_widget.data_analyzer = self.data_analyzer
+
+        # If acquisition timing is stored, propagate the frame interval so that
+        # Lomb–Scargle periods are expressed in meaningful time units.
+        acquisition_settings = self.experiment.settings.get("acquisition", {})
+        frame_interval = acquisition_settings.get("frame_interval_s")
+        if isinstance(frame_interval, (int, float)) and frame_interval > 0:
+            roi_plot_widget.sampling_interval = float(frame_interval)
 
         # Set up neuron detection widget
         detection_widget = self.analysis.get_neuron_detection_widget()
@@ -419,9 +429,6 @@ class MainWindow(QMainWindow):
 
         # Connect display settings changes to debounced saving
         self.viewer.displaySettingsChanged.connect(self._on_display_settings_changed)
-
-        # Create data analyzer
-        self.data_analyzer = DataAnalyzer(self.experiment)
 
         splitter.addWidget(self.viewer)
         splitter.addWidget(self.analysis)

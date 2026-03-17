@@ -22,9 +22,11 @@ from PySide6.QtWidgets import (
     QPushButton,
     QVBoxLayout,
     QWidget,
+    QComboBox,
 )
 
 from core.roi import ROI, ROIShape
+from core.data_analyzer import DataAnalyzer
 from ui.app_settings import get_theme
 from ui.styles import get_mpl_theme
 
@@ -39,6 +41,8 @@ class ROIIntensityPlotWidget(QWidget):
         self.roi: Optional[ROI] = None
         self.experiment: Optional["Experiment"] = None
         self._hover_cid = None
+        self.data_analyzer: Optional[DataAnalyzer] = None
+        self.sampling_interval: float = 1.0
 
         layout = QVBoxLayout(self)
 
@@ -46,6 +50,18 @@ class ROIIntensityPlotWidget(QWidget):
         self.status_label = QLabel("No ROI selected. Select an ROI in the image viewer.")
         self.status_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.status_label)
+
+        # Controls row for selecting graph type
+        controls_layout = QHBoxLayout()
+        controls_layout.addWidget(QLabel("Graph Type:"))
+
+        self.graph_type_combo = QComboBox()
+        self.graph_type_combo.addItems(["Time Series", "Lomb–Scargle Periodogram"])
+        self.graph_type_combo.currentIndexChanged.connect(self._replot_current_data)
+        controls_layout.addWidget(self.graph_type_combo)
+        controls_layout.addStretch()
+
+        layout.addLayout(controls_layout)
 
         # Matplotlib figure and canvas (theme applied when plotting)
         self.figure = Figure(figsize=(8, 6))
@@ -75,6 +91,14 @@ class ROIIntensityPlotWidget(QWidget):
         button_layout.addWidget(self.export_btn)
 
         layout.addLayout(button_layout)
+
+    def _get_analyzer(self) -> DataAnalyzer:
+        if self.data_analyzer is not None:
+            return self.data_analyzer
+        if self.experiment is None:
+            raise RuntimeError("Experiment must be set before computing Lomb–Scargle.")
+        self.data_analyzer = DataAnalyzer(self.experiment)
+        return self.data_analyzer
 
     def _apply_theme(self, ax) -> None:
         """Apply current app theme to figure and axes."""
@@ -110,25 +134,59 @@ class ROIIntensityPlotWidget(QWidget):
 
     def plot_intensity_time_series(self, intensity_data: np.ndarray, roi: ROI) -> None:
         """
-        Plot mean intensity time series for the selected ROI.
+        Plot mean intensity time series for the selected ROI, using the current
+        graph type selection.
 
+        Args:
+            intensity_data: 1D numpy array of mean intensities across frames
+            roi: ROI object (polygon or ellipse)
         Args:
             intensity_data: 1D numpy array of mean intensities across frames
             roi: ROI object (polygon or ellipse)
         """
         self.intensity_data = intensity_data
         self.roi = roi
+        self._replot_current_data()
+
+    def _replot_current_data(self) -> None:
+        """Replot the graph according to the selected graph type."""
+        if self.intensity_data is None or self.roi is None:
+            return
+
+        graph_type = self.graph_type_combo.currentText()
 
         # Clear previous plot
         self.figure.clear()
         ax = self.figure.add_subplot(111)
         theme = get_mpl_theme(get_theme())
 
-        frames = np.arange(len(intensity_data))
-        ax.plot(frames, intensity_data, linewidth=2, color=theme["roi_line_color"])
+        if graph_type == "Lomb–Scargle Periodogram":
+            self._plot_lomb_scargle(ax, theme)
+        else:
+            self._plot_time_series(ax, theme)
+
+        if self._hover_cid is not None:
+            self.canvas.mpl_disconnect(self._hover_cid)
+            self._hover_cid = None
+
+        if graph_type == "Time Series":
+            self._hover_cid = self.canvas.mpl_connect("motion_notify_event", self._on_motion)
+            self.hover_label.setText("Hover over plot for frame and intensity.")
+        else:
+            self.hover_label.setText("Hover disabled for periodogram view.")
+
+        self.canvas.draw_idle()
+
+    def _plot_time_series(self, ax, theme) -> None:
+        """Render the standard intensity vs frame plot."""
+        assert self.intensity_data is not None and self.roi is not None
+
+        frames = np.arange(len(self.intensity_data))
+        ax.plot(frames, self.intensity_data, linewidth=2, color=theme["roi_line_color"])
         ax.set_xlabel("Frame Number", fontsize=12)
         ax.set_ylabel("Mean Pixel Intensity", fontsize=12)
 
+        roi = self.roi
         if roi.shape == ROIShape.POLYGON and roi.points:
             roi_desc = f"Polygon ({len(roi.points)} points)"
         else:
@@ -137,16 +195,63 @@ class ROIIntensityPlotWidget(QWidget):
         self._apply_theme(ax)
 
         self.status_label.setText(
-            f"{roi_desc} | Frames: {len(intensity_data)} | "
-            f"Mean Intensity: {np.mean(intensity_data):.2f}"
+            f"{roi_desc} | Frames: {len(self.intensity_data)} | "
+            f"Mean Intensity: {np.mean(self.intensity_data):.2f}"
         )
         self.export_btn.setEnabled(True)
         self.export_png_btn.setEnabled(True)
 
-        if self._hover_cid is not None:
-            self.canvas.mpl_disconnect(self._hover_cid)
-        self._hover_cid = self.canvas.mpl_connect("motion_notify_event", self._on_motion)
-        self.canvas.draw_idle()
+    def _plot_lomb_scargle(self, ax, theme) -> None:
+        """Render Lomb–Scargle periodogram for the current intensity data."""
+        assert self.intensity_data is not None
+
+        try:
+            analyzer = self._get_analyzer()
+            periods, power = analyzer.compute_lomb_scargle_periodogram(
+                self.intensity_data,
+                dt=self.sampling_interval,
+            )
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Lomb–Scargle Error",
+                f"Failed to compute Lomb–Scargle periodogram:\n{str(e)}",
+            )
+            self.export_btn.setEnabled(False)
+            self.export_png_btn.setEnabled(False)
+            return
+
+        valid = np.isfinite(periods) & (periods > 0)
+        periods = periods[valid]
+        power = power[valid]
+
+        if periods.size == 0:
+            QMessageBox.warning(
+                self,
+                "Lomb–Scargle",
+                "No valid periods could be computed for this ROI.",
+            )
+            self.export_btn.setEnabled(False)
+            self.export_png_btn.setEnabled(False)
+            return
+
+        ax.plot(periods, power, color=theme["roi_line_color"], linewidth=2)
+
+        best_idx = int(np.argmax(power))
+        best_period = float(periods[best_idx])
+        ax.axvline(best_period, color=theme["average_color"], linestyle="--", alpha=0.7)
+
+        ax.set_xscale("log")
+        ax.set_xlabel("Period (time units)", fontsize=12)
+        ax.set_ylabel("Lomb–Scargle Power", fontsize=12)
+        ax.set_title("Lomb–Scargle Periodogram", fontsize=14)
+        self._apply_theme(ax)
+
+        self.status_label.setText(
+            f"Lomb–Scargle Periodogram | Best period ≈ {best_period:.3g} time-units"
+        )
+        self.export_btn.setEnabled(False)
+        self.export_png_btn.setEnabled(True)
 
     def _export_to_png(self) -> None:
         """Save the current plot as a PNG image."""
