@@ -212,11 +212,7 @@ def rayleigh_test(theta_rad: np.ndarray) -> Dict[str, Any]:
     if n > 50:
         p = np.exp(-Z)
     else:
-        p = np.exp(-Z) * (
-            1
-            + (2 * Z - Z**2) / (4 * n)
-            - (24 * Z - 132 * Z**2 + 76 * Z**3 - 9 * Z**4) / (288 * n**2)
-        )
+        p = np.exp(-Z) * (1 + (2 * Z - Z**2) / (4 * n) - (24 * Z - 132 * Z**2 + 76 * Z**3 - 9 * Z**4) / (288 * n**2))
     p = float(min(max(p, 0.0), 1.0))
 
     return {
@@ -225,4 +221,3 @@ def rayleigh_test(theta_rad: np.ndarray) -> Dict[str, Any]:
         "p_value": p,
         "n": int(n),
     }
-

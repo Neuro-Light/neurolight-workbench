@@ -366,8 +366,9 @@ class RayLeighPlotWidget(QWidget):
             parts.append(self._last_hover_text)
         if self._last_pick_text:
             parts.append(self._last_pick_text)
-        self.cursor_label.setText("\n".join(parts) if parts else "Hover over the plot to see θ and r.\nClick a" +
-                                        "dot to pin its peak time.")
+        self.cursor_label.setText(
+            "\n".join(parts) if parts else "Hover over the plot to see θ and r.\nClick a" + "dot to pin its peak time."
+        )
 
     def _on_motion(self, event) -> None:
         """Update cursor readout based on hover position."""
@@ -412,10 +413,7 @@ class RayLeighPlotWidget(QWidget):
 
         count = len(indices)
         roi_part = f" ({roi_label})" if roi_label else ""
-        message = (
-            f"Selected{roi_part}: {count} neuron(s)\n"
-            f"time = {t_str}, θ = {theta_deg:.1f}°, r = {r_sel:.3f}"
-        )
+        message = f"Selected{roi_part}: {count} neuron(s)\ntime = {t_str}, θ = {theta_deg:.1f}°, r = {r_sel:.3f}"
 
         self._last_pick_text = message
         self._update_cursor_box()
