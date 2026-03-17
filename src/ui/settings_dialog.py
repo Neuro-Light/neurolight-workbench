@@ -4,17 +4,30 @@ from __future__ import annotations
 
 from typing import Optional
 
+from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import (
+    QColorDialog,
     QDialog,
     QDialogButtonBox,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
+    QPushButton,
     QRadioButton,
     QVBoxLayout,
     QWidget,
 )
 
-from ui.app_settings import get_theme, set_theme
+from ui.app_settings import (
+    get_avg_trajectory_color,
+    get_avg_trajectory_roi_colors,
+    get_roi_colors,
+    get_theme,
+    set_avg_trajectory_color,
+    set_avg_trajectory_roi_color,
+    set_roi_color,
+    set_theme,
+)
 from ui.styles import get_stylesheet
 
 # Theme values shown in Preferences (single selection, same blue-box style)
@@ -25,9 +38,11 @@ THEME_VALUES = (
     ("light_high_contrast", "Light high contrast"),
 )
 
+ROI_LABELS = {"roi_1": "ROI 1", "roi_2": "ROI 2"}
+
 
 class SettingsDialog(QDialog):
-    """Application settings dialog (theme, etc.)."""
+    """Application settings dialog (theme, ROI colors, etc.)."""
 
     def __init__(self, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -44,9 +59,7 @@ class SettingsDialog(QDialog):
         for value, label in THEME_VALUES:
             radio = QRadioButton(label)
             radio.setToolTip(
-                "Increase contrast for text, borders, and backgrounds."
-                if "high contrast" in label
-                else None
+                "Increase contrast for text, borders, and backgrounds." if "high contrast" in label else None
             )
             self.theme_radios[value] = radio
             theme_layout.addWidget(radio)
@@ -57,8 +70,73 @@ class SettingsDialog(QDialog):
         current = get_theme()
         self.theme_radios.get(current, self.theme_radios["dark"]).setChecked(True)
 
+        # ROI Colors group
+        roi_group = QGroupBox("ROI Colors")
+        roi_layout = QVBoxLayout()
+        self._roi_swatches: dict[str, QLabel] = {}
+        self._roi_colors: dict[str, str] = get_roi_colors()
+
+        for roi_key, label_text in ROI_LABELS.items():
+            row = QHBoxLayout()
+            label = QLabel(label_text)
+            swatch = QLabel()
+            swatch.setFixedSize(24, 24)
+            self._set_swatch_color(swatch, self._roi_colors[roi_key])
+            self._roi_swatches[roi_key] = swatch
+            change_btn = QPushButton("Change...")
+            change_btn.setFixedWidth(90)
+            change_btn.clicked.connect(lambda _checked=False, k=roi_key: self._pick_roi_color(k))
+            row.addWidget(label)
+            row.addWidget(swatch)
+            row.addWidget(change_btn)
+            row.addStretch()
+            roi_layout.addLayout(row)
+
+        roi_group.setLayout(roi_layout)
+        layout.addWidget(roi_group)
+
+        # Graph Colors group (average trajectory lines)
+        traj_group = QGroupBox("Graph Colors")
+        traj_layout = QVBoxLayout()
+        self._avg_traj_color = get_avg_trajectory_color()
+        self._avg_traj_roi_colors = get_avg_trajectory_roi_colors()
+
+        avg_row = QHBoxLayout()
+        avg_row.addWidget(QLabel("Average Trajectory Line"))
+        self._avg_traj_swatch = QLabel()
+        self._avg_traj_swatch.setFixedSize(24, 24)
+        self._set_swatch_color(self._avg_traj_swatch, self._avg_traj_color)
+        avg_change_btn = QPushButton("Change...")
+        avg_change_btn.setFixedWidth(90)
+        avg_change_btn.clicked.connect(self._pick_avg_traj_color)
+        avg_change_btn.setToolTip("Single average when not viewing by ROI")
+        avg_row.addWidget(self._avg_traj_swatch)
+        avg_row.addWidget(avg_change_btn)
+        avg_row.addStretch()
+        traj_layout.addLayout(avg_row)
+
+        for roi_key, label_text in ROI_LABELS.items():
+            row = QHBoxLayout()
+            label = QLabel(f"Average ({label_text})")
+            swatch = QLabel()
+            swatch.setFixedSize(24, 24)
+            self._set_swatch_color(swatch, self._avg_traj_roi_colors[roi_key])
+            setattr(self, f"_avg_roi_{roi_key}_swatch", swatch)
+            change_btn = QPushButton("Change...")
+            change_btn.setFixedWidth(90)
+            change_btn.clicked.connect(lambda _checked=False, k=roi_key: self._pick_avg_roi_color(k))
+            change_btn.setToolTip(f"Color for the average trajectory line of {label_text} on the Graphs tab")
+            row.addWidget(label)
+            row.addWidget(swatch)
+            row.addWidget(change_btn)
+            row.addStretch()
+            traj_layout.addLayout(row)
+
+        traj_group.setLayout(traj_layout)
+        layout.addWidget(traj_group)
+
         # Info label
-        info = QLabel("Theme changes apply immediately.")
+        info = QLabel("Theme and color changes apply immediately.")
         info.setWordWrap(True)
         layout.addWidget(info)
 
@@ -68,14 +146,50 @@ class SettingsDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
+    @staticmethod
+    def _set_swatch_color(swatch: QLabel, hex_color: str) -> None:
+        pix = QPixmap(24, 24)
+        pix.fill(QColor(hex_color))
+        swatch.setPixmap(pix)
+
+    def _pick_roi_color(self, roi_key: str) -> None:
+        current = QColor(self._roi_colors[roi_key])
+        color = QColorDialog.getColor(current, self, f"Choose {ROI_LABELS[roi_key]} Color")
+        if color.isValid():
+            hex_color = color.name()
+            self._roi_colors[roi_key] = hex_color
+            self._set_swatch_color(self._roi_swatches[roi_key], hex_color)
+
+    def _pick_avg_traj_color(self) -> None:
+        current = QColor(self._avg_traj_color)
+        color = QColorDialog.getColor(current, self, "Choose Average Trajectory Color")
+        if color.isValid():
+            self._avg_traj_color = color.name()
+            self._set_swatch_color(self._avg_traj_swatch, self._avg_traj_color)
+
+    def _pick_avg_roi_color(self, roi_key: str) -> None:
+        current = QColor(self._avg_traj_roi_colors[roi_key])
+        color = QColorDialog.getColor(current, self, f"Choose Average ({ROI_LABELS[roi_key]}) Color")
+        if color.isValid():
+            self._avg_traj_roi_colors[roi_key] = color.name()
+            swatch = getattr(self, f"_avg_roi_{roi_key}_swatch")
+            self._set_swatch_color(swatch, color.name())
+
     def _apply_and_accept(self) -> None:
-        """Save theme and reapply stylesheet."""
+        """Save theme + ROI colors + graph colors and reapply stylesheet."""
         theme = "dark"
         for value, radio in self.theme_radios.items():
             if radio.isChecked():
                 theme = value
                 break
         set_theme(theme)
+
+        for roi_key, hex_color in self._roi_colors.items():
+            set_roi_color(roi_key, hex_color)
+
+        set_avg_trajectory_color(self._avg_traj_color)
+        for roi_key, hex_color in self._avg_traj_roi_colors.items():
+            set_avg_trajectory_roi_color(roi_key, hex_color)
 
         from PySide6.QtWidgets import QApplication
 

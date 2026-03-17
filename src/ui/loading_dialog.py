@@ -20,9 +20,7 @@ class LoadingDialog(QDialog):
         self.setMinimumHeight(150)
 
         # Make it stay on top and visible
-        self.setWindowFlags(
-            Qt.Dialog | Qt.WindowTitleHint | Qt.CustomizeWindowHint | Qt.WindowStaysOnTopHint
-        )
+        self.setWindowFlags(Qt.Dialog | Qt.WindowTitleHint | Qt.CustomizeWindowHint | Qt.WindowStaysOnTopHint)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(15)

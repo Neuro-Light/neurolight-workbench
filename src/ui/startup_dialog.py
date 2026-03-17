@@ -76,10 +76,7 @@ class RecentExperimentRow(QWidget):
         layout.addWidget(self.options_btn)
 
     def mousePressEvent(self, event) -> None:
-        if (
-            event.button() == Qt.LeftButton
-            and self.childAt(event.position().toPoint()) != self.options_btn
-        ):
+        if event.button() == Qt.LeftButton and self.childAt(event.position().toPoint()) != self.options_btn:
             self._on_click()
         super().mousePressEvent(event)
 
@@ -144,9 +141,7 @@ class NewExperimentDialog(QDialog):
         self.metadata: dict = {}
 
     def _browse(self) -> None:
-        directory = QFileDialog.getExistingDirectory(
-            self, "Select Save Location", self.path_edit.text()
-        )
+        directory = QFileDialog.getExistingDirectory(self, "Select Save Location", self.path_edit.text())
         if directory:
             self.path_edit.setText(directory)
 
@@ -321,7 +316,10 @@ class StartupDialog(QDialog):
 
     def _load_existing(self) -> None:
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Open Experiment", str(EXPERIMENTS_DIR), "Neurolight Experiment (*.nexp)"
+            self,
+            "Open Experiment",
+            str(EXPERIMENTS_DIR),
+            "Neurolight Experiment (*.nexp)",
         )
         if not file_path:
             return
@@ -333,7 +331,9 @@ class StartupDialog(QDialog):
             self.accept()
         except Exception as e:
             QMessageBox.warning(
-                self, "Load Failed", f"Failed to load experiment:\n{file_path}\n\n{str(e)}"
+                self,
+                "Load Failed",
+                f"Failed to load experiment:\n{file_path}\n\n{str(e)}",
             )
             self._refresh_recent()
 
@@ -349,8 +349,7 @@ class StartupDialog(QDialog):
             QMessageBox.warning(
                 self,
                 "Load Failed",
-                f"Failed to load experiment:\n{path}\n\n"
-                "The file may have been deleted or is corrupted.",
+                f"Failed to load experiment:\n{path}\n\nThe file may have been deleted or is corrupted.",
             )
             self._refresh_recent()
 
@@ -392,8 +391,7 @@ class StartupDialog(QDialog):
             reply = QMessageBox.warning(
                 self,
                 "Delete Experiment File",
-                f"Are you sure you want to permanently delete:\n{path}\n\n"
-                "This action cannot be undone!",
+                f"Are you sure you want to permanently delete:\n{path}\n\nThis action cannot be undone!",
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No,
             )
@@ -404,12 +402,12 @@ class StartupDialog(QDialog):
             if self.manager.delete_experiment(path, delete_file=delete_file):
                 self._refresh_recent()
                 if delete_file:
-                    QMessageBox.information(
-                        self, "Deleted", "Experiment file and entry have been deleted."
-                    )
+                    QMessageBox.information(self, "Deleted", "Experiment file and entry have been deleted.")
                 else:
                     QMessageBox.information(
-                        self, "Removed", "Experiment has been removed from the recent list."
+                        self,
+                        "Removed",
+                        "Experiment has been removed from the recent list.",
                     )
             else:
                 QMessageBox.warning(self, "Delete Failed", "Failed to delete experiment.")
@@ -445,9 +443,7 @@ class StartupDialog(QDialog):
             # Export experiment data using the manager's save method
             # This ensures the file format matches the native .nexp format
             if self.manager.save_experiment(experiment, file_path):
-                QMessageBox.information(
-                    self, "Export Successful", f"Experiment exported to:\n{file_path}"
-                )
+                QMessageBox.information(self, "Export Successful", f"Experiment exported to:\n{file_path}")
             else:
                 QMessageBox.warning(self, "Export Failed", "Failed to export experiment.")
         except Exception as e:

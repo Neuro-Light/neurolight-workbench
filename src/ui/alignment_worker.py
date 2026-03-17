@@ -119,9 +119,9 @@ class AlignmentWorker(QThread):
             global_range = global_max - global_min
 
             if global_range > 0:
-                image_stack_uint16 = (
-                    (image_stack.astype(np.float32) - global_min) / global_range * 65535.0
-                ).astype(np.uint16)
+                image_stack_uint16 = ((image_stack.astype(np.float32) - global_min) / global_range * 65535.0).astype(
+                    np.uint16
+                )
             else:
                 image_stack_uint16 = image_stack.astype(np.uint16)
 
@@ -147,15 +147,11 @@ class AlignmentWorker(QThread):
             # same fixed reference.  'previous' mode has inter-frame
             # dependencies so it falls back to the sequential C call.
             if executor is not None and self._reference in ("first", "mean"):
-                tmats = self._register_parallel(
-                    executor, image_stack_uint16, transform_const, num_frames
-                )
+                tmats = self._register_parallel(executor, image_stack_uint16, transform_const, num_frames)
                 if tmats is None:
                     return  # cancelled
             elif self._reference in ("first", "mean"):
-                tmats = self._register_sequential(
-                    sr, image_stack_uint16, transform_const, num_frames
-                )
+                tmats = self._register_sequential(sr, image_stack_uint16, transform_const, num_frames)
                 if tmats is None:
                     return  # cancelled
             else:
@@ -192,9 +188,7 @@ class AlignmentWorker(QThread):
             self.progress.emit(0, num_frames, "De-normalizing aligned stack...")
 
             if global_range > 0:
-                aligned_float = (
-                    aligned_stack_uint16.astype(np.float32) * (global_range / 65535.0) + global_min
-                )
+                aligned_float = aligned_stack_uint16.astype(np.float32) * (global_range / 65535.0) + global_min
                 del aligned_stack_uint16
 
                 dtype = image_stack.dtype
