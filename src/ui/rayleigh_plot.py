@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 
 from ui.app_settings import get_theme
 from ui.styles import get_mpl_theme
+from core.circular_stats import rao_spacing_test, rayleigh_test
 
 
 class RayLeighPlotWidget(QWidget):
@@ -91,6 +92,14 @@ class RayLeighPlotWidget(QWidget):
 
         controls_group.setLayout(controls_layout)
         sidebar_layout.addWidget(controls_group)
+
+        # Text summary of Rayleigh / Rao statistics (left panel, larger font, below options)
+        self.stats_label = QLabel("")
+        self.stats_label.setAlignment(Qt.AlignCenter)
+        self.stats_label.setWordWrap(True)
+        self.stats_label.setStyleSheet("font-size: 15px; font-weight: 600;")
+        sidebar_layout.addWidget(self.stats_label)
+
         sidebar_layout.addStretch()
 
         scroll = QScrollArea()
@@ -265,6 +274,28 @@ class RayLeighPlotWidget(QWidget):
             f"Peak Times (Modulo 24h)\nStart {title_time}  |  Interval {interval_minutes} min",
             fontsize=12,
         )
+        # --- Rayleigh and Rao statistics summary (below plot + in sidebar) -------
+        stats_text = ""
+        try:
+            rayleigh = rayleigh_test(theta)
+            angles_deg = np.degrees(theta) % 360.0
+            rao = rao_spacing_test(angles_deg)
+
+            r = rayleigh["r"]
+            p_rayleigh = rayleigh["p_value"]
+            U = rao["U"]
+            p_rao = rao["p_value"]
+
+            stats_text = (
+                f"Rayleigh: r = {r:.3f}, p ≈ {p_rayleigh:.3g}\n"
+                f"Rao's U = {U:.1f}, p {p_rao}"
+            )
+        except Exception:
+            stats_text = ""
+
+        # Only show stats in the left sidebar (large, prominent text)
+        self.stats_label.setText(stats_text)
+
         ax.legend(loc="lower left", bbox_to_anchor=(1.05, 0.1))
         self._apply_theme(ax)
         self.canvas.draw_idle()
