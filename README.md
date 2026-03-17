@@ -1,5 +1,9 @@
 # 🧠 Neurolight Workbench
 
+[![CI](https://github.com/Neuro-Light/neurolight-workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/Neuro-Light/neurolight-workbench/actions/workflows/ci.yml)
+[![Ruff](https://img.shields.io/badge/code%20style-ruff-261230?logo=ruff&logoColor=white)](https://docs.astral.sh/ruff/)
+[![codecov](https://codecov.io/gh/Neuro-Light/neurolight-workbench/branch/main/graph/badge.svg)](https://codecov.io/gh/Neuro-Light/neurolight-workbench)
+
 A powerful PySide6 desktop application for processing and analyzing large TIF image stacks with scientific rigor. Built for neuroscientists and researchers who need reproducible, shareable experiment workflows.
 
 ---
@@ -50,8 +54,8 @@ A powerful PySide6 desktop application for processing and analyzing large TIF im
 3. **Clone or download the project**
 
    ```bash
-   git clone https://github.com/Neuro-Light/neurolight-prototype
-   cd neurolight-prototype
+   git clone https://github.com/Neuro-Light/neurolight-workbench
+   cd neurolight-workbench
    ```
 
 4. **Install dependencies and create virtual environment**
@@ -93,27 +97,38 @@ A powerful PySide6 desktop application for processing and analyzing large TIF im
 ## 📁 Project Structure
 
 ```
-neurolight-prototype/
+neurolight-workbench/
 │
 ├── 📄 README.md
+├── 📄 BUILD.md
+├── 📄 CONTRIBUTING.md
 ├── 📄 pyproject.toml
-├── 📄 requirements.txt
-├── 📄 .gitignore
+├── 📄 uv.lock
+│
+├── 📂 .github/workflows/           # CI/CD workflows (GitHub Actions)
+│   ├── ci.yml
+│   └── cd.yml
 │
 ├── 📂 src/
 │   ├── main.py                    # Application entry point
 │   │
 │   ├── 📂 ui/                     # User interface components
-│   │   ├── startup_dialog.py     # Experiment selection screen
-│   │   ├── main_window.py        # Main application window
-│   │   ├── image_viewer.py       # Image display & navigation
-│   │   └── analysis_panel.py     # Analysis dashboard
+│   │   ├── startup_dialog.py      # Experiment selection screen
+│   │   ├── main_window.py         # Main application window
+│   │   ├── workflow.py            # Guided workflow stepper + gating logic
+│   │   ├── image_viewer.py        # Image display & navigation + ROI tools
+│   │   ├── roi_selection_dialog.py
+│   │   ├── neuron_detection_widget.py
+│   │   ├── neuron_trajectory_plot.py
+│   │   ├── roi_intensity_plot.py
+│   │   ├── rayleigh_plot.py
+│   │   ├── styles.py              # App theme + stylesheet + Matplotlib theme helpers
+│   │   └── settings_dialog.py
 │   │
 │   ├── 📂 core/                   # Core functionality
 │   │   ├── experiment_manager.py # Experiment session handling
-│   │   ├── image_processor.py    # OpenCV processing pipeline
-│   │   ├── gif_generator.py      # Animation export
-│   │   └── data_analyzer.py      # Statistical analysis
+│   │   ├── image_processor.py    # Image processing + neuron detection pipeline
+│   │   └── data_analyzer.py      # Intensity extraction + analysis helpers
 │   │
 │   └── 📂 utils/                  # Utilities
 │       └── file_handler.py       # TIF stack I/O
@@ -121,7 +136,7 @@ neurolight-prototype/
 ├── 📂 experiments/                # Default experiment storage
 ├── 📂 assets/
 │   └── 📂 icons/
-└── 📂 tests/                      # Unit tests (placeholder)
+└── 📂 tests/                      # Unit tests
 ```
 
 ### 🔧 Module Responsibilities
@@ -297,6 +312,25 @@ tests/
 uv sync --all-extras  # Install with test dependencies
 pytest tests/
 ```
+
+---
+
+## 📈 Code coverage (Codecov)
+
+The badge above is powered by Codecov. To enable it for this repo:
+
+1. **Create / sign into a Codecov account**, then add the repository `Neuro-Light/neurolight-workbench`.
+2. **Upload coverage from CI**:
+   - Ensure tests run with coverage, e.g.:
+
+     ```bash
+     uv run pytest tests/ -v --cov=src --cov-report=xml
+     ```
+
+   - Add a CI step in `.github/workflows/ci.yml` after tests to upload `coverage.xml` using the Codecov GitHub Action.
+3. **Set `CODECOV_TOKEN` only if needed**:
+   - Public repos typically don’t need it.
+   - Private repos often require adding `CODECOV_TOKEN` as a GitHub Actions secret.
 
 ---
 

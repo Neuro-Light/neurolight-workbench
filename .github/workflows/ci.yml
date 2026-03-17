@@ -71,9 +71,19 @@ jobs:
           sudo apt-get install -y libegl1 libxkbcommon0 libdbus-1-3 libxcb-cursor0
 
       - name: Run tests
-        run: uv run pytest tests/ -v
+        run: uv run pytest tests/ -v --cov=src --cov-branch --cov-report=xml
         env:
           QT_QPA_PLATFORM: offscreen
+
+      - name: Upload coverage to Codecov
+        # Upload even if tests fail, so partial coverage info is still available in logs.
+        if: always()
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
+          # token is optional for public repos; for private repos, set CODECOV_TOKEN in GitHub secrets
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   build:
     runs-on: ubuntu-latest
