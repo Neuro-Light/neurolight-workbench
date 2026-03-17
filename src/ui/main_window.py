@@ -291,6 +291,12 @@ class MainWindow(QMainWindow):
         if dlg.exec() == QDialog.Accepted:
             # Theme / colours were applied; refresh all visuals
             self.analysis.get_neuron_trajectory_plot_widget().refresh_theme()
+            try:
+                # Rayleigh plot should update its colors with theme changes as well
+                self.analysis.get_rayleigh_plot_widget().refresh_theme()
+            except Exception:
+                # Some tests or older analysis panels may not expose this widget
+                pass
             self.analysis.get_roi_plot_widget().refresh_theme()
             self.viewer.refresh_roi_selector_icons()
             self.viewer._show_current()  # redraw ROI overlays with new colours
@@ -400,13 +406,33 @@ class MainWindow(QMainWindow):
             # In tests the widget may be heavily mocked; ignore connection errors
             pass
 
-        # Connect detection widget to trajectory plot widget
+        # Connect detection widget to trajectory and Rayleigh plots. Some tests use a
+        # lightweight AnalysisPanel double that does not expose every plot.
         trajectory_plot_widget = self.analysis.get_neuron_trajectory_plot_widget()
-        detection_widget.set_trajectory_plot_callback(
-            lambda trajectories, quality_mask, locations, roi_origin=None: trajectory_plot_widget.plot_trajectories(
-                trajectories, quality_mask, locations, roi_origin=roi_origin
+        rayleigh_plot_getter = getattr(self.analysis, "get_rayleigh_plot_widget", None)
+        rayleigh_plot_widget = rayleigh_plot_getter() if callable(rayleigh_plot_getter) else None
+
+        def _update_neuron_plots(
+            trajectories,
+            quality_mask,
+            locations,
+            roi_origin=None,
+        ) -> None:
+            trajectory_plot_widget.plot_trajectories(
+                trajectories,
+                quality_mask,
+                locations,
+                roi_origin=roi_origin,
             )
-        )
+            # Rayleigh plot ignores ROI; it just needs trajectories and quality mask.
+            if rayleigh_plot_widget is not None:
+                rayleigh_plot_widget.set_trajectory_data(
+                    trajectories,
+                    quality_mask,
+                    roi_origin=roi_origin,
+                )
+
+        detection_widget.set_trajectory_plot_callback(_update_neuron_plots)
 
         # Connect detection widget to save experiment callback
         detection_widget.set_save_experiment_callback(self._save_neuron_detection)
@@ -868,6 +894,9 @@ class MainWindow(QMainWindow):
                     detection_params=detection_data.get("detection_params"),
                     roi_origin=detection_data.get("roi_origin"),  # Per-neuron ROI (0=ROI1, 1=ROI2)
                 )
+                # Advance workflow to analysis if detection data is restored.
+                self.workflow_manager.mark_step_ready(WorkflowStep.DETECT_NEURONS)
+                self.workflow_manager.complete_step_if_current(WorkflowStep.DETECT_NEURONS)
         except Exception:
             # Silently fail - detection data might be corrupted
             pass

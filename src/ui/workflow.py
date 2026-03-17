@@ -87,7 +87,7 @@ STEP_DEFINITIONS: Dict[WorkflowStep, StepMeta] = {
     ),
     WorkflowStep.ANALYZE_GRAPHS: StepMeta(
         index=6,
-        short_label="Analyze Graphs",
+        short_label="Analysis",
         tooltip="Inspect ROI intensity and neuron trajectory graphs.",
         description="Review ROI intensity traces and neuron trajectories in the analysis tabs. "
         "Use this step to interpret and validate the detected activity.",
