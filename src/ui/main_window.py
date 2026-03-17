@@ -297,6 +297,12 @@ class MainWindow(QMainWindow):
             except Exception:
                 # Some tests or older analysis panels may not expose this widget
                 pass
+            try:
+                # Lomb–Scargle periodogram should also adopt the new theme
+                self.analysis.get_lomb_scargle_widget().refresh_theme()
+            except Exception:
+                # Some tests or lightweight analysis panels may not expose this widget
+                pass
             self.analysis.get_roi_plot_widget().refresh_theme()
             self.viewer.refresh_roi_selector_icons()
             self.viewer._show_current()  # redraw ROI overlays with new colours
@@ -411,6 +417,8 @@ class MainWindow(QMainWindow):
         trajectory_plot_widget = self.analysis.get_neuron_trajectory_plot_widget()
         rayleigh_plot_getter = getattr(self.analysis, "get_rayleigh_plot_widget", None)
         rayleigh_plot_widget = rayleigh_plot_getter() if callable(rayleigh_plot_getter) else None
+        lomb_scargle_getter = getattr(self.analysis, "get_lomb_scargle_widget", None)
+        lomb_scargle_widget = lomb_scargle_getter() if callable(lomb_scargle_getter) else None
 
         def _update_neuron_plots(
             trajectories,
@@ -836,6 +844,15 @@ class MainWindow(QMainWindow):
 
             roi_plot_widget = self.analysis.get_roi_plot_widget()
             roi_plot_widget.plot_intensity_time_series(roi_key, intensity_data, roi=roi)
+
+            # Forward the same intensity data to the Lomb–Scargle periodogram widget so it
+            # can reuse the existing ROI intensity pipeline without introducing a new source.
+            try:
+                lomb_scargle_widget = self.analysis.get_lomb_scargle_widget()
+                lomb_scargle_widget.set_intensity_time_series(roi_key, intensity_data)
+            except Exception:
+                # Some tests or lightweight analysis panels may not expose this widget
+                pass
 
             detection_widget = self.analysis.get_neuron_detection_widget()
             if frame_data.ndim == 3:
