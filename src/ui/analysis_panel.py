@@ -15,13 +15,12 @@ class AnalysisPanel(QTabWidget):
         self.neuron_trajectory_plot_widget = NeuronTrajectoryPlotWidget()
         self.lomb_scargle_widget = LombScarglePlotWidget()
         self.rayleigh_plot_widget = RayLeighPlotWidget()
-        # Tab order: Detection, ROI Intensity, Trajectories, Lomb–Scargle, Rayleigh/Rao, Statistics
+        # Tab order: Detection, ROI Intensity, Trajectories, Lomb–Scargle, Rayleigh/Rao
         self._add_tab("Detection", self.neuron_detection_widget)
         self._add_tab("ROI Intensity", self.roi_plot_widget)
         self._add_tab("Trajectories", self.neuron_trajectory_plot_widget)
         self._add_tab("Lomb–Scargle", self.lomb_scargle_widget)
         self._add_tab("Rayleigh/Rao", self.rayleigh_plot_widget)
-        self._add_tab("Statistics")
 
     def _add_tab(self, title: str, widget: QWidget | None = None) -> None:
         if widget is None:
