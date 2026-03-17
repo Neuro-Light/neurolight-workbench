@@ -137,7 +137,11 @@ def get_mpl_theme(theme: str = "dark") -> dict:
     """Return matplotlib-friendly theme colors (facecolor, text, grid, line colors).
     Use for Figure/axes to match app theme (dark, light, dark_high_contrast, light_high_contrast).
     """
-    from ui.app_settings import get_avg_trajectory_color, get_roi_colors
+    from ui.app_settings import (
+        get_avg_trajectory_color,
+        get_avg_trajectory_roi_colors,
+        get_roi_colors,
+    )
 
     c = _palette(theme)
     is_dark = theme in (THEME_DARK, THEME_DARK_HIGH_CONTRAST)
@@ -145,6 +149,7 @@ def get_mpl_theme(theme: str = "dark") -> dict:
 
     roi_colors = get_roi_colors()
     avg_traj_color = get_avg_trajectory_color()
+    avg_traj_roi_colors = get_avg_trajectory_roi_colors()
 
     base: dict = {
         "figure_facecolor": c["surface"],
@@ -157,6 +162,8 @@ def get_mpl_theme(theme: str = "dark") -> dict:
         "roi_1_line_color": roi_colors["roi_1"],
         "roi_2_line_color": roi_colors["roi_2"],
         "avg_trajectory_color": avg_traj_color,
+        "avg_trajectory_roi_1_color": avg_traj_roi_colors["roi_1"],
+        "avg_trajectory_roi_2_color": avg_traj_roi_colors["roi_2"],
     }
 
     if is_dark:

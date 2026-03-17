@@ -189,8 +189,37 @@ class NeuronDetectionWidget(QWidget):
         self._update_ui_state()
 
     def set_trajectory_plot_callback(self, callback) -> None:
-        """Set callback function to notify when trajectories are available."""
+        """Set callback function to notify when trajectories are available.
+        Callback receives (neuron_trajectories, quality_mask, neuron_locations, roi_origin).
+        roi_origin is optional: 1D array of 0 (ROI 1) or 1 (ROI 2) per neuron, or None.
+        """
         self.trajectory_plot_callback = callback
+
+    def _compute_roi_origin(self) -> Optional[np.ndarray]:
+        """Return 1D array of 0 (ROI 1) or 1 (ROI 2) per neuron based on location and ROI masks."""
+        if self.neuron_locations is None or len(self.neuron_locations) == 0:
+            return None
+        m1 = self.roi_masks.get("roi_1")
+        m2 = self.roi_masks.get("roi_2")
+        n = len(self.neuron_locations)
+        roi_origin = np.zeros(n, dtype=np.intp)
+
+        # When both masks exist, assign each neuron by its (y, x) location
+        if m1 is not None and m2 is not None:
+            h, w = m1.shape
+            for i in range(n):
+                y, x = self.neuron_locations[i]
+                yi, xi = int(round(y)), int(round(x))
+                if 0 <= yi < h and 0 <= xi < w:
+                    in1 = bool(m1[yi, xi])
+                    in2 = bool(m2[yi, xi])
+                    # Prefer ROI 2 if pixel is in ROI 2 only; otherwise ROI 1 (or overlap -> ROI 1)
+                    roi_origin[i] = 1 if (in2 and not in1) else 0
+            return roi_origin
+        # Single-ROI: use detection mode to assign all to that ROI
+        if m2 is not None:
+            roi_origin[:] = 1
+        return roi_origin
 
     def set_save_experiment_callback(self, callback) -> None:
         """Set callback function to save experiment when detection completes."""
@@ -276,9 +305,13 @@ class NeuronDetectionWidget(QWidget):
         )
 
         # Notify trajectory plot widget
+        roi_origin = self._compute_roi_origin()
         if hasattr(self, "trajectory_plot_callback"):
             self.trajectory_plot_callback(
-                self.neuron_trajectories, self.quality_mask, self.neuron_locations
+                self.neuron_trajectories,
+                self.quality_mask,
+                self.neuron_locations,
+                roi_origin=roi_origin,
             )
 
     def _effective_mask(self) -> Optional[np.ndarray]:
@@ -424,10 +457,14 @@ class NeuronDetectionWidget(QWidget):
                 if hasattr(self, "save_experiment_callback"):
                     self.save_experiment_callback()
 
-            # Emit signal or notify trajectory plot widget (if connected)
+            # Notify trajectory plot widget (if connected)
+            roi_origin = self._compute_roi_origin()
             if hasattr(self, "trajectory_plot_callback"):
                 self.trajectory_plot_callback(
-                    self.neuron_trajectories, self.quality_mask, self.neuron_locations
+                    self.neuron_trajectories,
+                    self.quality_mask,
+                    self.neuron_locations,
+                    roi_origin=roi_origin,
                 )
             self.detectionCompleted.emit()
 

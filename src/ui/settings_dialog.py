@@ -20,9 +20,11 @@ from PySide6.QtWidgets import (
 
 from ui.app_settings import (
     get_avg_trajectory_color,
+    get_avg_trajectory_roi_colors,
     get_roi_colors,
     get_theme,
     set_avg_trajectory_color,
+    set_avg_trajectory_roi_color,
     set_roi_color,
     set_theme,
 )
@@ -95,10 +97,11 @@ class SettingsDialog(QDialog):
         roi_group.setLayout(roi_layout)
         layout.addWidget(roi_group)
 
-        # Average Trajectory Color group
+        # Graph Colors group (average trajectory lines)
         traj_group = QGroupBox("Graph Colors")
         traj_layout = QVBoxLayout()
         self._avg_traj_color = get_avg_trajectory_color()
+        self._avg_traj_roi_colors = get_avg_trajectory_roi_colors()
 
         avg_row = QHBoxLayout()
         avg_row.addWidget(QLabel("Average Trajectory Line"))
@@ -108,10 +111,30 @@ class SettingsDialog(QDialog):
         avg_change_btn = QPushButton("Change...")
         avg_change_btn.setFixedWidth(90)
         avg_change_btn.clicked.connect(self._pick_avg_traj_color)
+        avg_change_btn.setToolTip("Single average when not viewing by ROI")
         avg_row.addWidget(self._avg_traj_swatch)
         avg_row.addWidget(avg_change_btn)
         avg_row.addStretch()
         traj_layout.addLayout(avg_row)
+
+        for roi_key, label_text in ROI_LABELS.items():
+            row = QHBoxLayout()
+            label = QLabel(f"Average ({label_text})")
+            swatch = QLabel()
+            swatch.setFixedSize(24, 24)
+            self._set_swatch_color(swatch, self._avg_traj_roi_colors[roi_key])
+            setattr(self, f"_avg_roi_{roi_key}_swatch", swatch)
+            change_btn = QPushButton("Change...")
+            change_btn.setFixedWidth(90)
+            change_btn.clicked.connect(
+                lambda _checked=False, k=roi_key: self._pick_avg_roi_color(k)
+            )
+            change_btn.setToolTip(f"Color for the average trajectory line of {label_text} on the Graphs tab")
+            row.addWidget(label)
+            row.addWidget(swatch)
+            row.addWidget(change_btn)
+            row.addStretch()
+            traj_layout.addLayout(row)
 
         traj_group.setLayout(traj_layout)
         layout.addWidget(traj_group)
@@ -148,6 +171,16 @@ class SettingsDialog(QDialog):
             self._avg_traj_color = color.name()
             self._set_swatch_color(self._avg_traj_swatch, self._avg_traj_color)
 
+    def _pick_avg_roi_color(self, roi_key: str) -> None:
+        current = QColor(self._avg_traj_roi_colors[roi_key])
+        color = QColorDialog.getColor(
+            current, self, f"Choose Average ({ROI_LABELS[roi_key]}) Color"
+        )
+        if color.isValid():
+            self._avg_traj_roi_colors[roi_key] = color.name()
+            swatch = getattr(self, f"_avg_roi_{roi_key}_swatch")
+            self._set_swatch_color(swatch, color.name())
+
     def _apply_and_accept(self) -> None:
         """Save theme + ROI colors + graph colors and reapply stylesheet."""
         theme = "dark"
@@ -161,6 +194,8 @@ class SettingsDialog(QDialog):
             set_roi_color(roi_key, hex_color)
 
         set_avg_trajectory_color(self._avg_traj_color)
+        for roi_key, hex_color in self._avg_traj_roi_colors.items():
+            set_avg_trajectory_roi_color(roi_key, hex_color)
 
         from PySide6.QtWidgets import QApplication
 

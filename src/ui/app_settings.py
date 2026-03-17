@@ -14,6 +14,8 @@ DEFAULTS: Dict[str, Any] = {
     "roi_1_color": "#0077BB",
     "roi_2_color": "#EE7733",
     "avg_trajectory_color": "#e879f9",
+    "avg_trajectory_roi_1_color": "#22aaff",  # Brighter blue for ROI 1 average
+    "avg_trajectory_roi_2_color": "#ff9944",  # Brighter orange for ROI 2 average
 }
 
 
@@ -103,7 +105,31 @@ def get_avg_trajectory_color() -> str:
 
 
 def set_avg_trajectory_color(hex_color: str) -> None:
-    """Persist the average trajectory line colour."""
+    """Persist the average trajectory line colour (single-ROI / no-split case)."""
     settings = load_settings()
     settings["avg_trajectory_color"] = hex_color
+    save_settings(settings)
+
+
+def get_avg_trajectory_roi_colors() -> Dict[str, str]:
+    """Return average trajectory colours per ROI for Graphs tab: ``{"roi_1": "#hex", "roi_2": "#hex"}``."""
+    settings = load_settings()
+    return {
+        "roi_1": settings.get(
+            "avg_trajectory_roi_1_color", DEFAULTS["avg_trajectory_roi_1_color"]
+        ),
+        "roi_2": settings.get(
+            "avg_trajectory_roi_2_color", DEFAULTS["avg_trajectory_roi_2_color"]
+        ),
+    }
+
+
+def set_avg_trajectory_roi_color(roi_key: str, hex_color: str) -> None:
+    """Persist the average trajectory colour for *roi_key* (``roi_1`` or ``roi_2``)."""
+    if roi_key not in _ALLOWED_ROI_KEYS:
+        raise ValueError(
+            f"Invalid roi_key {roi_key!r}; expected one of {sorted(_ALLOWED_ROI_KEYS)}"
+        )
+    settings = load_settings()
+    settings[f"avg_trajectory_{roi_key}_color"] = hex_color
     save_settings(settings)

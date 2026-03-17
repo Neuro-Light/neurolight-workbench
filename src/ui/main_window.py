@@ -410,8 +410,8 @@ class MainWindow(QMainWindow):
         # Connect detection widget to trajectory plot widget
         trajectory_plot_widget = self.analysis.get_neuron_trajectory_plot_widget()
         detection_widget.set_trajectory_plot_callback(
-            lambda trajectories, quality_mask, locations: trajectory_plot_widget.plot_trajectories(
-                trajectories, quality_mask, locations
+            lambda trajectories, quality_mask, locations, roi_origin=None: trajectory_plot_widget.plot_trajectories(
+                trajectories, quality_mask, locations, roi_origin=roi_origin
             )
         )
 
@@ -472,12 +472,12 @@ class MainWindow(QMainWindow):
         """Auto-load image stack, ROI, and display settings if experiment has saved data."""
         # Always apply saved or neutral display settings up front
         self._apply_saved_display_settings()
-        detection_widget = None
         try:
             detection_widget = self.analysis.get_neuron_detection_widget()
             detection_widget.reset_detection_state()
+            self.analysis.get_neuron_trajectory_plot_widget().clear_plot()
         except Exception:
-            detection_widget = None
+            pass
         try:
             path = self.experiment.image_stack_path
             if path:
@@ -762,8 +762,9 @@ class MainWindow(QMainWindow):
             # Reset viewer state
             self.viewer.reset()
 
-            # Clear analysis panel
+            # Clear analysis panel (ROI intensity and trajectory graphs)
             self.analysis.roi_plot_widget.clear_plot()
+            self.analysis.get_neuron_trajectory_plot_widget().clear_plot()
 
             # Reassociate handler and data analyzer with new experiment
             self.stack_handler.associate_with_experiment(self.experiment)
@@ -867,6 +868,7 @@ class MainWindow(QMainWindow):
 
         if detection_data is None:
             detection_widget.reset_detection_state()
+            self.analysis.get_neuron_trajectory_plot_widget().clear_plot()
             return
 
         try:
