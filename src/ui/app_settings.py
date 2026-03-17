@@ -115,12 +115,8 @@ def get_avg_trajectory_roi_colors() -> Dict[str, str]:
     """Return average trajectory colours per ROI for Graphs tab: ``{"roi_1": "#hex", "roi_2": "#hex"}``."""
     settings = load_settings()
     return {
-        "roi_1": settings.get(
-            "avg_trajectory_roi_1_color", DEFAULTS["avg_trajectory_roi_1_color"]
-        ),
-        "roi_2": settings.get(
-            "avg_trajectory_roi_2_color", DEFAULTS["avg_trajectory_roi_2_color"]
-        ),
+        "roi_1": settings.get("avg_trajectory_roi_1_color", DEFAULTS["avg_trajectory_roi_1_color"]),
+        "roi_2": settings.get("avg_trajectory_roi_2_color", DEFAULTS["avg_trajectory_roi_2_color"]),
     }
 
 

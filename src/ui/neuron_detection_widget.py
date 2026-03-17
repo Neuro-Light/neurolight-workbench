@@ -49,7 +49,9 @@ class NeuronDetectionWidget(QWidget):
         self.neuron_trajectories: Optional[np.ndarray] = None
         self.quality_mask: Optional[np.ndarray] = None
         self.mean_frame: Optional[np.ndarray] = None
-        self._display_frame: Optional[np.ndarray] = None  # First frame for visualization (or mean when loading)
+        self._display_frame: Optional[np.ndarray] = (
+            None  # First frame for visualization (or mean when loading)
+        )
         self.roi_masks: Dict[str, Optional[np.ndarray]] = {"roi_1": None, "roi_2": None}
         self.experiment: Optional["Experiment"] = None
         self.image_processor: Optional["ImageProcessor"] = None
@@ -279,7 +281,11 @@ class NeuronDetectionWidget(QWidget):
         # If saved data has neurons from both ROIs, show both on Detection tab
         if roi_origin is not None and len(roi_origin) > 0:
             uniq = np.unique(roi_origin)
-            if len(uniq) > 1 and self.roi_masks.get("roi_1") is not None and self.roi_masks.get("roi_2") is not None:
+            if (
+                len(uniq) > 1
+                and self.roi_masks.get("roi_1") is not None
+                and self.roi_masks.get("roi_2") is not None
+            ):
                 idx = self.detect_mode_combo.findText(_DETECT_BOTH)
                 if idx >= 0:
                     self.detect_mode_combo.setCurrentIndex(idx)
@@ -471,8 +477,7 @@ class NeuronDetectionWidget(QWidget):
         self.export_trajectories_btn.setEnabled(num_neurons > 0)
         self.export_all_btn.setEnabled(num_neurons > 0)
         self.status_label.setText(
-            f"Detection complete: {num_neurons} neurons detected "
-            f"({num_good} good, {num_bad} bad)"
+            f"Detection complete: {num_neurons} neurons detected ({num_good} good, {num_bad} bad)"
         )
 
         if self.experiment is not None:

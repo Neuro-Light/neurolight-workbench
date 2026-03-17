@@ -410,7 +410,10 @@ class MainWindow(QMainWindow):
         # Connect detection widget to trajectory plot widget
         trajectory_plot_widget = self.analysis.get_neuron_trajectory_plot_widget()
         detection_widget.set_trajectory_plot_callback(
-            lambda trajectories, quality_mask, locations, roi_origin=None: trajectory_plot_widget.plot_trajectories(
+            lambda trajectories,
+            quality_mask,
+            locations,
+            roi_origin=None: trajectory_plot_widget.plot_trajectories(
                 trajectories, quality_mask, locations, roi_origin=roi_origin
             )
         )

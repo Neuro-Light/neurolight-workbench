@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any, Dict
 
 if TYPE_CHECKING:
     from core.image_processor import ImageProcessor
@@ -15,7 +15,9 @@ class DetectionWorker(QThread):
     """Runs neuron detection in a background thread and emits progress (step, total, message)."""
 
     progress = Signal(int, int, str)  # (completed, total, message)
-    finished = Signal(object, object, object)  # (neuron_locations, neuron_trajectories, quality_mask)
+    finished = Signal(
+        object, object, object
+    )  # (neuron_locations, neuron_trajectories, quality_mask)
     error = Signal(str)
 
     def __init__(
@@ -34,6 +36,7 @@ class DetectionWorker(QThread):
 
     def run(self) -> None:
         try:
+
             def on_progress(completed: int, total: int, message: str) -> None:
                 self.progress.emit(completed, total, message)
 

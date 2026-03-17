@@ -25,10 +25,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ui.draggable_spinbox import DraggableSpinBox
-
 from ui.app_settings import get_theme
+from ui.draggable_spinbox import DraggableSpinBox
 from ui.styles import get_mpl_theme
+
 
 def _smooth_display(y: np.ndarray, window: int) -> np.ndarray:
     """Apply a moving average for display only (window in frames); does not alter exported data."""
@@ -68,7 +68,9 @@ class NeuronTrajectoryPlotWidget(QWidget):
         self.roi_view_combo.addItem("Both (ROI 1 & 2)", self.VIEW_BOTH)
         self.roi_view_combo.addItem("ROI 1 only", self.VIEW_ROI1)
         self.roi_view_combo.addItem("ROI 2 only", self.VIEW_ROI2)
-        self.roi_view_combo.setToolTip("Filter trajectories by ROI when detection was run on both ROIs.")
+        self.roi_view_combo.setToolTip(
+            "Filter trajectories by ROI when detection was run on both ROIs."
+        )
         self.roi_view_combo.currentIndexChanged.connect(self._update_plot)
         roi_view_row.addWidget(self.roi_view_combo)
         roi_view_row.addStretch()
@@ -262,13 +264,18 @@ class NeuronTrajectoryPlotWidget(QWidget):
 
         # Build candidate indices (good and/or bad), then apply ROI filter and max limit
         if self.quality_mask is not None:
-            good_indices = np.where(self.quality_mask)[0] if show_good else np.array([], dtype=np.intp)
-            bad_indices = np.where(~self.quality_mask)[0] if show_bad else np.array([], dtype=np.intp)
+            good_indices = (
+                np.where(self.quality_mask)[0] if show_good else np.array([], dtype=np.intp)
+            )
+            bad_indices = (
+                np.where(~self.quality_mask)[0] if show_bad else np.array([], dtype=np.intp)
+            )
             candidates = np.concatenate([good_indices, bad_indices])
         else:
             candidates = np.arange(num_neurons)
 
-        # When we have ROI origin: filter by ROI first, then apply max_neurons per ROI (for Both) or total (for single ROI)
+        # When we have ROI origin: filter by ROI first, then apply max_neurons 
+        #           per ROI (for Both) or total (for single ROI)
         if self.roi_origin is not None and len(candidates) > 0:
             roi_1_candidates = candidates[self.roi_origin[candidates] == 0]
             roi_2_candidates = candidates[self.roi_origin[candidates] == 1]
@@ -367,12 +374,8 @@ class NeuronTrajectoryPlotWidget(QWidget):
         if show_average and len(neurons_to_plot) > 0:
             avg_color = theme.get("avg_trajectory_color", theme.get("average_color", "#e879f9"))
             if use_roi_colors:
-                avg_roi_1_color = theme.get(
-                    "avg_trajectory_roi_1_color", roi_1_color
-                )
-                avg_roi_2_color = theme.get(
-                    "avg_trajectory_roi_2_color", roi_2_color
-                )
+                avg_roi_1_color = theme.get("avg_trajectory_roi_1_color", roi_1_color)
+                avg_roi_2_color = theme.get("avg_trajectory_roi_2_color", roi_2_color)
                 if roi_1_indices:
                     avg_1 = np.mean(self.neuron_trajectories[roi_1_indices], axis=0)
                     ax.plot(

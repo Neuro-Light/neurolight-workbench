@@ -129,7 +129,9 @@ class SettingsDialog(QDialog):
             change_btn.clicked.connect(
                 lambda _checked=False, k=roi_key: self._pick_avg_roi_color(k)
             )
-            change_btn.setToolTip(f"Color for the average trajectory line of {label_text} on the Graphs tab")
+            change_btn.setToolTip(
+                f"Color for the average trajectory line of {label_text} on the Graphs tab"
+            )
             row.addWidget(label)
             row.addWidget(swatch)
             row.addWidget(change_btn)

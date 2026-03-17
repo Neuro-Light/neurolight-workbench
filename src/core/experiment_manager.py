@@ -233,9 +233,7 @@ class Experiment:
 
         # Load per-neuron ROI assignment (0 = ROI 1, 1 = ROI 2)
         if "roi_origin" in data and data["roi_origin"] is not None:
-            self._neuron_detection_data["roi_origin"] = np.array(
-                data["roi_origin"], dtype=np.intp
-            )
+            self._neuron_detection_data["roi_origin"] = np.array(data["roi_origin"], dtype=np.intp)
 
     def set_neuron_detection_data(
         self,

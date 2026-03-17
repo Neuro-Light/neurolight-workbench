@@ -495,6 +495,7 @@ class ImageProcessor:
             )
 
         _total_steps = 5
+
         def _progress(step: int, msg: str) -> None:
             if progress_callback:
                 progress_callback(step, _total_steps, msg)
@@ -591,7 +592,8 @@ class ImageProcessor:
         for neuron_idx, (y_center, x_center) in enumerate(neuron_locations):
             if progress_callback and neuron_idx > 0 and neuron_idx % _report_every == 0:
                 progress_callback(
-                    2, _total_steps,
+                    2,
+                    _total_steps,
                     f"Extracting trajectories... neuron {neuron_idx + 1} of {num_neurons}",
                 )
             # Create circular mask around neuron center
