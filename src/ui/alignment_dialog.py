@@ -8,9 +8,10 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QLabel,
     QMessageBox,
-    QSpinBox,
     QVBoxLayout,
 )
+
+from ui.draggable_spinbox import DraggableSpinBox
 
 
 class AlignmentDialog(QDialog):
@@ -33,7 +34,7 @@ class AlignmentDialog(QDialog):
         ref_group = QGroupBox("Reference Frame")
         ref_layout = QFormLayout()
 
-        self.reference_spinbox = QSpinBox()
+        self.reference_spinbox = DraggableSpinBox()
         self.reference_spinbox.setMinimum(0)
         self.reference_spinbox.setMaximum(max(0, num_frames - 1))
         self.reference_spinbox.setValue(0)

@@ -14,7 +14,6 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
-    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QGroupBox,
@@ -22,10 +21,11 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
-    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
+
+from ui.draggable_spinbox import DraggableDoubleSpinBox, DraggableSpinBox
 
 _DETECT_ROI1 = "Detect ROI 1"
 _DETECT_ROI2 = "Detect ROI 2"
@@ -71,21 +71,21 @@ class NeuronDetectionWidget(QWidget):
         params_layout = QFormLayout()
 
         # Cell size (diameter in pixels)
-        self.cell_size_spin = QSpinBox()
+        self.cell_size_spin = DraggableSpinBox()
         self.cell_size_spin.setRange(2, 50)
         self.cell_size_spin.setValue(6)
         self.cell_size_spin.setToolTip("Neuron diameter in pixels")
         params_layout.addRow("Cell Size (pixels):", self.cell_size_spin)
 
         # Number of peaks
-        self.num_peaks_spin = QSpinBox()
+        self.num_peaks_spin = DraggableSpinBox()
         self.num_peaks_spin.setRange(1, 2000)
         self.num_peaks_spin.setValue(800)
         self.num_peaks_spin.setToolTip("Maximum number of neurons to detect")
         params_layout.addRow("Max Neurons:", self.num_peaks_spin)
 
         # Correlation threshold
-        self.correlation_threshold_spin = QDoubleSpinBox()
+        self.correlation_threshold_spin = DraggableDoubleSpinBox()
         self.correlation_threshold_spin.setRange(0.0, 1.0)
         self.correlation_threshold_spin.setSingleStep(0.1)
         self.correlation_threshold_spin.setValue(0.4)
@@ -96,7 +96,7 @@ class NeuronDetectionWidget(QWidget):
         params_layout.addRow("Correlation Threshold:", self.correlation_threshold_spin)
 
         # Relative threshold
-        self.threshold_rel_spin = QDoubleSpinBox()
+        self.threshold_rel_spin = DraggableDoubleSpinBox()
         self.threshold_rel_spin.setRange(0.0, 1.0)
         self.threshold_rel_spin.setSingleStep(0.01)
         self.threshold_rel_spin.setValue(0.03)
@@ -117,7 +117,7 @@ class NeuronDetectionWidget(QWidget):
         params_layout.addRow("Max Projection:", self.max_projection_checkbox)
 
         # Preprocess sigma
-        self.preprocess_sigma_spin = QDoubleSpinBox()
+        self.preprocess_sigma_spin = DraggableDoubleSpinBox()
         self.preprocess_sigma_spin.setRange(0.0, 3.0)
         self.preprocess_sigma_spin.setSingleStep(0.25)
         self.preprocess_sigma_spin.setValue(1.0)

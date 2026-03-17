@@ -21,13 +21,21 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
-    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
+from ui.draggable_spinbox import DraggableSpinBox
+
 from ui.app_settings import get_theme
 from ui.styles import get_mpl_theme
+
+def _smooth_display(y: np.ndarray, window: int) -> np.ndarray:
+    """Apply a moving average for display only (window in frames); does not alter exported data."""
+    if window < 2 or len(y) < window:
+        return y
+    kernel = np.ones(window, dtype=np.float64) / window
+    return np.convolve(y.astype(np.float64), kernel, mode="same").astype(np.float32)
 
 
 class NeuronTrajectoryPlotWidget(QWidget):
@@ -83,7 +91,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
         options_layout.addRow("Show Bad Neurons:", self.show_bad_checkbox)
 
         # Max neurons to display
-        self.max_neurons_spin = QSpinBox()
+        self.max_neurons_spin = DraggableSpinBox()
         self.max_neurons_spin.setRange(1, 1000)
         self.max_neurons_spin.setValue(50)
         self.max_neurons_spin.setToolTip("Maximum number of neurons to display (for performance)")
@@ -95,6 +103,17 @@ class NeuronTrajectoryPlotWidget(QWidget):
         self.show_average_checkbox.setChecked(True)
         self.show_average_checkbox.stateChanged.connect(self._update_plot)
         options_layout.addRow("Show Average:", self.show_average_checkbox)
+
+        # Smoothing (display only; 0 = none)
+        self.smoothing_spin = DraggableSpinBox()
+        self.smoothing_spin.setRange(0, 51)
+        self.smoothing_spin.setValue(0)
+        self.smoothing_spin.setSpecialValueText("None")
+        self.smoothing_spin.setToolTip(
+            "Moving average window in frames for display only (0 = no smoothing). Export uses raw data."
+        )
+        self.smoothing_spin.valueChanged.connect(self._update_plot)
+        options_layout.addRow("Smoothing (frames):", self.smoothing_spin)
 
         options_group.setLayout(options_layout)
         layout.addWidget(options_group)
@@ -234,6 +253,10 @@ class NeuronTrajectoryPlotWidget(QWidget):
         show_bad = self.show_bad_checkbox.isChecked()
         max_neurons = self.max_neurons_spin.value()
         show_average = self.show_average_checkbox.isChecked()
+        smooth_window = self.smoothing_spin.value()
+
+        def _display_series(y: np.ndarray) -> np.ndarray:
+            return _smooth_display(y, smooth_window) if smooth_window >= 2 else y
 
         view_mode = self.roi_view_combo.currentData()
 
@@ -287,19 +310,21 @@ class NeuronTrajectoryPlotWidget(QWidget):
             for idx in roi_1_indices:
                 ax.plot(
                     frames,
-                    self.neuron_trajectories[idx],
+                    _display_series(self.neuron_trajectories[idx]),
                     color=roi_1_color,
                     alpha=0.4,
                     linewidth=0.8,
+                    antialiased=True,
                     label="ROI 1" if idx == roi_1_indices[0] else "",
                 )
             for idx in roi_2_indices:
                 ax.plot(
                     frames,
-                    self.neuron_trajectories[idx],
+                    _display_series(self.neuron_trajectories[idx]),
                     color=roi_2_color,
                     alpha=0.4,
                     linewidth=0.8,
+                    antialiased=True,
                     label="ROI 2" if idx == roi_2_indices[0] else "",
                 )
         elif self.quality_mask is not None:
@@ -308,10 +333,11 @@ class NeuronTrajectoryPlotWidget(QWidget):
                 for idx in good_to_plot:
                     ax.plot(
                         frames,
-                        self.neuron_trajectories[idx],
+                        _display_series(self.neuron_trajectories[idx]),
                         color=theme["good_color"],
                         alpha=0.4,
                         linewidth=0.8,
+                        antialiased=True,
                         label="Good Neurons" if idx == good_to_plot[0] else "",
                     )
             bad_to_plot = [i for i in neurons_to_plot if not self.quality_mask[i]]
@@ -319,20 +345,22 @@ class NeuronTrajectoryPlotWidget(QWidget):
                 for idx in bad_to_plot:
                     ax.plot(
                         frames,
-                        self.neuron_trajectories[idx],
+                        _display_series(self.neuron_trajectories[idx]),
                         color=theme["bad_color"],
                         alpha=0.4,
                         linewidth=0.8,
+                        antialiased=True,
                         label="Bad Neurons" if idx == bad_to_plot[0] else "",
                     )
         else:
             for idx in neurons_to_plot:
                 ax.plot(
                     frames,
-                    self.neuron_trajectories[idx],
+                    _display_series(self.neuron_trajectories[idx]),
                     color=theme["neutral_color"],
                     alpha=0.4,
                     linewidth=0.8,
+                    antialiased=True,
                     label="Neurons" if idx == neurons_to_plot[0] else "",
                 )
 
@@ -348,17 +376,21 @@ class NeuronTrajectoryPlotWidget(QWidget):
                 if roi_1_indices:
                     avg_1 = np.mean(self.neuron_trajectories[roi_1_indices], axis=0)
                     ax.plot(
-                        frames, avg_1,
+                        frames,
+                        _display_series(avg_1),
                         color=avg_roi_1_color,
                         linewidth=2.5,
+                        antialiased=True,
                         label="Average (ROI 1)",
                     )
                 if roi_2_indices:
                     avg_2 = np.mean(self.neuron_trajectories[roi_2_indices], axis=0)
                     ax.plot(
-                        frames, avg_2,
+                        frames,
+                        _display_series(avg_2),
                         color=avg_roi_2_color,
                         linewidth=2.5,
+                        antialiased=True,
                         label="Average (ROI 2)",
                     )
             elif self.quality_mask is not None and show_good:
@@ -367,18 +399,20 @@ class NeuronTrajectoryPlotWidget(QWidget):
                     avg_trajectory = np.mean(self.neuron_trajectories[good_in_plot], axis=0)
                     ax.plot(
                         frames,
-                        avg_trajectory,
+                        _display_series(avg_trajectory),
                         color=avg_color,
                         linewidth=2.5,
+                        antialiased=True,
                         label="Average (Good Neurons)",
                     )
             else:
                 avg_trajectory = np.mean(self.neuron_trajectories[neurons_to_plot], axis=0)
                 ax.plot(
                     frames,
-                    avg_trajectory,
+                    _display_series(avg_trajectory),
                     color=avg_color,
                     linewidth=2.5,
+                    antialiased=True,
                     label="Average",
                 )
 
