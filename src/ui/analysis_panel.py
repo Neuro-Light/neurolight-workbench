@@ -1,8 +1,8 @@
 from PySide6.QtWidgets import QLabel, QTabWidget, QVBoxLayout, QWidget
 
+from ui.lomb_scargle_plot import LombScarglePlotWidget
 from ui.neuron_detection_widget import NeuronDetectionWidget
 from ui.neuron_trajectory_plot import NeuronTrajectoryPlotWidget
-from ui.lomb_scargle_plot import LombScarglePlotWidget
 from ui.rayleigh_plot import RayLeighPlotWidget
 from ui.roi_intensity_plot import ROIIntensityPlotWidget
 

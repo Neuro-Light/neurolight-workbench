@@ -417,8 +417,6 @@ class MainWindow(QMainWindow):
         trajectory_plot_widget = self.analysis.get_neuron_trajectory_plot_widget()
         rayleigh_plot_getter = getattr(self.analysis, "get_rayleigh_plot_widget", None)
         rayleigh_plot_widget = rayleigh_plot_getter() if callable(rayleigh_plot_getter) else None
-        lomb_scargle_getter = getattr(self.analysis, "get_lomb_scargle_widget", None)
-        lomb_scargle_widget = lomb_scargle_getter() if callable(lomb_scargle_getter) else None
 
         def _update_neuron_plots(
             trajectories,
