@@ -94,12 +94,32 @@ class RayLeighPlotWidget(QWidget):
         sidebar_layout.addWidget(controls_group)
 
         # Text summary of Rayleigh / Rao statistics (left panel, larger font, below options)
-        self.stats_label = QLabel("")
-        self.stats_label.setAlignment(Qt.AlignCenter)
-        self.stats_label.setWordWrap(True)
-        self.stats_label.setStyleSheet("font-size: 15px; font-weight: 600;")
-        sidebar_layout.addWidget(self.stats_label)
+        stats_container = QVBoxLayout()
+        stats_container.setSpacing(4)
 
+        self.rayleigh_title_label = QLabel("Rayleigh:")
+        self.rayleigh_title_label.setAlignment(Qt.AlignCenter)
+        self.rayleigh_title_label.setStyleSheet("font-size: 16px; font-weight: 700; color: #4A90E2;")
+        stats_container.addWidget(self.rayleigh_title_label)
+
+        self.rayleigh_stats_label = QLabel("")
+        self.rayleigh_stats_label.setAlignment(Qt.AlignCenter)
+        self.rayleigh_stats_label.setWordWrap(True)
+        self.rayleigh_stats_label.setStyleSheet("font-size: 14px; font-weight: 500;")
+        stats_container.addWidget(self.rayleigh_stats_label)
+
+        self.rao_title_label = QLabel("Rao:")
+        self.rao_title_label.setAlignment(Qt.AlignCenter)
+        self.rao_title_label.setStyleSheet("font-size: 16px; font-weight: 700; color: #4A90E2; margin-top: 6px;")
+        stats_container.addWidget(self.rao_title_label)
+
+        self.rao_stats_label = QLabel("")
+        self.rao_stats_label.setAlignment(Qt.AlignCenter)
+        self.rao_stats_label.setWordWrap(True)
+        self.rao_stats_label.setStyleSheet("font-size: 14px; font-weight: 500;")
+        stats_container.addWidget(self.rao_stats_label)
+
+        sidebar_layout.addLayout(stats_container)
         sidebar_layout.addStretch()
 
         scroll = QScrollArea()
@@ -274,8 +294,9 @@ class RayLeighPlotWidget(QWidget):
             f"Peak Times (Modulo 24h)\nStart {title_time}  |  Interval {interval_minutes} min",
             fontsize=12,
         )
-        # --- Rayleigh and Rao statistics summary (below plot + in sidebar) -------
-        stats_text = ""
+        # --- Rayleigh and Rao statistics summary (sidebar only) -------------------
+        rayleigh_text = ""
+        rao_text = ""
         try:
             rayleigh = rayleigh_test(theta)
             angles_deg = np.degrees(theta) % 360.0
@@ -286,15 +307,14 @@ class RayLeighPlotWidget(QWidget):
             U = rao["U"]
             p_rao = rao["p_value"]
 
-            stats_text = (
-                f"Rayleigh: r = {r:.3f}, p ≈ {p_rayleigh:.3g}\n"
-                f"Rao's U = {U:.1f}, p {p_rao}"
-            )
+            rayleigh_text = f"r = {r:.3f}, p ≈ {p_rayleigh:.3g}"
+            rao_text = f"U = {U:.1f}, p {p_rao}"
         except Exception:
-            stats_text = ""
+            rayleigh_text = ""
+            rao_text = ""
 
-        # Only show stats in the left sidebar (large, prominent text)
-        self.stats_label.setText(stats_text)
+        self.rayleigh_stats_label.setText(rayleigh_text)
+        self.rao_stats_label.setText(rao_text)
 
         ax.legend(loc="lower left", bbox_to_anchor=(1.05, 0.1))
         self._apply_theme(ax)
