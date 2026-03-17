@@ -12,6 +12,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QFileDialog,
@@ -28,6 +29,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ui.detection_progress_dialog import DetectionProgressDialog
+from ui.detection_worker import DetectionWorker
 from ui.draggable_spinbox import DraggableDoubleSpinBox, DraggableSpinBox
 
 _DETECT_ROI1 = "Detect ROI 1"
@@ -51,6 +54,8 @@ class NeuronDetectionWidget(QWidget):
         self.experiment: Optional["Experiment"] = None
         self.image_processor: Optional["ImageProcessor"] = None
         self.frame_data: Optional[np.ndarray] = None
+        self._detection_progress_dialog: Optional[DetectionProgressDialog] = None
+        self._detection_worker: Optional[DetectionWorker] = None
 
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -363,7 +368,7 @@ class NeuronDetectionWidget(QWidget):
                 self.status_label.setText("Ready to detect neurons.")
 
     def _run_detection(self) -> None:
-        """Run neuron detection using the selected detection mode."""
+        """Run neuron detection in a background thread with progress dialog."""
         effective = self._effective_mask()
         if self.frame_data is None or effective is None or self.image_processor is None:
             QMessageBox.warning(
@@ -373,122 +378,126 @@ class NeuronDetectionWidget(QWidget):
             )
             return
 
-        try:
-            cell_size = self.cell_size_spin.value()
-            num_peaks = self.num_peaks_spin.value()
-            correlation_threshold = self.correlation_threshold_spin.value()
-            threshold_rel = self.threshold_rel_spin.value()
-            apply_detrending = self.detrending_checkbox.isChecked()
-            use_max_projection = self.max_projection_checkbox.isChecked()
-            preprocess_sigma = self.preprocess_sigma_spin.value()
-
-            self.detect_btn.setEnabled(False)
-            self.status_label.setText("Detecting neurons...")
-            QMessageBox.information(
+        if self._detection_worker is not None and self._detection_worker.isRunning():
+            QMessageBox.warning(
                 self,
-                "Detection Started",
-                "Neuron detection is running. This may take a moment...",
+                "Detection in Progress",
+                "Neuron detection is already running. Please wait for it to finish.",
             )
+            return
 
-            self.neuron_locations, self.neuron_trajectories, self.quality_mask = (
-                self.image_processor.detect_neurons_in_roi(
-                    self.frame_data,
-                    effective,
-                    cell_size=cell_size,
-                    num_peaks=num_peaks,
-                    correlation_threshold=correlation_threshold,
-                    threshold_rel=threshold_rel,
-                    apply_detrending=apply_detrending,
-                    use_max_projection=use_max_projection,
-                    preprocess_sigma=preprocess_sigma,
-                )
-            )
+        params = {
+            "cell_size": self.cell_size_spin.value(),
+            "num_peaks": self.num_peaks_spin.value(),
+            "correlation_threshold": self.correlation_threshold_spin.value(),
+            "threshold_rel": self.threshold_rel_spin.value(),
+            "apply_detrending": self.detrending_checkbox.isChecked(),
+            "use_max_projection": self.max_projection_checkbox.isChecked(),
+            "preprocess_sigma": self.preprocess_sigma_spin.value(),
+        }
 
+        self.detect_btn.setEnabled(False)
+        self._detection_progress_dialog = DetectionProgressDialog(self, total_steps=5)
+        self._detection_progress_dialog.show()
+        QApplication.processEvents()
+
+        self._detection_worker = DetectionWorker(
+            self.image_processor,
+            self.frame_data,
+            effective,
+            params,
+            parent=self,
+        )
+        self._detection_worker.progress.connect(self._detection_progress_dialog.update_progress)
+        self._detection_worker.finished.connect(self._on_detection_finished)
+        self._detection_worker.error.connect(self._on_detection_error)
+        self._detection_worker.start()
+
+    def _on_detection_finished(
+        self,
+        neuron_locations: np.ndarray,
+        neuron_trajectories: np.ndarray,
+        quality_mask: np.ndarray,
+    ) -> None:
+        """Apply detection results and update UI after worker completes."""
+        self._detection_worker = None
+        if self._detection_progress_dialog is not None:
+            self._detection_progress_dialog.close()
+            self._detection_progress_dialog = None
+
+        self.neuron_locations = neuron_locations
+        self.neuron_trajectories = neuron_trajectories
+        self.quality_mask = quality_mask
+
+        effective = self._effective_mask()
+        if self.frame_data is not None and effective is not None:
             roi_region_stack = np.zeros_like(self.frame_data)
             for t in range(self.frame_data.shape[0]):
                 roi_region_stack[t] = self.frame_data[t] * effective.astype(self.frame_data.dtype)
-
-            # Rescale to 0-1 for visualization
             frame_min = np.min(roi_region_stack)
             frame_max = np.max(roi_region_stack)
             if frame_max > frame_min:
                 roi_region_stack = (roi_region_stack - frame_min) / (frame_max - frame_min)
-
             self.mean_frame = np.mean(roi_region_stack, axis=0)
-            self._display_frame = roi_region_stack[0].copy()  # First frame for display
+            self._display_frame = roi_region_stack[0].copy()
+        else:
+            self.mean_frame = None
+            self._display_frame = None
 
-            # Update visualization
-            self._visualize_results()
+        self._visualize_results()
 
-            # Update statistics
-            num_neurons = len(self.neuron_locations)
-            num_good = np.sum(self.quality_mask) if self.quality_mask is not None else 0
-            num_bad = num_neurons - num_good
+        num_neurons = len(self.neuron_locations)
+        num_good = np.sum(self.quality_mask) if self.quality_mask is not None else 0
+        num_bad = num_neurons - num_good
+        self.stats_label.setText(
+            f"Total Neurons: {num_neurons} | Good: {num_good} | Bad: {num_bad}"
+        )
+        self.export_locations_btn.setEnabled(num_neurons > 0)
+        self.export_trajectories_btn.setEnabled(num_neurons > 0)
+        self.export_all_btn.setEnabled(num_neurons > 0)
+        self.status_label.setText(
+            f"Detection complete: {num_neurons} neurons detected "
+            f"({num_good} good, {num_bad} bad)"
+        )
 
-            self.stats_label.setText(
-                f"Total Neurons: {num_neurons} | Good: {num_good} | Bad: {num_bad}"
+        if self.experiment is not None:
+            detection_params = {
+                "cell_size": self.cell_size_spin.value(),
+                "num_peaks": self.num_peaks_spin.value(),
+                "correlation_threshold": self.correlation_threshold_spin.value(),
+                "threshold_rel": self.threshold_rel_spin.value(),
+                "apply_detrending": self.detrending_checkbox.isChecked(),
+            }
+            self.experiment.set_neuron_detection_data(
+                neuron_locations=self.neuron_locations,
+                neuron_trajectories=self.neuron_trajectories,
+                quality_mask=self.quality_mask,
+                mean_frame=None,
+                detection_params=detection_params,
             )
+            if hasattr(self, "save_experiment_callback"):
+                self.save_experiment_callback()
 
-            # Enable export buttons
-            self.export_locations_btn.setEnabled(num_neurons > 0)
-            self.export_trajectories_btn.setEnabled(num_neurons > 0)
-            self.export_all_btn.setEnabled(num_neurons > 0)
-
-            self.status_label.setText(
-                f"Detection complete: {num_neurons} neurons detected "
-                f"({num_good} good, {num_bad} bad)"
+        roi_origin = self._compute_roi_origin()
+        if hasattr(self, "trajectory_plot_callback"):
+            self.trajectory_plot_callback(
+                self.neuron_trajectories,
+                self.quality_mask,
+                self.neuron_locations,
+                roi_origin=roi_origin,
             )
+        self.detectionCompleted.emit()
+        self.detect_btn.setEnabled(True)
 
-            # Save detection data to experiment
-            if self.experiment is not None:
-                # Get detection parameters
-                detection_params = {
-                    "cell_size": cell_size,
-                    "num_peaks": num_peaks,
-                    "correlation_threshold": correlation_threshold,
-                    "threshold_rel": threshold_rel,
-                    "apply_detrending": apply_detrending,
-                }
-
-                # Set detection data in experiment
-                # Note: mean_frame is NOT saved to reduce file size (can be recalculated)
-                self.experiment.set_neuron_detection_data(
-                    neuron_locations=self.neuron_locations,
-                    neuron_trajectories=self.neuron_trajectories,
-                    quality_mask=self.quality_mask,
-                    mean_frame=None,  # Don't save mean_frame - it can be recalculated
-                    detection_params=detection_params,
-                )
-
-                # Verify data was set (for debugging)
-                saved_data = self.experiment.get_neuron_detection_data()
-                if saved_data is None:
-                    # Data wasn't set, log error
-                    import logging
-
-                    logger = logging.getLogger(__name__)
-                    logger.error("Failed to set neuron detection data in experiment")
-
-                # Auto-save experiment if path is available
-                if hasattr(self, "save_experiment_callback"):
-                    self.save_experiment_callback()
-
-            # Notify trajectory plot widget (if connected)
-            roi_origin = self._compute_roi_origin()
-            if hasattr(self, "trajectory_plot_callback"):
-                self.trajectory_plot_callback(
-                    self.neuron_trajectories,
-                    self.quality_mask,
-                    self.neuron_locations,
-                    roi_origin=roi_origin,
-                )
-            self.detectionCompleted.emit()
-
-        except Exception as e:
-            QMessageBox.critical(self, "Detection Failed", f"Failed to detect neurons:\n{str(e)}")
-            self.status_label.setText(f"Detection failed: {str(e)}")
-        finally:
-            self.detect_btn.setEnabled(True)
+    def _on_detection_error(self, message: str) -> None:
+        """Handle detection worker error."""
+        self._detection_worker = None
+        if self._detection_progress_dialog is not None:
+            self._detection_progress_dialog.close()
+            self._detection_progress_dialog = None
+        QMessageBox.critical(self, "Detection Failed", f"Failed to detect neurons:\n{message}")
+        self.status_label.setText(f"Detection failed: {message}")
+        self.detect_btn.setEnabled(True)
 
     def _visualize_results(self) -> None:
         """Visualize detected neurons as crosses overlaid on the first frame (zoomed to ROI, contrast enhanced)."""

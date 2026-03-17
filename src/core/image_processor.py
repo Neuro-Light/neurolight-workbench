@@ -431,6 +431,7 @@ class ImageProcessor:
         apply_detrending: bool = True,
         use_max_projection: bool = True,
         preprocess_sigma: float = 1.0,
+        progress_callback: Optional[Callable[[int, int, str], None]] = None,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Detect neurons within a specified ROI using local maxima detection.
@@ -493,10 +494,15 @@ class ImageProcessor:
                 f"roi_mask shape {roi_mask.shape} must match image dimensions ({height}, {width})"
             )
 
+        _total_steps = 5
+        def _progress(step: int, msg: str) -> None:
+            if progress_callback:
+                progress_callback(step, _total_steps, msg)
+
         # ============================================================
         # Step 1: Image Preprocessing
         # ============================================================
-        # Extract ROI region from all frames
+        _progress(0, "Extracting ROI and preprocessing frames...")
         roi_region_stack = np.zeros((num_frames, height, width), dtype=frame_data.dtype)
         for t in range(num_frames):
             roi_region_stack[t] = frame_data[t] * roi_mask.astype(frame_data.dtype)
@@ -528,6 +534,7 @@ class ImageProcessor:
         # ============================================================
         # Step 2: Neuron Detection (Local Maxima)
         # ============================================================
+        _progress(1, "Detecting neuron positions (local maxima)...")
         # Footprint: find maxima over a neuron-sized region (reduces spurious
         # single-pixel peaks). In scikit-image 0.21+, footprint and min_distance
         # are mutually exclusive; we use footprint only.
@@ -543,7 +550,7 @@ class ImageProcessor:
         )
 
         if len(peaks) == 0:
-            # No neurons detected
+            _progress(_total_steps, "No neurons detected in this ROI.")
             return (
                 np.array([], dtype=np.int32).reshape(0, 2),  # Empty array with shape (0, 2)
                 np.array([]).reshape(0, num_frames),  # Empty trajectories
@@ -561,7 +568,7 @@ class ImageProcessor:
                 valid_neurons.append(i)
 
         if len(valid_neurons) == 0:
-            # No valid neurons in ROI
+            _progress(_total_steps, "No valid neurons within ROI mask.")
             return (
                 np.array([], dtype=np.int32).reshape(0, 2),
                 np.array([]).reshape(0, num_frames),
@@ -574,15 +581,19 @@ class ImageProcessor:
         # ============================================================
         # Step 3: Trajectory Extraction
         # ============================================================
-        # For each detected neuron, extract mean intensity over time
-        # within a circular region around the center
+        _progress(2, f"Extracting intensity trajectories ({num_neurons} neurons)...")
         radius = cell_size / 2
         neuron_trajectories = np.zeros((num_neurons, num_frames), dtype=np.float32)
 
-        # Create coordinate grids for circular mask
         y_coords, x_coords = np.ogrid[:height, :width]
+        _report_every = max(1, num_neurons // 20)  # Report ~20 times during loop
 
         for neuron_idx, (y_center, x_center) in enumerate(neuron_locations):
+            if progress_callback and neuron_idx > 0 and neuron_idx % _report_every == 0:
+                progress_callback(
+                    2, _total_steps,
+                    f"Extracting trajectories... neuron {neuron_idx + 1} of {num_neurons}",
+                )
             # Create circular mask around neuron center
             dist_sq = (y_coords - y_center) ** 2 + (x_coords - x_center) ** 2
             circle_mask = dist_sq <= (radius**2)
@@ -599,7 +610,7 @@ class ImageProcessor:
         # ============================================================
         # Step 4: Quality Filtering (Correlation-based)
         # ============================================================
-        # Calculate correlation matrix between all neuron trajectories
+        _progress(3, "Computing quality (correlation with other neurons)...")
         if num_neurons > 1:
             # Compute pairwise correlations
             correlation_matrix = np.corrcoef(neuron_trajectories)
@@ -621,6 +632,7 @@ class ImageProcessor:
         # ============================================================
         # Step 5: Detrending (Optional)
         # ============================================================
+        _progress(4, "Applying detrending (removing slow drift)...")
         if apply_detrending and num_frames > 71:  # Need enough frames for Savitzky-Golay
             window_length = min(71, num_frames if num_frames % 2 == 1 else num_frames - 1)
             if window_length >= 5:  # Minimum window length for polyorder=3
@@ -636,4 +648,5 @@ class ImageProcessor:
                         # If filtering fails (e.g., too few points), skip detrending
                         pass
 
+        _progress(_total_steps, f"Detection complete. Found {num_neurons} neurons.")
         return neuron_locations, neuron_trajectories, quality_mask
