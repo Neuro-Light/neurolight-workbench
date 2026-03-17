@@ -125,4 +125,3 @@ def compute_lomb_scargle(
         "uneven_sampling": uneven,
         "n_samples": n,
     }
-

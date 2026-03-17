@@ -458,4 +458,3 @@ class LombScarglePlotWidget(QWidget):
             QMessageBox.information(self, "Export Successful", f"Periodogram data exported to:\n{file_path}")
         except Exception as e:
             QMessageBox.critical(self, "Export Failed", f"Failed to export data:\n{e}")
-
