@@ -269,8 +269,13 @@ class RayLeighPlotWidget(QWidget):
         ax.set_theta_direction(-1)
         ax.set_ylim(0, 1.05)
         ax.set_yticks([])
-        ax.set_xticks([0, np.pi / 2, np.pi, 3 * np.pi / 2])
-        ax.set_xticklabels(["24", "6", "12", "18"])
+        # Show tick labels for all even hours around the 24-hour circle.
+        # We label "24" instead of "0" at the top for readability.
+        even_hours = np.arange(0, 24, 2)
+        even_thetas = (even_hours / 24.0) * (2 * np.pi)
+        even_labels = ["24" if h == 0 else str(h) for h in even_hours]
+        ax.set_xticks(even_thetas)
+        ax.set_xticklabels(even_labels)
 
         theme = get_mpl_theme(get_theme())
 
