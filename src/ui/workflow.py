@@ -46,10 +46,7 @@ STEP_DEFINITIONS: Dict[WorkflowStep, StepMeta] = {
     WorkflowStep.LOAD_IMAGES: StepMeta(
         index=1,
         short_label="Load Image Stack",
-        tooltip=(
-            "Load the image stack to analyze. "
-            "Use File → Open Image Stack or the Open Images button."
-        ),
+        tooltip=("Load the image stack to analyze. Use File → Open Image Stack or the Open Images button."),
         description=(
             "Start by loading the image stack you want to analyze. "
             "You can use File → Open Image Stack, the Open Images "
@@ -69,10 +66,7 @@ STEP_DEFINITIONS: Dict[WorkflowStep, StepMeta] = {
         index=3,
         short_label="Align Images",
         tooltip="Align frames in the stack using PyStackReg to correct motion.",
-        description=(
-            "Run image alignment from the Tools → Align Images "
-            "menu to correct for motion across the stack."
-        ),
+        description=("Run image alignment from the Tools → Align Images menu to correct for motion across the stack."),
     ),
     WorkflowStep.SELECT_ROI: StepMeta(
         index=4,
@@ -261,7 +255,7 @@ class WorkflowManager(QObject):
         in the workflow when they open older .nexp files.
         """
         has_stack = bool(self._experiment.image_stack_path)
-        has_roi = bool(self._experiment.roi)
+        has_roi = any(self._experiment.rois.get(k) for k in ("roi_1", "roi_2"))
         has_detection = self._experiment.get_neuron_detection_data() is not None
 
         if has_stack:
@@ -353,10 +347,7 @@ class WorkflowStepper(QFrame):
                 arrow = QLabel("\U000021e8")
                 arrow.setAlignment(Qt.AlignCenter)
                 arrow.setObjectName("workflowStepperArrow")
-                arrow.setStyleSheet(
-                    "color: #f97316; font-weight: 600; padding: 0 4px; font-size: 38px;"
-                )
-                arrow.setFixedWidth(28)
+                arrow.setFixedWidth(40)
                 steps_row.addWidget(arrow)
 
         root_layout.addLayout(steps_row)
@@ -438,19 +429,21 @@ class WorkflowStepper(QFrame):
 
         for step, button in self._step_buttons.items():
             status = self._manager.get_step_status(step)
-            is_active = status == StepStatus.ACTIVE
+            is_current = step == current
             is_completed = status == StepStatus.COMPLETED
 
-            button.setChecked(is_active)
+            button.setChecked(is_current)
             button.setEnabled(self._manager.can_navigate_to_step(step))
-            self._apply_step_style(button, status)
+            self._apply_step_style(button, status, is_current)
 
-            # Simple visual encoding via dynamic properties (picked up by stylesheet if desired)
-            button.setProperty("workflowStatus", status.name.lower())
+            # Dynamic properties for stylesheet hooks
+            if is_current:
+                button.setProperty("workflowStatus", "active")
+            else:
+                button.setProperty("workflowStatus", status.name.lower())
             button.style().unpolish(button)
             button.style().polish(button)
 
-            # Prefix completed steps with a checkmark-like indicator in the text
             meta = STEP_DEFINITIONS[step]
             if is_completed:
                 button.setText(f"✓ {meta.index}\n{meta.short_label}")
@@ -462,9 +455,7 @@ class WorkflowStepper(QFrame):
         self._description_label.setText(current_meta.description)
 
         # Next button only enabled when the active step is marked ready (and not the final step)
-        can_advance = current != WorkflowStep.ANALYZE_GRAPHS and self._manager.is_step_ready(
-            current
-        )
+        can_advance = current != WorkflowStep.ANALYZE_GRAPHS and self._manager.is_step_ready(current)
         self._next_button.setEnabled(can_advance)
 
         # Show Align/Skip controls only on the alignment step
@@ -472,21 +463,35 @@ class WorkflowStepper(QFrame):
         self._align_button.setVisible(is_align_step)
         self._skip_align_button.setVisible(is_align_step)
 
-    def _apply_step_style(self, button: QToolButton, status: StepStatus) -> None:
-        palette = {
-            StepStatus.ACTIVE: ("#111827", "#f97316", "#ffffff", "600"),
-            StepStatus.COMPLETED: ("#064e3b", "#10b981", "#e0f2f1", "500"),
-            StepStatus.LOCKED: ("#1f2937", "#4b5563", "#94a3b8", "400"),
-        }
-        bg, border, text, weight = palette.get(status, ("#1f2937", "#4b5563", "#94a3b8", "400"))
+    def _apply_step_style(self, button: QToolButton, status: StepStatus, is_current: bool) -> None:
+        if is_current:
+            # Vivid highlight so the user always knows which step they're on
+            bg = "#1e3a5f"
+            border = "#4A90E2"
+            text = "#ffffff"
+            weight = "700"
+            border_w = 3
+        elif status == StepStatus.COMPLETED:
+            bg = "#064e3b"
+            border = "#10b981"
+            text = "#e0f2f1"
+            weight = "500"
+            border_w = 2
+        else:
+            bg = "#1f2937"
+            border = "#4b5563"
+            text = "#94a3b8"
+            weight = "400"
+            border_w = 2
+
         style = (
             "QToolButton {{"
             "border-radius: 10px;"
             "padding: 8px 6px;"
             "background-color: {bg};"
             "color: {fg};"
-            "border: 2px solid {border};"
+            "border: {bw}px solid {border};"
             "font-weight: {weight};"
             "}}"
-        ).format(bg=bg, fg=text, border=border, weight=weight)
+        ).format(bg=bg, fg=text, border=border, weight=weight, bw=border_w)
         button.setStyleSheet(style)

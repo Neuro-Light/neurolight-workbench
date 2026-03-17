@@ -8,9 +8,10 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QLabel,
     QMessageBox,
-    QSpinBox,
     QVBoxLayout,
 )
+
+from ui.draggable_spinbox import DraggableSpinBox
 
 
 class AlignmentDialog(QDialog):
@@ -33,7 +34,7 @@ class AlignmentDialog(QDialog):
         ref_group = QGroupBox("Reference Frame")
         ref_layout = QFormLayout()
 
-        self.reference_spinbox = QSpinBox()
+        self.reference_spinbox = DraggableSpinBox()
         self.reference_spinbox.setMinimum(0)
         self.reference_spinbox.setMaximum(max(0, num_frames - 1))
         self.reference_spinbox.setValue(0)
@@ -97,7 +98,13 @@ class AlignmentDialog(QDialog):
         self.reference_index = value
 
     def _on_transform_changed(self, index: int):
-        transform_types = ["rigid_body", "translation", "scaled_rotation", "affine", "bilinear"]
+        transform_types = [
+            "rigid_body",
+            "translation",
+            "scaled_rotation",
+            "affine",
+            "bilinear",
+        ]
         self.transform_type = transform_types[index]
 
     def _on_reference_strategy_changed(self, index: int):
@@ -115,9 +122,7 @@ class AlignmentDialog(QDialog):
     def accept(self) -> None:
         """Validate and accept the dialog."""
         if self.num_frames == 0:
-            QMessageBox.warning(
-                self, "No Images", "No images loaded. Please load an image stack first."
-            )
+            QMessageBox.warning(self, "No Images", "No images loaded. Please load an image stack first.")
             return
 
         if self.reference_index < 0 or self.reference_index >= self.num_frames:

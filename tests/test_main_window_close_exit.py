@@ -59,6 +59,8 @@ def main_window(app, sample_experiment):
     mock_viewer.stackLoaded.connect = Mock()
     mock_viewer.roiSelected = Mock()
     mock_viewer.roiSelected.connect = Mock()
+    mock_viewer.roiDeleted = Mock()
+    mock_viewer.roiDeleted.connect = Mock()
     mock_viewer.displaySettingsChanged = Mock()
     mock_viewer.displaySettingsChanged.connect = Mock()
 
@@ -129,9 +131,7 @@ class TestCloseExperiment:
         with (
             patch.object(QMessageBox, "question") as mock_question,
             patch.object(main_window, "hide") as mock_hide,
-            patch(
-                "ui.main_window.StartupDialog", return_value=mock_startup_dialog
-            ) as mock_startup_cls,
+            patch("ui.main_window.StartupDialog", return_value=mock_startup_dialog) as mock_startup_cls,
             patch.object(QApplication, "quit") as mock_quit,
         ):
             mock_question.return_value = QMessageBox.Yes
