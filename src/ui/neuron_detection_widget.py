@@ -16,11 +16,14 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QMessageBox,
     QPushButton,
+    QScrollArea,
+    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -43,20 +46,27 @@ class NeuronDetectionWidget(QWidget):
         self.neuron_trajectories: Optional[np.ndarray] = None
         self.quality_mask: Optional[np.ndarray] = None
         self.mean_frame: Optional[np.ndarray] = None
+        self._display_frame: Optional[np.ndarray] = None  # First frame for visualization (or mean when loading)
         self.roi_masks: Dict[str, Optional[np.ndarray]] = {"roi_1": None, "roi_2": None}
         self.experiment: Optional["Experiment"] = None
         self.image_processor: Optional["ImageProcessor"] = None
         self.frame_data: Optional[np.ndarray] = None
 
-        layout = QVBoxLayout(self)
+        main_layout = QHBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
 
-        # Status label
+        # Sidebar: controls (fixed width, scrollable if needed)
+        sidebar = QFrame()
+        sidebar.setMaximumWidth(300)
+        sidebar.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(8, 8, 8, 8)
+
         self.status_label = QLabel("No ROI selected. Select an ROI in the image viewer.")
         self.status_label.setAlignment(Qt.AlignCenter)
         self.status_label.setWordWrap(True)
-        layout.addWidget(self.status_label)
+        sidebar_layout.addWidget(self.status_label)
 
-        # Detection mode selector
         mode_row = QHBoxLayout()
         mode_row.addWidget(QLabel("Detection target:"))
         self.detect_mode_combo = QComboBox()
@@ -64,27 +74,23 @@ class NeuronDetectionWidget(QWidget):
         self.detect_mode_combo.setToolTip("Choose which ROI(s) to run neuron detection on")
         self.detect_mode_combo.currentIndexChanged.connect(lambda _: self._update_ui_state())
         mode_row.addWidget(self.detect_mode_combo, 1)
-        layout.addLayout(mode_row)
+        sidebar_layout.addLayout(mode_row)
 
-        # Parameters group
         params_group = QGroupBox("Detection Parameters")
         params_layout = QFormLayout()
 
-        # Cell size (diameter in pixels)
         self.cell_size_spin = DraggableSpinBox()
         self.cell_size_spin.setRange(2, 50)
         self.cell_size_spin.setValue(6)
         self.cell_size_spin.setToolTip("Neuron diameter in pixels")
         params_layout.addRow("Cell Size (pixels):", self.cell_size_spin)
 
-        # Number of peaks
         self.num_peaks_spin = DraggableSpinBox()
         self.num_peaks_spin.setRange(1, 2000)
         self.num_peaks_spin.setValue(800)
         self.num_peaks_spin.setToolTip("Maximum number of neurons to detect")
         params_layout.addRow("Max Neurons:", self.num_peaks_spin)
 
-        # Correlation threshold
         self.correlation_threshold_spin = DraggableDoubleSpinBox()
         self.correlation_threshold_spin.setRange(0.0, 1.0)
         self.correlation_threshold_spin.setSingleStep(0.1)
@@ -95,7 +101,6 @@ class NeuronDetectionWidget(QWidget):
         )
         params_layout.addRow("Correlation Threshold:", self.correlation_threshold_spin)
 
-        # Relative threshold
         self.threshold_rel_spin = DraggableDoubleSpinBox()
         self.threshold_rel_spin.setRange(0.0, 1.0)
         self.threshold_rel_spin.setSingleStep(0.01)
@@ -107,7 +112,6 @@ class NeuronDetectionWidget(QWidget):
         )
         params_layout.addRow("Peak Threshold:", self.threshold_rel_spin)
 
-        # Max projection checkbox
         self.max_projection_checkbox = QCheckBox()
         self.max_projection_checkbox.setChecked(True)
         self.max_projection_checkbox.setToolTip(
@@ -116,7 +120,6 @@ class NeuronDetectionWidget(QWidget):
         )
         params_layout.addRow("Max Projection:", self.max_projection_checkbox)
 
-        # Preprocess sigma
         self.preprocess_sigma_spin = DraggableDoubleSpinBox()
         self.preprocess_sigma_spin.setRange(0.0, 3.0)
         self.preprocess_sigma_spin.setSingleStep(0.25)
@@ -128,51 +131,59 @@ class NeuronDetectionWidget(QWidget):
         )
         params_layout.addRow("Smoothing (sigma):", self.preprocess_sigma_spin)
 
-        # Detrending checkbox
         self.detrending_checkbox = QCheckBox()
         self.detrending_checkbox.setChecked(True)
         self.detrending_checkbox.setToolTip("Apply Savitzky-Golay filter to remove slow drift")
         params_layout.addRow("Apply Detrending:", self.detrending_checkbox)
 
         params_group.setLayout(params_layout)
-        layout.addWidget(params_group)
+        sidebar_layout.addWidget(params_group)
 
-        # Detection button
         self.detect_btn = QPushButton("Detect Neurons")
         self.detect_btn.setProperty("class", "primary")
         self.detect_btn.clicked.connect(self._run_detection)
         self.detect_btn.setEnabled(False)
-        layout.addWidget(self.detect_btn)
+        sidebar_layout.addWidget(self.detect_btn)
 
-        # Statistics label
         self.stats_label = QLabel("")
         self.stats_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.stats_label)
+        self.stats_label.setWordWrap(True)
+        sidebar_layout.addWidget(self.stats_label)
 
-        # Matplotlib figure and canvas for visualization
-        self.figure = Figure(figsize=(10, 8))
-        self.canvas = FigureCanvas(self.figure)
-        layout.addWidget(self.canvas)
-
-        # Buttons layout
-        buttons_layout = QHBoxLayout()
-
+        export_btns = QVBoxLayout()
         self.export_locations_btn = QPushButton("Export Locations (CSV)")
         self.export_locations_btn.clicked.connect(self._export_locations)
         self.export_locations_btn.setEnabled(False)
-        buttons_layout.addWidget(self.export_locations_btn)
+        export_btns.addWidget(self.export_locations_btn)
 
         self.export_trajectories_btn = QPushButton("Export Trajectories (NPY)")
         self.export_trajectories_btn.clicked.connect(self._export_trajectories)
         self.export_trajectories_btn.setEnabled(False)
-        buttons_layout.addWidget(self.export_trajectories_btn)
+        export_btns.addWidget(self.export_trajectories_btn)
 
         self.export_all_btn = QPushButton("Export All (CSV)")
         self.export_all_btn.clicked.connect(self._export_all)
         self.export_all_btn.setEnabled(False)
-        buttons_layout.addWidget(self.export_all_btn)
+        export_btns.addWidget(self.export_all_btn)
 
-        layout.addLayout(buttons_layout)
+        sidebar_layout.addLayout(export_btns)
+        sidebar_layout.addStretch()
+
+        scroll = QScrollArea()
+        scroll.setWidget(sidebar)
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setMinimumWidth(260)
+        scroll.setMaximumWidth(320)
+        main_layout.addWidget(scroll)
+
+        # Main area: graph (takes remaining space)
+        self.figure = Figure(figsize=(8, 6))
+        self.canvas = FigureCanvas(self.figure)
+        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.canvas.setMinimumSize(400, 300)
+        main_layout.addWidget(self.canvas, 1)
 
     def set_image_processor(self, image_processor: "ImageProcessor") -> None:
         """Set the image processor for detection."""
@@ -230,6 +241,7 @@ class NeuronDetectionWidget(QWidget):
         self.neuron_trajectories = None
         self.quality_mask = None
         self.mean_frame = None
+        self._display_frame = None
         self.roi_masks = {"roi_1": None, "roi_2": None}
 
         self.figure.clear()
@@ -255,10 +267,11 @@ class NeuronDetectionWidget(QWidget):
         self.neuron_trajectories = neuron_trajectories
         self.quality_mask = quality_mask
 
-        # Recalculate mean_frame if not provided
+        # Recalculate mean_frame and display frame (first frame) if not provided
         effective_mask = self._effective_mask()
         if mean_frame is not None:
             self.mean_frame = mean_frame
+            self._display_frame = mean_frame  # Fallback when loading without frame_data
         elif self.frame_data is not None and effective_mask is not None:
             roi_region_stack = np.zeros_like(self.frame_data)
             for t in range(self.frame_data.shape[0]):
@@ -270,8 +283,10 @@ class NeuronDetectionWidget(QWidget):
             if frame_max > frame_min:
                 roi_region_stack = (roi_region_stack - frame_min) / (frame_max - frame_min)
             self.mean_frame = np.mean(roi_region_stack, axis=0)
+            self._display_frame = roi_region_stack[0].copy()  # First frame for display
         else:
             self.mean_frame = None
+            self._display_frame = None
 
         # Restore detection parameters if available
         if detection_params:
@@ -400,6 +415,7 @@ class NeuronDetectionWidget(QWidget):
                 roi_region_stack = (roi_region_stack - frame_min) / (frame_max - frame_min)
 
             self.mean_frame = np.mean(roi_region_stack, axis=0)
+            self._display_frame = roi_region_stack[0].copy()  # First frame for display
 
             # Update visualization
             self._visualize_results()
@@ -475,20 +491,64 @@ class NeuronDetectionWidget(QWidget):
             self.detect_btn.setEnabled(True)
 
     def _visualize_results(self) -> None:
-        """Visualize detected neurons overlaid on the mean frame."""
-        if self.mean_frame is None or self.neuron_locations is None:
+        """Visualize detected neurons as crosses overlaid on the first frame (zoomed to ROI, contrast enhanced)."""
+        display_img = self._display_frame if self._display_frame is not None else self.mean_frame
+        if display_img is None or self.neuron_locations is None:
             return
 
-        # Clear previous plot
+        # Zoom to ROI bounding box and prepare contrast-enhanced crop for display
+        effective_mask = self._effective_mask()
+        if effective_mask is not None and np.any(effective_mask):
+            ys, xs = np.where(effective_mask)
+            ymin, ymax = int(ys.min()), int(ys.max())
+            xmin, xmax = int(xs.min()), int(xs.max())
+            # Padding (10% of span or at least 4 px)
+            h_span = max(ymax - ymin + 1, 1)
+            w_span = max(xmax - xmin + 1, 1)
+            pad_y = max(4, int(0.1 * h_span))
+            pad_x = max(4, int(0.1 * w_span))
+            ymin = max(0, ymin - pad_y)
+            ymax = min(display_img.shape[0] - 1, ymax + pad_y)
+            xmin = max(0, xmin - pad_x)
+            xmax = min(display_img.shape[1] - 1, xmax + pad_x)
+            crop = display_img[ymin : ymax + 1, xmin : xmax + 1].astype(np.float64)
+            # Contrast: stretch to 2nd–98th percentile of ROI pixels in crop
+            in_roi = effective_mask[ymin : ymax + 1, xmin : xmax + 1]
+            if np.any(in_roi):
+                vals = crop[in_roi]
+                p2, p98 = np.percentile(vals, (2, 98))
+                if p98 > p2:
+                    crop = np.clip((crop - p2) / (p98 - p2), 0.0, 1.0)
+                else:
+                    crop = np.clip(crop - p2, 0.0, 1.0)
+            display_to_show = crop.astype(np.float32)
+            extent = [xmin, xmax + 1, ymax + 1, ymin]
+            xlim = (xmin, xmax + 1)
+            ylim = (ymax + 1, ymin)
+        else:
+            display_to_show = display_img.astype(np.float64)
+            in_mask = display_to_show > 0 if display_img is not None else None
+            if in_mask is not None and np.any(in_mask):
+                p2, p98 = np.percentile(display_to_show[in_mask], (2, 98))
+                if p98 > p2:
+                    display_to_show = np.clip((display_to_show - p2) / (p98 - p2), 0.0, 1.0)
+            display_to_show = display_to_show.astype(np.float32)
+            extent = None
+            xlim = None
+            ylim = None
+
         self.figure.clear()
         ax = self.figure.add_subplot(111)
 
-        # Display mean frame
-        ax.imshow(self.mean_frame, cmap="gray", origin="upper")
+        if extent is not None:
+            ax.imshow(display_to_show, cmap="gray", origin="upper", extent=extent, aspect="equal")
+            ax.set_xlim(xlim)
+            ax.set_ylim(ylim)
+        else:
+            ax.imshow(display_to_show, cmap="gray", origin="upper")
 
-        # Overlay detected neurons
+        # Overlay detected neurons as little crosses
         if len(self.neuron_locations) > 0:
-            # Plot good neurons in green
             good_neurons = (
                 self.neuron_locations[self.quality_mask]
                 if self.quality_mask is not None
@@ -496,39 +556,34 @@ class NeuronDetectionWidget(QWidget):
             )
             if len(good_neurons) > 0:
                 ax.scatter(
-                    good_neurons[:, 1],  # x coordinates
-                    good_neurons[:, 0],  # y coordinates
+                    good_neurons[:, 1],
+                    good_neurons[:, 0],
                     c="green",
-                    s=50,
-                    marker="o",
-                    edgecolors="darkgreen",
-                    linewidths=1,
-                    alpha=0.7,
+                    s=28,
+                    marker="+",
+                    linewidths=1.2,
+                    alpha=0.9,
                     label=f"Good Neurons ({len(good_neurons)})",
                 )
-
-            # Plot bad neurons in red
             if self.quality_mask is not None:
                 bad_neurons = self.neuron_locations[~self.quality_mask]
                 if len(bad_neurons) > 0:
                     ax.scatter(
-                        bad_neurons[:, 1],  # x coordinates
-                        bad_neurons[:, 0],  # y coordinates
+                        bad_neurons[:, 1],
+                        bad_neurons[:, 0],
                         c="red",
-                        s=50,
-                        marker="x",
-                        linewidths=2,
-                        alpha=0.7,
+                        s=28,
+                        marker="+",
+                        linewidths=1.2,
+                        alpha=0.9,
                         label=f"Bad Neurons ({len(bad_neurons)})",
                     )
-
             ax.legend(loc="upper right")
 
-        ax.set_title("Detected Neurons Overlaid on Mean Frame", fontsize=14)
+        ax.set_title("Detected Neurons on First Frame", fontsize=14)
         ax.set_xlabel("X (pixels)", fontsize=12)
         ax.set_ylabel("Y (pixels)", fontsize=12)
 
-        # Refresh canvas
         self.canvas.draw()
 
     def _export_locations(self) -> None:
@@ -652,6 +707,7 @@ class NeuronDetectionWidget(QWidget):
         self.neuron_trajectories = None
         self.quality_mask = None
         self.mean_frame = None
+        self._display_frame = None
         self.roi_masks = {"roi_1": None, "roi_2": None}
         self.figure.clear()
         self.canvas.draw()
