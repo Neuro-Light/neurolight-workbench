@@ -669,12 +669,14 @@ class MainWindow(QMainWindow):
                         "threshold_rel": detection_widget.threshold_rel_spin.value(),
                         "apply_detrending": detection_widget.detrending_checkbox.isChecked(),
                     }
+                roi_origin = detection_widget._compute_roi_origin()
                 self.experiment.set_neuron_detection_data(
                     neuron_locations=detection_widget.neuron_locations,
                     neuron_trajectories=detection_widget.neuron_trajectories,
                     quality_mask=detection_widget.quality_mask,
                     mean_frame=detection_widget.mean_frame,
                     detection_params=detection_params,
+                    roi_origin=roi_origin,
                 )
 
     def _save_neuron_detection(self) -> None:
@@ -886,6 +888,7 @@ class MainWindow(QMainWindow):
                     quality_mask=detection_data["quality_mask"],
                     mean_frame=detection_data.get("mean_frame"),  # Optional - can be recalculated
                     detection_params=detection_data.get("detection_params"),
+                    roi_origin=detection_data.get("roi_origin"),  # Per-neuron ROI (0=ROI1, 1=ROI2)
                 )
         except Exception:
             # Silently fail - detection data might be corrupted

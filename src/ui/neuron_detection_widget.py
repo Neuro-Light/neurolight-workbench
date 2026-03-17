@@ -56,6 +56,7 @@ class NeuronDetectionWidget(QWidget):
         self.frame_data: Optional[np.ndarray] = None
         self._detection_progress_dialog: Optional[DetectionProgressDialog] = None
         self._detection_worker: Optional[DetectionWorker] = None
+        self._loaded_roi_origin: Optional[np.ndarray] = None
 
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -247,6 +248,7 @@ class NeuronDetectionWidget(QWidget):
         self.quality_mask = None
         self.mean_frame = None
         self._display_frame = None
+        self._loaded_roi_origin = None
         self.roi_masks = {"roi_1": None, "roi_2": None}
 
         self.figure.clear()
@@ -266,11 +268,21 @@ class NeuronDetectionWidget(QWidget):
         quality_mask: np.ndarray,
         mean_frame: Optional[np.ndarray] = None,
         detection_params: Optional[Dict[str, Any]] = None,
+        roi_origin: Optional[np.ndarray] = None,
     ) -> None:
         """Load previously saved detection data."""
         self.neuron_locations = neuron_locations
         self.neuron_trajectories = neuron_trajectories
         self.quality_mask = quality_mask
+        self._loaded_roi_origin = roi_origin  # Use when not None for trajectory callback
+
+        # If saved data has neurons from both ROIs, show both on Detection tab
+        if roi_origin is not None and len(roi_origin) > 0:
+            uniq = np.unique(roi_origin)
+            if len(uniq) > 1 and self.roi_masks.get("roi_1") is not None and self.roi_masks.get("roi_2") is not None:
+                idx = self.detect_mode_combo.findText(_DETECT_BOTH)
+                if idx >= 0:
+                    self.detect_mode_combo.setCurrentIndex(idx)
 
         # Recalculate mean_frame and display frame (first frame) if not provided
         effective_mask = self._effective_mask()
@@ -324,8 +336,10 @@ class NeuronDetectionWidget(QWidget):
             f"Loaded {num_neurons} neurons from saved experiment ({num_good} good, {num_bad} bad)"
         )
 
-        # Notify trajectory plot widget
-        roi_origin = self._compute_roi_origin()
+        # Notify trajectory plot widget (use saved roi_origin if we loaded it, else compute)
+        roi_origin = getattr(self, "_loaded_roi_origin", None)
+        if roi_origin is None:
+            roi_origin = self._compute_roi_origin()
         if hasattr(self, "trajectory_plot_callback"):
             self.trajectory_plot_callback(
                 self.neuron_trajectories,
@@ -333,6 +347,7 @@ class NeuronDetectionWidget(QWidget):
                 self.neuron_locations,
                 roi_origin=roi_origin,
             )
+        self._loaded_roi_origin = None  # Clear so next run uses computed
 
     def _effective_mask(self) -> Optional[np.ndarray]:
         """Return the combined boolean mask for the currently selected detection mode."""
@@ -468,12 +483,14 @@ class NeuronDetectionWidget(QWidget):
                 "threshold_rel": self.threshold_rel_spin.value(),
                 "apply_detrending": self.detrending_checkbox.isChecked(),
             }
+            roi_origin = self._compute_roi_origin()
             self.experiment.set_neuron_detection_data(
                 neuron_locations=self.neuron_locations,
                 neuron_trajectories=self.neuron_trajectories,
                 quality_mask=self.quality_mask,
                 mean_frame=None,
                 detection_params=detection_params,
+                roi_origin=roi_origin,
             )
             if hasattr(self, "save_experiment_callback"):
                 self.save_experiment_callback()

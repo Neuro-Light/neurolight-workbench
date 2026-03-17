@@ -68,8 +68,11 @@ class Experiment:
                 "processing": {"history": self.processing_history},
                 "analysis": {"results": self.analysis_results, "plots": []},
                 "settings": self.settings,
-                # Dual ROI storage (new format)
-                "rois": self.rois,
+                # Dual ROI storage: always write both keys so both ROIs are persisted
+                "rois": {
+                    "roi_1": self.rois.get("roi_1"),
+                    "roi_2": self.rois.get("roi_2"),
+                },
                 # Backward compat: write roi_1 as legacy "roi" so older versions can read it
                 "roi": self.rois.get("roi_1"),
                 # Save neuron detection data if available
@@ -178,6 +181,14 @@ class Experiment:
         if "detection_params" in data:
             result["detection_params"] = data["detection_params"]
 
+        # Save per-neuron ROI assignment (0 = ROI 1, 1 = ROI 2) so Graphs tab can filter after reload
+        if "roi_origin" in data and data["roi_origin"] is not None:
+            roi_origin = data["roi_origin"]
+            if isinstance(roi_origin, np.ndarray) and roi_origin.size > 0:
+                result["roi_origin"] = roi_origin.tolist()
+            elif isinstance(roi_origin, (list, tuple)):
+                result["roi_origin"] = list(roi_origin)
+
         return result if result else None
 
     def _deserialize_neuron_detection(self, data: Dict[str, Any]) -> None:
@@ -220,6 +231,12 @@ class Experiment:
         if "detection_params" in data:
             self._neuron_detection_data["detection_params"] = data["detection_params"]
 
+        # Load per-neuron ROI assignment (0 = ROI 1, 1 = ROI 2)
+        if "roi_origin" in data and data["roi_origin"] is not None:
+            self._neuron_detection_data["roi_origin"] = np.array(
+                data["roi_origin"], dtype=np.intp
+            )
+
     def set_neuron_detection_data(
         self,
         neuron_locations: Optional[np.ndarray] = None,
@@ -227,6 +244,7 @@ class Experiment:
         quality_mask: Optional[np.ndarray] = None,
         mean_frame: Optional[np.ndarray] = None,
         detection_params: Optional[Dict[str, Any]] = None,
+        roi_origin: Optional[np.ndarray] = None,
     ) -> None:
         """Store neuron detection data in the experiment."""
         # Always initialize the dict if it doesn't exist
@@ -246,6 +264,8 @@ class Experiment:
             self._neuron_detection_data["mean_frame"] = mean_frame
         if detection_params is not None:
             self._neuron_detection_data["detection_params"] = detection_params
+        if roi_origin is not None:
+            self._neuron_detection_data["roi_origin"] = roi_origin
 
     def get_neuron_detection_data(self) -> Optional[Dict[str, Any]]:
         """Get stored neuron detection data."""
