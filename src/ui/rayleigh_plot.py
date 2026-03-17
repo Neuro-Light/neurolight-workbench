@@ -169,6 +169,23 @@ class RayLeighPlotWidget(QWidget):
         self._pick_cid = self.canvas.mpl_connect("pick_event", self._on_pick)
         self._motion_cid = self.canvas.mpl_connect("motion_notify_event", self._on_motion)
 
+    def get_experiment_start_time_minutes(self) -> int:
+        """
+        Return the experiment start time as minutes since midnight (0–1439).
+        """
+        start_time = self.start_time_edit.time()
+        return start_time.hour() * 60 + start_time.minute()
+
+    def set_experiment_start_time_minutes(self, minutes: int) -> None:
+        """
+        Set the experiment start time from minutes since midnight (0–1439).
+        Values outside this range are wrapped modulo 24 hours.
+        """
+        minutes_int = int(minutes) % (24 * 60)
+        hours = minutes_int // 60
+        mins = minutes_int % 60
+        self.start_time_edit.setTime(QTime(hours, mins))
+
     # This method is called by the main application when new neuron trajectory data is available.
     def set_trajectory_data(
         self,
