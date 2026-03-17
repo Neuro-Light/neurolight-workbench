@@ -101,11 +101,12 @@ def compute_lomb_scargle(
         num_freqs = 10
 
     frequency = np.linspace(min_freq, max_freq, num_freqs, dtype=float)
+    angular_freq = 2.0 * np.pi * frequency
 
     # Pre-center the signal to improve numerical stability
     y_centered = y_valid - float(np.mean(y_valid))
 
-    power = lombscargle(t_rel, y_centered, frequency, precenter=True, normalize=True)
+    power = lombscargle(t_rel, y_centered, angular_freq, precenter=True, normalize=True)
     power = np.asarray(power, dtype=float)
 
     if not np.all(np.isfinite(power)) or power.size == 0:

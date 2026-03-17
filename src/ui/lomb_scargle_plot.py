@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 
 from core.lomb_scargle import compute_lomb_scargle
 from ui.app_settings import get_theme
-from ui.constants import ROI_DISPLAY_NAMES, ROI_KEYS
+from ui.constants import DEFAULT_FRAME_INTERVAL_MINUTES, ROI_DISPLAY_NAMES, ROI_KEYS
 from ui.draggable_spinbox import DraggableSpinBox
 from ui.styles import get_mpl_theme
 
@@ -74,7 +74,7 @@ class LombScarglePlotWidget(QWidget):
         # Sampling interval (in arbitrary time units per frame)
         self.sampling_interval_spin = DraggableSpinBox()
         self.sampling_interval_spin.setRange(1, 10_000)
-        self.sampling_interval_spin.setValue(1)
+        self.sampling_interval_spin.setValue(DEFAULT_FRAME_INTERVAL_MINUTES)
         self.sampling_interval_spin.setToolTip(
             "Time between successive frames in arbitrary units.\n"
             "If actual acquisition interval is known (e.g. minutes), enter it here."

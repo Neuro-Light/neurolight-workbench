@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 
 from core.circular_stats import rao_spacing_test, rayleigh_test
 from ui.app_settings import get_theme
+from ui.constants import DEFAULT_FRAME_INTERVAL_MINUTES
 from ui.styles import get_mpl_theme
 
 
@@ -91,7 +92,7 @@ class RayLeighPlotWidget(QWidget):
         controls_layout.addRow("Experiment Start Time:", self.start_time_edit)
         self.interval_minutes_spin = QSpinBox()
         self.interval_minutes_spin.setRange(1, 1440)
-        self.interval_minutes_spin.setValue(30)
+        self.interval_minutes_spin.setValue(DEFAULT_FRAME_INTERVAL_MINUTES)
         self.interval_minutes_spin.setSuffix(" min")
         self.interval_minutes_spin.setToolTip("Time between consecutive frames in minutes")
         controls_layout.addRow("Interval Between Photos:", self.interval_minutes_spin)
