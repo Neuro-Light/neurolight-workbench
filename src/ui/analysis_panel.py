@@ -13,10 +13,10 @@ class AnalysisPanel(QTabWidget):
         self.neuron_detection_widget = NeuronDetectionWidget()
         self.neuron_trajectory_plot_widget = NeuronTrajectoryPlotWidget()
         self.rayleigh_plot_widget = RayLeighPlotWidget()
-        # Tab order: Detection, ROI Intensity, Graphs, Rayleigh Plot, Statistics
+        # Tab order: Detection, ROI Intensity, Trajectories, Rayleigh Plot, Statistics
         self._add_tab("Detection", self.neuron_detection_widget)
         self._add_tab("ROI Intensity", self.roi_plot_widget)
-        self._add_tab("Graphs", self.neuron_trajectory_plot_widget)
+        self._add_tab("Trajectories", self.neuron_trajectory_plot_widget)
         self._add_tab("Rayleigh Plot", self.rayleigh_plot_widget)
         self._add_tab("Statistics")
 
