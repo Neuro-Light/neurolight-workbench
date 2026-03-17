@@ -134,13 +134,10 @@ class RayLeighPlotWidget(QWidget):
             num_good = np.sum(quality_mask)
             num_bad = num_neurons - num_good
             self.status_label.setText(
-                f"Ready to plot {num_neurons} neurons "
-                f"({num_good} good, {num_bad} bad) across {num_frames} frames"
+                f"Ready to plot {num_neurons} neurons ({num_good} good, {num_bad} bad) across {num_frames} frames"
             )
         else:
-            self.status_label.setText(
-                f"Ready to plot {num_neurons} neurons across {num_frames} frames"
-            )
+            self.status_label.setText(f"Ready to plot {num_neurons} neurons across {num_frames} frames")
         self.plot_btn.setEnabled(True)
         self._plot()
 
