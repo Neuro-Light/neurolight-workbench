@@ -9,6 +9,7 @@ from matplotlib.backends.backend_qtagg import (
 from matplotlib.backends.backend_qtagg import (
     NavigationToolbar2QT as NavigationToolbar,
 )
+from matplotlib.collections import PathCollection
 from matplotlib.figure import Figure
 from PySide6.QtCore import Qt, QTime
 from PySide6.QtWidgets import (
@@ -28,6 +29,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from core.circular_stats import rao_spacing_test, rayleigh_test
 from ui.app_settings import get_theme
 from ui.styles import get_mpl_theme
 
@@ -43,13 +45,17 @@ class RayLeighPlotWidget(QWidget):
         self.neuron_trajectories: Optional[np.ndarray] = None
         self.quality_mask: Optional[np.ndarray] = None
         self.roi_origin: Optional[np.ndarray] = None  # 0 = ROI 1, 1 = ROI 2 per neuron
+        self._pick_cid: Optional[int] = None
+        self._motion_cid: Optional[int] = None
+        self._last_hover_text: str = ""
+        self._last_pick_text: str = ""
 
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
 
         # Left sidebar: options (fixed width)
         sidebar = QFrame()
-        sidebar.setMaximumWidth(280)
+        sidebar.setMaximumWidth(380)
         sidebar.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(8, 8, 8, 8)
@@ -60,7 +66,10 @@ class RayLeighPlotWidget(QWidget):
         sidebar_layout.addWidget(self.status_label)
 
         # ROI view selector: Both / ROI 1 only / ROI 2 only
-        roi_row = QHBoxLayout()
+        roi_row_widget = QWidget()
+        roi_row_widget.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        roi_row = QHBoxLayout(roi_row_widget)
+        roi_row.setContentsMargins(0, 0, 0, 0)
         roi_row.addWidget(QLabel("Show neurons from:"))
         self.roi_view_combo = QComboBox()
         self.roi_view_combo.addItem("Both (ROI 1 & 2)", "both")
@@ -69,9 +78,11 @@ class RayLeighPlotWidget(QWidget):
         self.roi_view_combo.setToolTip("Filter Rayleigh plot to neurons from ROI 1, ROI 2, or both.")
         self.roi_view_combo.currentIndexChanged.connect(self._plot)
         roi_row.addWidget(self.roi_view_combo, 1)
-        sidebar_layout.addLayout(roi_row)
+        sidebar_layout.addWidget(roi_row_widget, alignment=Qt.AlignHCenter)
 
         controls_group = QGroupBox("Time Settings")
+        controls_group.setMaximumWidth(280)
+        controls_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         controls_layout = QFormLayout()
         self.start_time_edit = QTimeEdit()
         self.start_time_edit.setDisplayFormat("HH:mm")
@@ -80,7 +91,7 @@ class RayLeighPlotWidget(QWidget):
         controls_layout.addRow("Experiment Start Time:", self.start_time_edit)
         self.interval_minutes_spin = QSpinBox()
         self.interval_minutes_spin.setRange(1, 1440)
-        self.interval_minutes_spin.setValue(60)
+        self.interval_minutes_spin.setValue(7)
         self.interval_minutes_spin.setSuffix(" min")
         self.interval_minutes_spin.setToolTip("Time between consecutive frames in minutes")
         controls_layout.addRow("Interval Between Photos:", self.interval_minutes_spin)
@@ -90,7 +101,47 @@ class RayLeighPlotWidget(QWidget):
         controls_layout.addRow(self.plot_btn)
 
         controls_group.setLayout(controls_layout)
-        sidebar_layout.addWidget(controls_group)
+        sidebar_layout.addWidget(controls_group, alignment=Qt.AlignHCenter)
+
+        # Cursor / selection readout (separate from the status banner at top)
+        self.cursor_group = QGroupBox("Cursor / Selection")
+        self.cursor_group.setMaximumWidth(280)
+        self.cursor_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        cursor_layout = QVBoxLayout(self.cursor_group)
+        self.cursor_label = QLabel("Hover over the plot to see θ and r.\nClick a dot to pin its peak time.")
+        self.cursor_label.setAlignment(Qt.AlignCenter)
+        self.cursor_label.setWordWrap(True)
+        self.cursor_label.setStyleSheet("font-size: 13px; font-weight: 500;")
+        cursor_layout.addWidget(self.cursor_label)
+        sidebar_layout.addWidget(self.cursor_group, alignment=Qt.AlignHCenter)
+
+        # Text summary of Rayleigh / Rao statistics (left panel, larger font, below options)
+        stats_container = QVBoxLayout()
+        stats_container.setSpacing(4)
+
+        self.rayleigh_title_label = QLabel("Rayleigh:")
+        self.rayleigh_title_label.setAlignment(Qt.AlignCenter)
+        self.rayleigh_title_label.setStyleSheet("font-size: 16px; font-weight: 700; color: #4A90E2;")
+        stats_container.addWidget(self.rayleigh_title_label)
+
+        self.rayleigh_stats_label = QLabel("")
+        self.rayleigh_stats_label.setAlignment(Qt.AlignCenter)
+        self.rayleigh_stats_label.setWordWrap(True)
+        self.rayleigh_stats_label.setStyleSheet("font-size: 14px; font-weight: 500;")
+        stats_container.addWidget(self.rayleigh_stats_label)
+
+        self.rao_title_label = QLabel("Rao:")
+        self.rao_title_label.setAlignment(Qt.AlignCenter)
+        self.rao_title_label.setStyleSheet("font-size: 16px; font-weight: 700; color: #4A90E2; margin-top: 6px;")
+        stats_container.addWidget(self.rao_title_label)
+
+        self.rao_stats_label = QLabel("")
+        self.rao_stats_label.setAlignment(Qt.AlignCenter)
+        self.rao_stats_label.setWordWrap(True)
+        self.rao_stats_label.setStyleSheet("font-size: 14px; font-weight: 500;")
+        stats_container.addWidget(self.rao_stats_label)
+
+        sidebar_layout.addLayout(stats_container)
         sidebar_layout.addStretch()
 
         scroll = QScrollArea()
@@ -112,6 +163,10 @@ class RayLeighPlotWidget(QWidget):
         plot_layout.addWidget(self.toolbar)
         plot_layout.addWidget(self.canvas)
         main_layout.addWidget(plot_container, 1)
+
+        # Enable picking on the Rayleigh plot so users can click dots.
+        self._pick_cid = self.canvas.mpl_connect("pick_event", self._on_pick)
+        self._motion_cid = self.canvas.mpl_connect("motion_notify_event", self._on_motion)
 
     # This method is called by the main application when new neuron trajectory data is available.
     def set_trajectory_data(
@@ -232,39 +287,70 @@ class RayLeighPlotWidget(QWidget):
             roi_1_idx = roi_flags == 0
             roi_2_idx = roi_flags == 1
             if np.any(roi_1_idx):
-                ax.scatter(
+                sc1 = ax.scatter(
                     theta[roi_1_idx],
                     jitter[roi_1_idx],
                     s=35,
                     color=roi_1_color,
                     alpha=0.8,
                     label="ROI 1",
+                    picker=5,
                 )
+                sc1._rayleigh_peak_minutes = peak_minutes[roi_1_idx]  # type: ignore[attr-defined]
+                sc1._rayleigh_roi = "ROI 1"  # type: ignore[attr-defined]
             if np.any(roi_2_idx):
-                ax.scatter(
+                sc2 = ax.scatter(
                     theta[roi_2_idx],
                     jitter[roi_2_idx],
                     s=35,
                     color=roi_2_color,
                     alpha=0.8,
                     label="ROI 2",
+                    picker=5,
                 )
+                sc2._rayleigh_peak_minutes = peak_minutes[roi_2_idx]  # type: ignore[attr-defined]
+                sc2._rayleigh_roi = "ROI 2"  # type: ignore[attr-defined]
         else:
             # Fallback: single-colour points using the theme's good/neutral colour.
-            ax.scatter(
+            sc = ax.scatter(
                 theta,
                 jitter,
                 s=35,
                 color=theme.get("neutral_color", theme.get("good_color", "#60a5fa")),
                 alpha=0.8,
                 label="Neurons",
+                picker=5,
             )
+            sc._rayleigh_peak_minutes = peak_minutes  # type: ignore[attr-defined]
+            sc._rayleigh_roi = None  # type: ignore[attr-defined]
 
         title_time = start_time.toString("HH:mm")
         ax.set_title(
             f"Peak Times (Modulo 24h)\nStart {title_time}  |  Interval {interval_minutes} min",
             fontsize=12,
         )
+        # --- Rayleigh and Rao statistics summary (sidebar only) -------------------
+        rayleigh_text = ""
+        rao_text = ""
+        try:
+            rayleigh = rayleigh_test(theta)
+            angles_deg = np.degrees(theta) % 360.0
+            rao = rao_spacing_test(angles_deg)
+
+            r = rayleigh["r"]
+            p_rayleigh = rayleigh["p_value"]
+            U = rao["U"]
+            p_rao = rao["p_value"]
+
+            rayleigh_text = f"r = {r:.3f}, p ≈ {p_rayleigh:.3g}"
+            rao_text = f"U = {U:.1f}, p {p_rao}"
+        except Exception:
+            rayleigh_text = ""
+            rao_text = ""
+
+        self.rayleigh_stats_label.setText(rayleigh_text)
+        self.rao_stats_label.setText(rao_text)
+
         ax.legend(loc="lower left", bbox_to_anchor=(1.05, 0.1))
         self._apply_theme(ax)
         self.canvas.draw_idle()
@@ -273,3 +359,61 @@ class RayLeighPlotWidget(QWidget):
         """Redraw the plot with the current app theme (e.g. after theme change)."""
         if self.neuron_trajectories is not None and len(self.neuron_trajectories) > 0:
             self._plot()
+
+    def _update_cursor_box(self) -> None:
+        parts = []
+        if self._last_hover_text:
+            parts.append(self._last_hover_text)
+        if self._last_pick_text:
+            parts.append(self._last_pick_text)
+        self.cursor_label.setText(
+            "\n".join(parts) if parts else "Hover over the plot to see θ and r.\nClick a" + "dot to pin its peak time."
+        )
+
+    def _on_motion(self, event) -> None:
+        """Update cursor readout based on hover position."""
+        if event.inaxes is None or event.xdata is None or event.ydata is None:
+            self._last_hover_text = ""
+            self._update_cursor_box()
+            return
+
+        theta_rad = float(event.xdata)
+        r_val = float(event.ydata)
+        theta_deg = (np.degrees(theta_rad) % 360.0 + 360.0) % 360.0
+        minutes = int(round((theta_deg / 360.0) * (24 * 60))) % (24 * 60)
+        hh = minutes // 60
+        mm = minutes % 60
+        self._last_hover_text = f"Hover: θ = {theta_deg:.1f}°  ({hh:02d}:{mm:02d})\nHover: r = {r_val:.3f}"
+        self._update_cursor_box()
+
+    def _on_pick(self, event) -> None:
+        """Handle clicks on Rayleigh plot points to show their peak times."""
+        artist = event.artist
+        if not isinstance(artist, PathCollection):
+            return
+
+        mins = getattr(artist, "_rayleigh_peak_minutes", None)
+        roi_label = getattr(artist, "_rayleigh_roi", None)
+        if mins is None:
+            return
+
+        indices = np.atleast_1d(event.ind)
+        mins_arr = np.asarray(mins, dtype=float)[indices]
+
+        # Use the first selected point as the representative for theta / r.
+        offsets = artist.get_offsets()
+        theta_sel, r_sel = map(float, offsets[indices[0]])
+
+        # Convert theta to degrees and time-of-day (HH:MM)
+        theta_deg = (np.degrees(theta_sel) % 360.0 + 360.0) % 360.0
+        m0 = float(mins_arr[0]) % (24 * 60)
+        h0 = int(m0 // 60)
+        minute0 = int(round(m0 % 60)) % 60
+        t_str = f"{h0:02d}:{minute0:02d}"
+
+        count = len(indices)
+        roi_part = f" ({roi_label})" if roi_label else ""
+        message = f"Selected{roi_part}: {count} neuron(s)\ntime = {t_str}, θ = {theta_deg:.1f}°, r = {r_sel:.3f}"
+
+        self._last_pick_text = message
+        self._update_cursor_box()

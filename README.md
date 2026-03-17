@@ -115,19 +115,27 @@ neurolight-workbench/
 │   ├── 📂 ui/                     # User interface components
 │   │   ├── startup_dialog.py      # Experiment selection screen
 │   │   ├── main_window.py         # Main application window
+│   │   ├── analysis_panel.py       # Tabbed analysis panel container
 │   │   ├── workflow.py            # Guided workflow stepper + gating logic
 │   │   ├── image_viewer.py        # Image display & navigation + ROI tools
 │   │   ├── roi_selection_dialog.py
+│   │   ├── alignment_dialog.py
+│   │   ├── alignment_worker.py
+│   │   ├── alignment_progress_dialog.py
 │   │   ├── neuron_detection_widget.py
+│   │   ├── detection_worker.py
+│   │   ├── detection_progress_dialog.py
 │   │   ├── neuron_trajectory_plot.py
 │   │   ├── roi_intensity_plot.py
 │   │   ├── rayleigh_plot.py
+│   │   ├── draggable_spinbox.py   # Drag-to-adjust spinboxes
 │   │   ├── styles.py              # App theme + stylesheet + Matplotlib theme helpers
 │   │   └── settings_dialog.py
 │   │
 │   ├── 📂 core/                   # Core functionality
 │   │   ├── experiment_manager.py # Experiment session handling
 │   │   ├── image_processor.py    # Image processing + neuron detection pipeline
+│   │   ├── circular_stats.py      # Rayleigh + Rao circular uniformity tests
 │   │   └── data_analyzer.py      # Intensity extraction + analysis helpers
 │   │
 │   └── 📂 utils/                  # Utilities
@@ -145,13 +153,13 @@ neurolight-workbench/
 | ------------------------- | ---------------------------------------------------------------------------------------- |
 | **experiment_manager.py** | Create, load, save `.nexp` experiments; manage recent experiments list                   |
 | **file_handler.py**       | Load/validate TIF stacks; provide random frame access; associate stacks with experiments |
-| **image_processor.py**    | Apply OpenCV operations; maintain processing history for reproducibility                 |
-| **gif_generator.py**      | Generate and optimize animated GIFs from image sequences                                 |
-| **data_analyzer.py**      | Calculate statistics, generate plots; store results in experiment sessions               |
+| **image_processor.py**    | Image processing + neuron detection pipeline                                             |
+| **circular_stats.py**     | Rayleigh + Rao circular uniformity tests for peak-time angles                            |
+| **data_analyzer.py**      | ROI intensity extraction and analysis helpers                                            |
 | **startup_dialog.py**     | Present new/load experiment options; show recent experiments                             |
 | **main_window.py**        | Coordinate menus, panels, and auto-save functionality                                    |
 | **image_viewer.py**       | Display TIFs with navigation controls; implement LRU caching; handle drag-and-drop       |
-| **analysis_panel.py**     | Provide tabbed interface for future analysis tools                                       |
+| **analysis_panel.py**     | Analysis tabs: Detection, ROI Intensity, Trajectories, Rayleigh/Rao                      |
 
 ---
 
