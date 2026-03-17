@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QMessageBox,
     QPushButton,
     QSlider,
     QStyle,
@@ -408,8 +409,19 @@ class ImageViewer(QWidget):
             return
         img = self.cache.get(self.index)
         if img is None:
-            img = self.handler.get_image_at_index(self.index)
-            self.cache.set(self.index, img)
+            try:
+                img = self.handler.get_image_at_index(self.index)
+            except Exception as e:
+                # In frozen macOS apps, missing Pillow plugins or permission issues
+                # can manifest as "nothing loads". Show a clear error to the user.
+                QMessageBox.critical(
+                    self,
+                    "Failed to load image",
+                    f"Could not open:\n{self.handler.files[self.index]}\n\nError:\n{e}",
+                )
+                return
+            else:
+                self.cache.set(self.index, img)
         # show the 8 bit image on the workbench
         preview_img = self._ensure_uint8(img)
         qimg = numpy_to_qimage(preview_img)
