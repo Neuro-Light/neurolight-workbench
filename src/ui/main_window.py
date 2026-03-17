@@ -42,23 +42,32 @@ logger = logging.getLogger(__name__)
 
 # Configure logging to file if not already configured
 _log_file = Path.home() / ".neurolight" / "neurolight.log"
-_log_file.parent.mkdir(parents=True, exist_ok=True)
+try:
+    _log_file.parent.mkdir(parents=True, exist_ok=True)
+except OSError:
+    # In restricted environments (some CI/sandboxes), the home directory may be read-only.
+    # Logging should never prevent the UI (or tests) from importing.
+    pass
 
 # Check if logging is already configured at the module level
 if not logger.handlers:
-    # Create file handler with append mode
-    file_handler = logging.FileHandler(_log_file, encoding="utf-8", mode="a")
-    file_handler.setLevel(logging.WARNING)
+    handler: logging.Handler
+    try:
+        # Create file handler with append mode
+        handler = logging.FileHandler(_log_file, encoding="utf-8", mode="a")
+    except OSError:
+        handler = logging.NullHandler()
+    handler.setLevel(logging.WARNING)
 
     # Create formatter - logger.exception() automatically includes traceback
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-    file_handler.setFormatter(formatter)
+    handler.setFormatter(formatter)
 
     # Add handler to logger
-    logger.addHandler(file_handler)
+    logger.addHandler(handler)
     logger.setLevel(logging.WARNING)
     logger.propagate = False  # Prevent duplicate logs
 

@@ -11,7 +11,12 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 
 CONFIG_DIR = Path.home() / ".neurolight"
-CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    # In restricted environments (some CI/sandboxes), the home directory may be read-only.
+    # Recent-file persistence is optional and should never prevent importing.
+    pass
 RECENT_FILE = CONFIG_DIR / "recent_experiments.json"
 
 
@@ -270,9 +275,13 @@ class Experiment:
 
 class ExperimentManager:
     def __init__(self) -> None:
-        RECENT_FILE.touch(exist_ok=True)
-        if RECENT_FILE.stat().st_size == 0:
-            RECENT_FILE.write_text(json.dumps({"recent": []}, indent=2))
+        try:
+            RECENT_FILE.touch(exist_ok=True)
+            if RECENT_FILE.stat().st_size == 0:
+                RECENT_FILE.write_text(json.dumps({"recent": []}, indent=2))
+        except OSError:
+            # Recent experiments list is best-effort; ignore filesystem restrictions.
+            pass
 
     def create_new_experiment(self, metadata: Dict[str, Any]) -> Experiment:
         name = metadata.get("name", "").strip()
@@ -347,8 +356,11 @@ class ExperimentManager:
             # Remove invalid entries from recent file if any were found
             if invalid_paths:
                 data["recent"] = valid_items
-                with open(RECENT_FILE, "w", encoding="utf-8") as f:
-                    json.dump(data, f, indent=2)
+                try:
+                    with open(RECENT_FILE, "w", encoding="utf-8") as f:
+                        json.dump(data, f, indent=2)
+                except OSError:
+                    pass
 
             # Return most recent first, limit 5
             valid_items.sort(key=lambda x: x.get("last_opened", ""), reverse=True)
@@ -372,8 +384,11 @@ class ExperimentManager:
         data["recent"] = [e for e in data.get("recent", []) if e.get("path") != file_path]
         data["recent"].insert(0, entry)
         data["recent"] = data["recent"][:20]
-        with open(RECENT_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        try:
+            with open(RECENT_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+        except OSError:
+            pass
 
     def remove_from_recent(self, file_path: str) -> None:
         """Remove an experiment from the recent experiments list."""
@@ -385,8 +400,11 @@ class ExperimentManager:
             data = {"recent": []}
         # Remove the entry
         data["recent"] = [e for e in data.get("recent", []) if e.get("path") != file_path]
-        with open(RECENT_FILE, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2)
+        try:
+            with open(RECENT_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+        except OSError:
+            pass
 
     def delete_experiment(self, file_path: str, delete_file: bool = False) -> bool:
         """
