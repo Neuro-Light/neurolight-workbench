@@ -890,6 +890,15 @@ def get_stylesheet(theme: str = "dark") -> str:
         font-size: {FONT_SIZE_SMALL};
     }}
 
+    /* Stepper arrows between steps: primary blue, enough room so the tip is not clipped */
+    QFrame[objectName="workflowStepper"] QLabel[objectName="workflowStepperArrow"] {{
+        color: {c["primary"]};
+        font-size: 32px;
+        font-weight: 600;
+        padding: 0 6px;
+        min-width: 36px;
+    }}
+
     /* === Message Box (kept consistent with theme) === */
     QMessageBox {{
         background-color: {c["surface"]};
