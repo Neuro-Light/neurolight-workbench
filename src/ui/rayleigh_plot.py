@@ -91,7 +91,7 @@ class RayLeighPlotWidget(QWidget):
         controls_layout.addRow("Experiment Start Time:", self.start_time_edit)
         self.interval_minutes_spin = QSpinBox()
         self.interval_minutes_spin.setRange(1, 1440)
-        self.interval_minutes_spin.setValue(7)
+        self.interval_minutes_spin.setValue(30)
         self.interval_minutes_spin.setSuffix(" min")
         self.interval_minutes_spin.setToolTip("Time between consecutive frames in minutes")
         controls_layout.addRow("Interval Between Photos:", self.interval_minutes_spin)
