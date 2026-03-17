@@ -55,7 +55,7 @@ class RayLeighPlotWidget(QWidget):
 
         # Left sidebar: options (fixed width)
         sidebar = QFrame()
-        sidebar.setMaximumWidth(330)
+        sidebar.setMaximumWidth(380)
         sidebar.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
         sidebar_layout = QVBoxLayout(sidebar)
         sidebar_layout.setContentsMargins(8, 8, 8, 8)
@@ -81,6 +81,8 @@ class RayLeighPlotWidget(QWidget):
         sidebar_layout.addWidget(roi_row_widget, alignment=Qt.AlignHCenter)
 
         controls_group = QGroupBox("Time Settings")
+        controls_group.setMaximumWidth(280)
+        controls_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         controls_layout = QFormLayout()
         self.start_time_edit = QTimeEdit()
         self.start_time_edit.setDisplayFormat("HH:mm")
@@ -103,6 +105,8 @@ class RayLeighPlotWidget(QWidget):
 
         # Cursor / selection readout (separate from the status banner at top)
         self.cursor_group = QGroupBox("Cursor / Selection")
+        self.cursor_group.setMaximumWidth(280)
+        self.cursor_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         cursor_layout = QVBoxLayout(self.cursor_group)
         self.cursor_label = QLabel("Hover over the plot to see θ and r.\nClick a dot to pin its peak time.")
         self.cursor_label.setAlignment(Qt.AlignCenter)
