@@ -13,10 +13,14 @@ from matplotlib.figure import Figure
 from PySide6.QtCore import Qt, QTime
 from PySide6.QtWidgets import (
     QFormLayout,
+    QFrame,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
     QMessageBox,
     QPushButton,
+    QScrollArea,
+    QSizePolicy,
     QSpinBox,
     QTimeEdit,
     QVBoxLayout,
@@ -38,43 +42,62 @@ class RayLeighPlotWidget(QWidget):
         self.neuron_trajectories: Optional[np.ndarray] = None
         self.quality_mask: Optional[np.ndarray] = None
 
-        layout = QVBoxLayout(self)
-        # Initial status label before data is loaded, with instructions for the user.
+        main_layout = QHBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Left sidebar: options (fixed width)
+        sidebar = QFrame()
+        sidebar.setMaximumWidth(280)
+        sidebar.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(8, 8, 8, 8)
+
         self.status_label = QLabel("No neuron trajectories available. Run detection first.")
         self.status_label.setAlignment(Qt.AlignCenter)
         self.status_label.setWordWrap(True)
-        layout.addWidget(self.status_label)
+        sidebar_layout.addWidget(self.status_label)
 
         controls_group = QGroupBox("Time Settings")
         controls_layout = QFormLayout()
-        # Time settings
         self.start_time_edit = QTimeEdit()
         self.start_time_edit.setDisplayFormat("HH:mm")
         self.start_time_edit.setTime(QTime(0, 0))
         self.start_time_edit.setToolTip("Time of first frame (24-hour time)")
         controls_layout.addRow("Experiment Start Time:", self.start_time_edit)
-        # Time between frames
         self.interval_minutes_spin = QSpinBox()
         self.interval_minutes_spin.setRange(1, 1440)
         self.interval_minutes_spin.setValue(60)
         self.interval_minutes_spin.setSuffix(" min")
         self.interval_minutes_spin.setToolTip("Time between consecutive frames in minutes")
         controls_layout.addRow("Interval Between Photos:", self.interval_minutes_spin)
-        # Button to plot
         self.plot_btn = QPushButton("Plot Rayleigh Plot")
         self.plot_btn.setEnabled(False)
         self.plot_btn.clicked.connect(self._plot)
         controls_layout.addRow(self.plot_btn)
 
         controls_group.setLayout(controls_layout)
-        layout.addWidget(controls_group)
+        sidebar_layout.addWidget(controls_group)
+        sidebar_layout.addStretch()
 
+        scroll = QScrollArea()
+        scroll.setWidget(sidebar)
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        main_layout.addWidget(scroll)
+
+        # Right: plot (takes remaining space)
+        plot_container = QWidget()
+        plot_layout = QVBoxLayout(plot_container)
+        plot_layout.setContentsMargins(4, 4, 4, 4)
         self.figure = Figure(figsize=(6, 6))
         self.canvas = FigureCanvas(self.figure)
+        self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.toolbar = NavigationToolbar(self.canvas, self)
         self.toolbar.setObjectName("mpl_nav_toolbar")
-        layout.addWidget(self.toolbar)
-        layout.addWidget(self.canvas)
+        plot_layout.addWidget(self.toolbar)
+        plot_layout.addWidget(self.canvas)
+        main_layout.addWidget(plot_container, 1)
 
     # This method is called by the main application when new neuron trajectory data is available.
     def set_trajectory_data(
