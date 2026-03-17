@@ -9,8 +9,8 @@ from matplotlib.backends.backend_qtagg import (
 from matplotlib.backends.backend_qtagg import (
     NavigationToolbar2QT as NavigationToolbar,
 )
-from matplotlib.figure import Figure
 from matplotlib.collections import PathCollection
+from matplotlib.figure import Figure
 from PySide6.QtCore import Qt, QTime
 from PySide6.QtWidgets import (
     QComboBox,
@@ -29,9 +29,9 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from core.circular_stats import rao_spacing_test, rayleigh_test
 from ui.app_settings import get_theme
 from ui.styles import get_mpl_theme
-from core.circular_stats import rao_spacing_test, rayleigh_test
 
 
 class RayLeighPlotWidget(QWidget):
@@ -366,7 +366,8 @@ class RayLeighPlotWidget(QWidget):
             parts.append(self._last_hover_text)
         if self._last_pick_text:
             parts.append(self._last_pick_text)
-        self.cursor_label.setText("\n".join(parts) if parts else "Hover over the plot to see θ and r.\nClick a dot to pin its peak time.")
+        self.cursor_label.setText("\n".join(parts) if parts else "Hover over the plot to see θ and r.\nClick a" +
+                                        "dot to pin its peak time.")
 
     def _on_motion(self, event) -> None:
         """Update cursor readout based on hover position."""
