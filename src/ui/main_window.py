@@ -291,6 +291,12 @@ class MainWindow(QMainWindow):
         if dlg.exec() == QDialog.Accepted:
             # Theme / colours were applied; refresh all visuals
             self.analysis.get_neuron_trajectory_plot_widget().refresh_theme()
+            try:
+                # Rayleigh plot should update its colors with theme changes as well
+                self.analysis.get_rayleigh_plot_widget().refresh_theme()
+            except Exception:
+                # Some tests or older analysis panels may not expose this widget
+                pass
             self.analysis.get_roi_plot_widget().refresh_theme()
             self.viewer.refresh_roi_selector_icons()
             self.viewer._show_current()  # redraw ROI overlays with new colours
