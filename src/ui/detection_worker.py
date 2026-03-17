@@ -15,9 +15,7 @@ class DetectionWorker(QThread):
     """Runs neuron detection in a background thread and emits progress (step, total, message)."""
 
     progress = Signal(int, int, str)  # (completed, total, message)
-    finished = Signal(
-        object, object, object
-    )  # (neuron_locations, neuron_trajectories, quality_mask)
+    finished = Signal(object, object, object)  # (neuron_locations, neuron_trajectories, quality_mask)
     error = Signal(str)
 
     def __init__(

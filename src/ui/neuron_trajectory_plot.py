@@ -68,9 +68,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
         self.roi_view_combo.addItem("Both (ROI 1 & 2)", self.VIEW_BOTH)
         self.roi_view_combo.addItem("ROI 1 only", self.VIEW_ROI1)
         self.roi_view_combo.addItem("ROI 2 only", self.VIEW_ROI2)
-        self.roi_view_combo.setToolTip(
-            "Filter trajectories by ROI when detection was run on both ROIs."
-        )
+        self.roi_view_combo.setToolTip("Filter trajectories by ROI when detection was run on both ROIs.")
         self.roi_view_combo.currentIndexChanged.connect(self._update_plot)
         roi_view_row.addWidget(self.roi_view_combo)
         roi_view_row.addStretch()
@@ -187,9 +185,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
                 f"({num_good} good, {num_bad} bad) across {num_frames} frames"
             )
         else:
-            self.status_label.setText(
-                f"Displaying {num_neurons} neuron trajectories across {num_frames} frames"
-            )
+            self.status_label.setText(f"Displaying {num_neurons} neuron trajectories across {num_frames} frames")
 
         # Enable export buttons
         self.export_btn.setEnabled(True)
@@ -219,12 +215,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
 
     def _on_motion(self, event) -> None:
         """Show frame and intensity under cursor in hover label."""
-        if (
-            self.neuron_trajectories is None
-            or event.inaxes is None
-            or event.xdata is None
-            or event.ydata is None
-        ):
+        if self.neuron_trajectories is None or event.inaxes is None or event.xdata is None or event.ydata is None:
             self.hover_label.setText("Hover over plot for frame and intensity.")
             return
         frame_idx = int(round(event.xdata))
@@ -264,17 +255,13 @@ class NeuronTrajectoryPlotWidget(QWidget):
 
         # Build candidate indices (good and/or bad), then apply ROI filter and max limit
         if self.quality_mask is not None:
-            good_indices = (
-                np.where(self.quality_mask)[0] if show_good else np.array([], dtype=np.intp)
-            )
-            bad_indices = (
-                np.where(~self.quality_mask)[0] if show_bad else np.array([], dtype=np.intp)
-            )
+            good_indices = np.where(self.quality_mask)[0] if show_good else np.array([], dtype=np.intp)
+            bad_indices = np.where(~self.quality_mask)[0] if show_bad else np.array([], dtype=np.intp)
             candidates = np.concatenate([good_indices, bad_indices])
         else:
             candidates = np.arange(num_neurons)
 
-        # When we have ROI origin: filter by ROI first, then apply max_neurons 
+        # When we have ROI origin: filter by ROI first, then apply max_neurons
         #           per ROI (for Both) or total (for single ROI)
         if self.roi_origin is not None and len(candidates) > 0:
             roi_1_candidates = candidates[self.roi_origin[candidates] == 0]
@@ -285,10 +272,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
                 neurons_to_plot = roi_2_candidates[:max_neurons].tolist()
             else:
                 # VIEW_BOTH: take up to max_neurons from each ROI so both are represented
-                neurons_to_plot = (
-                    roi_1_candidates[:max_neurons].tolist()
-                    + roi_2_candidates[:max_neurons].tolist()
-                )
+                neurons_to_plot = roi_1_candidates[:max_neurons].tolist() + roi_2_candidates[:max_neurons].tolist()
         else:
             # No ROI split: use first max_neurons good, first max_neurons bad
             neurons_to_plot = []
@@ -304,9 +288,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
 
         # Plot individual neuron trajectories (theme-aware colors)
         use_roi_colors = (
-            view_mode == self.VIEW_BOTH
-            and self.roi_origin is not None
-            and len(np.unique(self.roi_origin)) > 1
+            view_mode == self.VIEW_BOTH and self.roi_origin is not None and len(np.unique(self.roi_origin)) > 1
         )
         roi_1_color = theme["roi_1_line_color"]
         roi_2_color = theme["roi_2_line_color"]
@@ -502,9 +484,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
 
             np.savetxt(file_path, data, delimiter=",", header=header, comments="", fmt=fmt)
 
-            QMessageBox.information(
-                self, "Export Successful", f"Trajectory data exported to:\n{file_path}"
-            )
+            QMessageBox.information(self, "Export Successful", f"Trajectory data exported to:\n{file_path}")
         except Exception as e:
             QMessageBox.critical(self, "Export Failed", f"Failed to export data:\n{str(e)}")
 

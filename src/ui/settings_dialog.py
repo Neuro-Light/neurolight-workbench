@@ -59,9 +59,7 @@ class SettingsDialog(QDialog):
         for value, label in THEME_VALUES:
             radio = QRadioButton(label)
             radio.setToolTip(
-                "Increase contrast for text, borders, and backgrounds."
-                if "high contrast" in label
-                else None
+                "Increase contrast for text, borders, and backgrounds." if "high contrast" in label else None
             )
             self.theme_radios[value] = radio
             theme_layout.addWidget(radio)
@@ -126,12 +124,8 @@ class SettingsDialog(QDialog):
             setattr(self, f"_avg_roi_{roi_key}_swatch", swatch)
             change_btn = QPushButton("Change...")
             change_btn.setFixedWidth(90)
-            change_btn.clicked.connect(
-                lambda _checked=False, k=roi_key: self._pick_avg_roi_color(k)
-            )
-            change_btn.setToolTip(
-                f"Color for the average trajectory line of {label_text} on the Graphs tab"
-            )
+            change_btn.clicked.connect(lambda _checked=False, k=roi_key: self._pick_avg_roi_color(k))
+            change_btn.setToolTip(f"Color for the average trajectory line of {label_text} on the Graphs tab")
             row.addWidget(label)
             row.addWidget(swatch)
             row.addWidget(change_btn)
@@ -175,9 +169,7 @@ class SettingsDialog(QDialog):
 
     def _pick_avg_roi_color(self, roi_key: str) -> None:
         current = QColor(self._avg_traj_roi_colors[roi_key])
-        color = QColorDialog.getColor(
-            current, self, f"Choose Average ({ROI_LABELS[roi_key]}) Color"
-        )
+        color = QColorDialog.getColor(current, self, f"Choose Average ({ROI_LABELS[roi_key]}) Color")
         if color.isValid():
             self._avg_traj_roi_colors[roi_key] = color.name()
             swatch = getattr(self, f"_avg_roi_{roi_key}_swatch")

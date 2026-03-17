@@ -108,9 +108,7 @@ class ROIIntensityPlotWidget(QWidget):
     # Public API
     # ------------------------------------------------------------------
 
-    def plot_intensity_time_series(
-        self, roi_key: str, intensity_data: np.ndarray, roi: ROI
-    ) -> None:
+    def plot_intensity_time_series(self, roi_key: str, intensity_data: np.ndarray, roi: ROI) -> None:
         """Store intensity data for *roi_key* and redraw."""
         self._intensity[roi_key] = intensity_data
         self._rois[roi_key] = roi
@@ -299,8 +297,6 @@ class ROIIntensityPlotWidget(QWidget):
                 comments="",
                 fmt=fmt,
             )
-            QMessageBox.information(
-                self, "Export Successful", f"Intensity data exported to:\n{file_path}"
-            )
+            QMessageBox.information(self, "Export Successful", f"Intensity data exported to:\n{file_path}")
         except Exception as e:
             QMessageBox.critical(self, "Export Failed", f"Failed to export data:\n{e}")

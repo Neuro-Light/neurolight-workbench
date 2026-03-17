@@ -122,9 +122,7 @@ class AlignmentDialog(QDialog):
     def accept(self) -> None:
         """Validate and accept the dialog."""
         if self.num_frames == 0:
-            QMessageBox.warning(
-                self, "No Images", "No images loaded. Please load an image stack first."
-            )
+            QMessageBox.warning(self, "No Images", "No images loaded. Please load an image stack first.")
             return
 
         if self.reference_index < 0 or self.reference_index >= self.num_frames:

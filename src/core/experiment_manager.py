@@ -198,9 +198,7 @@ class Experiment:
 
         # Deserialize neuron locations
         if "neuron_locations" in data:
-            self._neuron_detection_data["neuron_locations"] = np.array(
-                data["neuron_locations"], dtype=np.int32
-            )
+            self._neuron_detection_data["neuron_locations"] = np.array(data["neuron_locations"], dtype=np.int32)
 
         # Deserialize neuron trajectories (base64-encoded)
         if "neuron_trajectories" in data:
@@ -215,9 +213,7 @@ class Experiment:
                 )
             else:
                 # Legacy format (list)
-                self._neuron_detection_data["neuron_trajectories"] = np.array(
-                    traj_data, dtype=np.float32
-                )
+                self._neuron_detection_data["neuron_trajectories"] = np.array(traj_data, dtype=np.float32)
 
         # Deserialize quality mask
         if "quality_mask" in data:

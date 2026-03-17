@@ -99,9 +99,7 @@ class ImageProcessor:
         self.log_processing_step("crop", {"roi": roi.to_dict(), "apply_mask": apply_mask})
         return cropped
 
-    def crop_stack_to_roi(
-        self, image_stack: np.ndarray, roi: ROI, apply_mask: bool = True
-    ) -> np.ndarray:
+    def crop_stack_to_roi(self, image_stack: np.ndarray, roi: ROI, apply_mask: bool = True) -> np.ndarray:
         """
         Crop an entire image stack to ROI region.
 
@@ -333,9 +331,9 @@ class ImageProcessor:
         global_range = global_max - global_min
 
         if global_range > 0:
-            image_stack_uint16 = (
-                (image_stack.astype(np.float32) - global_min) / global_range * 65535.0
-            ).astype(np.uint16)
+            image_stack_uint16 = ((image_stack.astype(np.float32) - global_min) / global_range * 65535.0).astype(
+                np.uint16
+            )
         else:
             image_stack_uint16 = image_stack.astype(np.uint16)
 
@@ -356,9 +354,7 @@ class ImageProcessor:
 
         # Vectorized de-normalization back to original data range
         if global_range > 0:
-            aligned_float = (
-                aligned_stack_uint16.astype(np.float32) * (global_range / 65535.0) + global_min
-            )
+            aligned_float = aligned_stack_uint16.astype(np.float32) * (global_range / 65535.0) + global_min
             del aligned_stack_uint16
 
             if image_stack.dtype == np.uint8:
@@ -490,9 +486,7 @@ class ImageProcessor:
         num_frames, height, width = frame_data.shape
 
         if roi_mask.shape != (height, width):
-            raise ValueError(
-                f"roi_mask shape {roi_mask.shape} must match image dimensions ({height}, {width})"
-            )
+            raise ValueError(f"roi_mask shape {roi_mask.shape} must match image dimensions ({height}, {width})")
 
         _total_steps = 5
 

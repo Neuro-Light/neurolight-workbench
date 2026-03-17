@@ -541,9 +541,7 @@ class ROISelectionDialog(QDialog):
         ):
             dx = int(x - self._last_drag_pos.x())
             dy = int(y - self._last_drag_pos.y())
-            self._current_roi.adjust_with_handle(
-                self._dragging_handle, dx, dy, self._image_width, self._image_height
-            )
+            self._current_roi.adjust_with_handle(self._dragging_handle, dx, dy, self._image_width, self._image_height)
             self._last_drag_pos = QPointF(x, y)
             self._update_overlay()
             return

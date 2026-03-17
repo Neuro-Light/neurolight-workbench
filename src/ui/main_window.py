@@ -198,8 +198,7 @@ class MainWindow(QMainWindow):
                 # - current step is beyond Select ROI, or
                 # - Select ROI is in completed steps (user finished step 4)
                 show_analysis = (
-                    current_index > roi_index
-                    or WorkflowStep.SELECT_ROI in self.workflow_manager.completed_steps
+                    current_index > roi_index or WorkflowStep.SELECT_ROI in self.workflow_manager.completed_steps
                 )
                 self.analysis.setVisible(show_analysis)
 
@@ -218,9 +217,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    def set_current_experiment_path(
-        self, path: Optional[str], *, persist_workflow: bool = True
-    ) -> None:
+    def set_current_experiment_path(self, path: Optional[str], *, persist_workflow: bool = True) -> None:
         self.current_experiment_path = path
         if persist_workflow and path:
             self._save_workflow_progress()
@@ -286,9 +283,7 @@ class MainWindow(QMainWindow):
 
     def open_website(self):
         QDesktopServices.openUrl(
-            QUrl(
-                "https://sce.nau.edu/capstone/projects/CS/2026/NeuroNauts_F25/project_overview.html"
-            )
+            QUrl("https://sce.nau.edu/capstone/projects/CS/2026/NeuroNauts_F25/project_overview.html")
         )
 
     def _open_settings(self) -> None:
@@ -348,9 +343,7 @@ class MainWindow(QMainWindow):
                 try:
                     self.manager.save_experiment(self.experiment, self.current_experiment_path)
                 except Exception as e:
-                    logger.exception(
-                        f"Failed to save experiment during close: {self.current_experiment_path}"
-                    )
+                    logger.exception(f"Failed to save experiment during close: {self.current_experiment_path}")
                     self._show_save_error_feedback(str(e))
             event.accept()
         else:
@@ -410,10 +403,7 @@ class MainWindow(QMainWindow):
         # Connect detection widget to trajectory plot widget
         trajectory_plot_widget = self.analysis.get_neuron_trajectory_plot_widget()
         detection_widget.set_trajectory_plot_callback(
-            lambda trajectories,
-            quality_mask,
-            locations,
-            roi_origin=None: trajectory_plot_widget.plot_trajectories(
+            lambda trajectories, quality_mask, locations, roi_origin=None: trajectory_plot_widget.plot_trajectories(
                 trajectories, quality_mask, locations, roi_origin=roi_origin
             )
         )
@@ -487,9 +477,7 @@ class MainWindow(QMainWindow):
                 # Show loading dialog
                 loading_dialog = LoadingDialog(self)
                 loading_dialog.show()
-                loading_dialog.update_status(
-                    "Loading image stack...", "This may take a few seconds"
-                )
+                loading_dialog.update_status("Loading image stack...", "This may take a few seconds")
 
                 # Process events to show the dialog
                 QApplication.processEvents()
@@ -518,18 +506,14 @@ class MainWindow(QMainWindow):
                                 self.viewer.set_stack(p)
                         else:
                             # No saved file list, load from directory
-                            loading_dialog.update_status(
-                                "Loading image stack...", f"Loading images from: {p}"
-                            )
+                            loading_dialog.update_status("Loading image stack...", f"Loading images from: {p}")
                             QApplication.processEvents()
                             self.viewer.set_stack(p)
 
                         # Load both ROIs from experiment.rois
                         has_any_roi = any(self.experiment.rois.get(k) for k in ("roi_1", "roi_2"))
                         if has_any_roi:
-                            loading_dialog.update_status(
-                                "Loading ROIs...", "Restoring ROI selections"
-                            )
+                            loading_dialog.update_status("Loading ROIs...", "Restoring ROI selections")
                             QApplication.processEvents()
 
                             loaded_rois: dict = {}
@@ -541,8 +525,7 @@ class MainWindow(QMainWindow):
                                     loaded_rois[roi_key] = ROI.from_dict(roi_data)
                                 except Exception as exc:
                                     logger.warning(
-                                        "ROI.from_dict failed for %s (data=%r): %s; "
-                                        "using default ellipse fallback",
+                                        "ROI.from_dict failed for %s (data=%r): %s; using default ellipse fallback",
                                         roi_key,
                                         roi_data,
                                         exc,
@@ -666,9 +649,7 @@ class MainWindow(QMainWindow):
                     detection_params = {
                         "cell_size": detection_widget.cell_size_spin.value(),
                         "num_peaks": detection_widget.num_peaks_spin.value(),
-                        "correlation_threshold": (
-                            detection_widget.correlation_threshold_spin.value()
-                        ),
+                        "correlation_threshold": (detection_widget.correlation_threshold_spin.value()),
                         "threshold_rel": detection_widget.threshold_rel_spin.value(),
                         "apply_detrending": detection_widget.detrending_checkbox.isChecked(),
                     }
@@ -707,9 +688,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Error", str(e))
 
     def _save_as(self) -> None:
-        file_path, _ = QFileDialog.getSaveFileName(
-            self, "Save Experiment As", "", "Neurolight Experiment (*.nexp)"
-        )
+        file_path, _ = QFileDialog.getSaveFileName(self, "Save Experiment As", "", "Neurolight Experiment (*.nexp)")
         if not file_path:
             return
         if not file_path.endswith(".nexp"):
@@ -824,14 +803,10 @@ class MainWindow(QMainWindow):
             frame_max = np.max(frame_data)
             if frame_max > 1.0:
                 frame_data = (
-                    (frame_data - frame_min) / (frame_max - frame_min)
-                    if frame_max != frame_min
-                    else frame_data
+                    (frame_data - frame_min) / (frame_max - frame_min) if frame_max != frame_min else frame_data
                 )
 
-            intensity_data = self.data_analyzer.extract_roi_intensity_time_series(
-                frame_data, roi=roi
-            )
+            intensity_data = self.data_analyzer.extract_roi_intensity_time_series(frame_data, roi=roi)
 
             roi_plot_widget = self.analysis.get_roi_plot_widget()
             roi_plot_widget.plot_intensity_time_series(roi_key, intensity_data, roi=roi)
@@ -999,16 +974,12 @@ class MainWindow(QMainWindow):
                 return
 
             # Ask user for output directory
-            output_dir = QFileDialog.getExistingDirectory(
-                self, "Select Output Directory for Cropped Stack", ""
-            )
+            output_dir = QFileDialog.getExistingDirectory(self, "Select Output Directory for Cropped Stack", "")
             if not output_dir:
                 return
 
             # Crop stack (apply mask for both ellipse and polygon)
-            cropped_stack = self.image_processor.crop_stack_to_roi(
-                frame_data, current_roi, apply_mask=True
-            )
+            cropped_stack = self.image_processor.crop_stack_to_roi(frame_data, current_roi, apply_mask=True)
 
             # Save cropped frames
             from PIL import Image
@@ -1038,9 +1009,7 @@ class MainWindow(QMainWindow):
                         # Constant frame - convert to uint8 with proper scaling
                         if np.issubdtype(cropped_frame.dtype, np.floating):
                             # For float dtypes, scale to 0-255 range
-                            uint8_value = np.clip(np.round(frame_min * 255), 0, 255).astype(
-                                np.uint8
-                            )
+                            uint8_value = np.clip(np.round(frame_min * 255), 0, 255).astype(np.uint8)
                         else:
                             # For integer dtypes, just clip to 0-255
                             uint8_value = np.clip(frame_min, 0, 255).astype(np.uint8)
@@ -1131,9 +1100,7 @@ class MainWindow(QMainWindow):
         self._alignment_progress.close()
         self._alignment_worker = None
 
-        avg_confidence = (
-            sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0.0
-        )
+        avg_confidence = sum(confidence_scores) / len(confidence_scores) if confidence_scores else 0.0
         low_confidence_frames = [i for i, conf in enumerate(confidence_scores) if conf < 0.5]
 
         result_message = (
@@ -1351,8 +1318,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self,
             "Save Complete",
-            f"Aligned {len(aligned_stack)} images saved to {output_dir}\n"
-            f"Transformation matrices and metadata saved.",
+            f"Aligned {len(aligned_stack)} images saved to {output_dir}\nTransformation matrices and metadata saved.",
         )
 
     def _export_experiment(self) -> None:
@@ -1386,9 +1352,7 @@ class MainWindow(QMainWindow):
             # Export experiment data using the manager's save method
             # This ensures the file format matches the native .nexp format
             if self.manager.save_experiment(self.experiment, file_path):
-                QMessageBox.information(
-                    self, "Export Successful", f"Experiment exported to:\n{file_path}"
-                )
+                QMessageBox.information(self, "Export Successful", f"Experiment exported to:\n{file_path}")
             else:
                 QMessageBox.warning(self, "Export Failed", "Failed to export experiment.")
         except Exception as e:

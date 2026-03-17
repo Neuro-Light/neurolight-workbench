@@ -46,10 +46,7 @@ STEP_DEFINITIONS: Dict[WorkflowStep, StepMeta] = {
     WorkflowStep.LOAD_IMAGES: StepMeta(
         index=1,
         short_label="Load Image Stack",
-        tooltip=(
-            "Load the image stack to analyze. "
-            "Use File → Open Image Stack or the Open Images button."
-        ),
+        tooltip=("Load the image stack to analyze. Use File → Open Image Stack or the Open Images button."),
         description=(
             "Start by loading the image stack you want to analyze. "
             "You can use File → Open Image Stack, the Open Images "
@@ -69,10 +66,7 @@ STEP_DEFINITIONS: Dict[WorkflowStep, StepMeta] = {
         index=3,
         short_label="Align Images",
         tooltip="Align frames in the stack using PyStackReg to correct motion.",
-        description=(
-            "Run image alignment from the Tools → Align Images "
-            "menu to correct for motion across the stack."
-        ),
+        description=("Run image alignment from the Tools → Align Images menu to correct for motion across the stack."),
     ),
     WorkflowStep.SELECT_ROI: StepMeta(
         index=4,
@@ -461,9 +455,7 @@ class WorkflowStepper(QFrame):
         self._description_label.setText(current_meta.description)
 
         # Next button only enabled when the active step is marked ready (and not the final step)
-        can_advance = current != WorkflowStep.ANALYZE_GRAPHS and self._manager.is_step_ready(
-            current
-        )
+        can_advance = current != WorkflowStep.ANALYZE_GRAPHS and self._manager.is_step_ready(current)
         self._next_button.setEnabled(can_advance)
 
         # Show Align/Skip controls only on the alignment step

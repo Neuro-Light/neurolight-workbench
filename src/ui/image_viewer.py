@@ -52,9 +52,7 @@ class ImageViewer(QWidget):
     roiSelected = Signal(str, object)  # Emits (roi_key, ROI object)
     roiChanged = Signal(str, object)  # Emits (roi_key, ROI object) when adjusted
     roiDeleted = Signal(str)  # Emits roi_key when an ROI is deleted
-    displaySettingsChanged = Signal(
-        int, int
-    )  # Emits (exposure, contrast) when display settings change
+    displaySettingsChanged = Signal(int, int)  # Emits (exposure, contrast) when display settings change
 
     def __init__(self, handler: ImageStackHandler) -> None:
         super().__init__()
@@ -416,9 +414,7 @@ class ImageViewer(QWidget):
         preview_img = self._ensure_uint8(img)
         qimg = numpy_to_qimage(preview_img)
         pix = QPixmap.fromImage(qimg)
-        scaled_pix = pix.scaled(
-            self.image_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation
-        )
+        scaled_pix = pix.scaled(self.image_label.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
 
         if img.ndim >= 2:
             original_height, original_width = img.shape[0], img.shape[1]
@@ -505,10 +501,7 @@ class ImageViewer(QWidget):
             self,
             "Select Image Files",
             "",
-            "Image Files (*.tif *.tiff *.gif);;"
-            "TIF Files (*.tif *.tiff);;"
-            "GIF Files (*.gif);;"
-            "All Files (*.*)",
+            "Image Files (*.tif *.tiff *.gif);;TIF Files (*.tif *.tiff);;GIF Files (*.gif);;All Files (*.*)",
         )
 
         if files:
