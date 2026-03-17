@@ -219,15 +219,46 @@ class RayLeighPlotWidget(QWidget):
 
         theme = get_mpl_theme(get_theme())
 
-        # Color all displayed neurons the same for now; ROI filtering is via the selector.
-        ax.scatter(
-            theta,
-            jitter,
-            s=35,
-            color=theme["good_color"],
-            alpha=0.8,
-            label="Neurons",
-        )
+        # Color points by ROI when possible so Rayleigh plot visually matches ROI colours.
+        if (
+            self.roi_origin is not None
+            and len(self.roi_origin) == num_neurons
+            and np.any(self.roi_origin[indices] == 0)
+            and np.any(self.roi_origin[indices] == 1)
+        ):
+            roi_1_color = theme["roi_1_line_color"]
+            roi_2_color = theme["roi_2_line_color"]
+            roi_flags = self.roi_origin[indices]
+            roi_1_idx = roi_flags == 0
+            roi_2_idx = roi_flags == 1
+            if np.any(roi_1_idx):
+                ax.scatter(
+                    theta[roi_1_idx],
+                    jitter[roi_1_idx],
+                    s=35,
+                    color=roi_1_color,
+                    alpha=0.8,
+                    label="ROI 1",
+                )
+            if np.any(roi_2_idx):
+                ax.scatter(
+                    theta[roi_2_idx],
+                    jitter[roi_2_idx],
+                    s=35,
+                    color=roi_2_color,
+                    alpha=0.8,
+                    label="ROI 2",
+                )
+        else:
+            # Fallback: single-colour points using the theme's good/neutral colour.
+            ax.scatter(
+                theta,
+                jitter,
+                s=35,
+                color=theme.get("neutral_color", theme.get("good_color", "#60a5fa")),
+                alpha=0.8,
+                label="Neurons",
+            )
 
         title_time = start_time.toString("HH:mm")
         ax.set_title(
