@@ -12,6 +12,7 @@ from matplotlib.backends.backend_qtagg import (
 from matplotlib.figure import Figure
 from PySide6.QtCore import Qt, QTime
 from PySide6.QtWidgets import (
+    QComboBox,
     QFormLayout,
     QFrame,
     QGroupBox,
@@ -41,6 +42,7 @@ class RayLeighPlotWidget(QWidget):
         super().__init__(parent)
         self.neuron_trajectories: Optional[np.ndarray] = None
         self.quality_mask: Optional[np.ndarray] = None
+        self.roi_origin: Optional[np.ndarray] = None  # 0 = ROI 1, 1 = ROI 2 per neuron
 
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -56,6 +58,18 @@ class RayLeighPlotWidget(QWidget):
         self.status_label.setAlignment(Qt.AlignCenter)
         self.status_label.setWordWrap(True)
         sidebar_layout.addWidget(self.status_label)
+
+        # ROI view selector: Both / ROI 1 only / ROI 2 only
+        roi_row = QHBoxLayout()
+        roi_row.addWidget(QLabel("Show neurons from:"))
+        self.roi_view_combo = QComboBox()
+        self.roi_view_combo.addItem("Both (ROI 1 & 2)", "both")
+        self.roi_view_combo.addItem("ROI 1 only", "roi_1")
+        self.roi_view_combo.addItem("ROI 2 only", "roi_2")
+        self.roi_view_combo.setToolTip("Filter Rayleigh plot to neurons from ROI 1, ROI 2, or both.")
+        self.roi_view_combo.currentIndexChanged.connect(self._plot)
+        roi_row.addWidget(self.roi_view_combo, 1)
+        sidebar_layout.addLayout(roi_row)
 
         controls_group = QGroupBox("Time Settings")
         controls_layout = QFormLayout()
@@ -104,9 +118,11 @@ class RayLeighPlotWidget(QWidget):
         self,
         neuron_trajectories: np.ndarray,
         quality_mask: Optional[np.ndarray] = None,
+        roi_origin: Optional[np.ndarray] = None,
     ) -> None:
         self.neuron_trajectories = neuron_trajectories
         self.quality_mask = quality_mask
+        self.roi_origin = roi_origin
 
         if neuron_trajectories is None or len(neuron_trajectories) == 0:
             self.status_label.setText("No neuron trajectories to display.")
@@ -158,7 +174,35 @@ class RayLeighPlotWidget(QWidget):
         start_minutes = start_time.hour() * 60 + start_time.minute()
         interval_minutes = int(self.interval_minutes_spin.value())
 
-        peak_frames = np.argmax(self.neuron_trajectories, axis=1)
+        # Build mask of neurons to include based on ROI selector and quality mask
+        num_neurons = self.neuron_trajectories.shape[0]
+        indices = np.arange(num_neurons)
+
+        # ROI filter first (if roi_origin available)
+        view_mode = self.roi_view_combo.currentData()
+        if self.roi_origin is not None and len(self.roi_origin) == num_neurons:
+            if view_mode == "roi_1":
+                indices = indices[self.roi_origin == 0]
+            elif view_mode == "roi_2":
+                indices = indices[self.roi_origin == 1]
+            # "both" keeps all indices
+
+        # Then apply quality filter (only good neurons) if available
+        if self.quality_mask is not None:
+            good_mask = self.quality_mask.astype(bool)
+            indices = indices[good_mask[indices]]
+
+        if indices.size == 0:
+            QMessageBox.information(
+                self,
+                "No Neurons",
+                "No neurons match the current ROI / quality filters.",
+            )
+            self.figure.clear()
+            self.canvas.draw_idle()
+            return
+
+        peak_frames = np.argmax(self.neuron_trajectories[indices], axis=1)
         peak_minutes = (start_minutes + peak_frames * interval_minutes) % (24 * 60)
         theta = (peak_minutes / (24 * 60)) * (2 * np.pi)
 
@@ -178,35 +222,15 @@ class RayLeighPlotWidget(QWidget):
 
         theme = get_mpl_theme(get_theme())
 
-        if self.quality_mask is not None:
-            good_mask = self.quality_mask.astype(bool)
-            if np.any(good_mask):
-                ax.scatter(
-                    theta[good_mask],
-                    jitter[good_mask],
-                    s=35,
-                    color=theme["good_color"],
-                    alpha=0.8,
-                    label="Good Neurons",
-                )
-            if np.any(~good_mask):
-                ax.scatter(
-                    theta[~good_mask],
-                    jitter[~good_mask],
-                    s=35,
-                    color=theme["bad_color"],
-                    alpha=0.8,
-                    label="Bad Neurons",
-                )
-        else:
-            ax.scatter(
-                theta,
-                jitter,
-                s=35,
-                color=theme["neutral_color"],
-                alpha=0.8,
-                label="Neurons",
-            )
+        # Color all displayed neurons the same for now; ROI filtering is via the selector.
+        ax.scatter(
+            theta,
+            jitter,
+            s=35,
+            color=theme["good_color"],
+            alpha=0.8,
+            label="Neurons",
+        )
 
         title_time = start_time.toString("HH:mm")
         ax.set_title(

@@ -420,7 +420,11 @@ class MainWindow(QMainWindow):
             )
             # Rayleigh plot ignores ROI; it just needs trajectories and quality mask.
             if rayleigh_plot_widget is not None:
-                rayleigh_plot_widget.set_trajectory_data(trajectories, quality_mask)
+                rayleigh_plot_widget.set_trajectory_data(
+                    trajectories,
+                    quality_mask,
+                    roi_origin=roi_origin,
+                )
 
         detection_widget.set_trajectory_plot_callback(_update_neuron_plots)
 
