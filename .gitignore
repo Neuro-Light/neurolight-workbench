@@ -6,6 +6,10 @@ __pycache__/
 .Python
 .pytest_cache/
 .ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
 env/
 venv/
 .venv/

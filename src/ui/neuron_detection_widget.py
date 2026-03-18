@@ -87,7 +87,7 @@ class NeuronDetectionWidget(QWidget):
 
         self.cell_size_spin = DraggableSpinBox()
         self.cell_size_spin.setRange(2, 50)
-        self.cell_size_spin.setValue(6)
+        self.cell_size_spin.setValue(8)
         self.cell_size_spin.setToolTip("Neuron diameter in pixels")
         params_layout.addRow("Cell Size (pixels):", self.cell_size_spin)
 
@@ -100,7 +100,7 @@ class NeuronDetectionWidget(QWidget):
         self.correlation_threshold_spin = DraggableDoubleSpinBox()
         self.correlation_threshold_spin.setRange(0.0, 1.0)
         self.correlation_threshold_spin.setSingleStep(0.1)
-        self.correlation_threshold_spin.setValue(0.4)
+        self.correlation_threshold_spin.setValue(0.5)
         self.correlation_threshold_spin.setDecimals(2)
         self.correlation_threshold_spin.setToolTip("Threshold for filtering neurons by correlation quality")
         params_layout.addRow("Correlation Threshold:", self.correlation_threshold_spin)
@@ -108,7 +108,7 @@ class NeuronDetectionWidget(QWidget):
         self.threshold_rel_spin = DraggableDoubleSpinBox()
         self.threshold_rel_spin.setRange(0.0, 1.0)
         self.threshold_rel_spin.setSingleStep(0.01)
-        self.threshold_rel_spin.setValue(0.03)
+        self.threshold_rel_spin.setValue(0.06)
         self.threshold_rel_spin.setDecimals(2)
         self.threshold_rel_spin.setToolTip(
             "Relative threshold for peak detection (0.0-1.0). "
@@ -302,10 +302,10 @@ class NeuronDetectionWidget(QWidget):
 
         # Restore detection parameters if available
         if detection_params:
-            self.cell_size_spin.setValue(detection_params.get("cell_size", 6))
-            self.num_peaks_spin.setValue(detection_params.get("num_peaks", 400))
-            self.correlation_threshold_spin.setValue(detection_params.get("correlation_threshold", 0.4))
-            self.threshold_rel_spin.setValue(detection_params.get("threshold_rel", 0.1))
+            self.cell_size_spin.setValue(detection_params.get("cell_size", 8))
+            self.num_peaks_spin.setValue(detection_params.get("num_peaks", 800))
+            self.correlation_threshold_spin.setValue(detection_params.get("correlation_threshold", 0.5))
+            self.threshold_rel_spin.setValue(detection_params.get("threshold_rel", 0.06))
             self.detrending_checkbox.setChecked(detection_params.get("apply_detrending", True))
 
         # Update visualization

@@ -42,23 +42,32 @@ logger = logging.getLogger(__name__)
 
 # Configure logging to file if not already configured
 _log_file = Path.home() / ".neurolight" / "neurolight.log"
-_log_file.parent.mkdir(parents=True, exist_ok=True)
+try:
+    _log_file.parent.mkdir(parents=True, exist_ok=True)
+except OSError:
+    # In restricted environments (some CI/sandboxes), the home directory may be read-only.
+    # Logging should never prevent the UI (or tests) from importing.
+    pass
 
 # Check if logging is already configured at the module level
 if not logger.handlers:
-    # Create file handler with append mode
-    file_handler = logging.FileHandler(_log_file, encoding="utf-8", mode="a")
-    file_handler.setLevel(logging.WARNING)
+    handler: logging.Handler
+    try:
+        # Create file handler with append mode
+        handler = logging.FileHandler(_log_file, encoding="utf-8", mode="a")
+    except OSError:
+        handler = logging.NullHandler()
+    handler.setLevel(logging.WARNING)
 
     # Create formatter - logger.exception() automatically includes traceback
     formatter = logging.Formatter(
         "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-    file_handler.setFormatter(formatter)
+    handler.setFormatter(formatter)
 
     # Add handler to logger
-    logger.addHandler(file_handler)
+    logger.addHandler(handler)
     logger.setLevel(logging.WARNING)
     logger.propagate = False  # Prevent duplicate logs
 
@@ -213,6 +222,9 @@ class MainWindow(QMainWindow):
         if not self.current_experiment_path:
             return
         try:
+            # Persist any time-related settings that are cheap to capture
+            if hasattr(self, "analysis"):
+                self._capture_experiment_time_settings()
             self.manager.save_experiment(self.experiment, self.current_experiment_path)
         except Exception:
             pass
@@ -297,6 +309,12 @@ class MainWindow(QMainWindow):
             except Exception:
                 # Some tests or older analysis panels may not expose this widget
                 pass
+            try:
+                # Lomb–Scargle periodogram should also adopt the new theme
+                self.analysis.get_lomb_scargle_widget().refresh_theme()
+            except Exception:
+                # Some tests or lightweight analysis panels may not expose this widget
+                pass
             self.analysis.get_roi_plot_widget().refresh_theme()
             self.viewer.refresh_roi_selector_icons()
             self.viewer._show_current()  # redraw ROI overlays with new colours
@@ -345,6 +363,7 @@ class MainWindow(QMainWindow):
             self._flush_pending_display_settings()
             self._sync_rois_to_experiment()
             self._capture_display_settings()
+            self._capture_experiment_time_settings()
             if self.current_experiment_path:
                 try:
                     self.manager.save_experiment(self.experiment, self.current_experiment_path)
@@ -487,10 +506,37 @@ class MainWindow(QMainWindow):
         self.viewer.set_exposure(exposure)
         self.viewer.set_contrast(contrast)
 
+    def _apply_experiment_time_settings(self) -> None:
+        """
+        Apply saved experiment time settings (e.g. Rayleigh start time) to widgets.
+        """
+        if not hasattr(self, "analysis"):
+            return
+        # Rayleigh plot start time
+        try:
+            rayleigh_getter = getattr(self.analysis, "get_rayleigh_plot_widget", None)
+            rayleigh_widget = rayleigh_getter() if callable(rayleigh_getter) else None
+        except Exception:
+            rayleigh_widget = None
+        if rayleigh_widget is None:
+            return
+
+        time_settings = self.experiment.settings.get("time") or {}
+        start_minutes = time_settings.get("start_minutes")
+        if start_minutes is None:
+            return
+        try:
+            rayleigh_widget.set_experiment_start_time_minutes(int(start_minutes))
+        except Exception:
+            # If anything goes wrong here, fall back to widget defaults
+            pass
+
     def _auto_load_experiment_data(self) -> None:
         """Auto-load image stack, ROI, and display settings if experiment has saved data."""
         # Always apply saved or neutral display settings up front
         self._apply_saved_display_settings()
+        # Apply saved experiment time (e.g. Rayleigh start time) if available
+        self._apply_experiment_time_settings()
         try:
             detection_widget = self.analysis.get_neuron_detection_widget()
             detection_widget.reset_detection_state()
@@ -695,6 +741,7 @@ class MainWindow(QMainWindow):
             try:
                 self._sync_rois_to_experiment()
                 self._capture_display_settings()
+                self._capture_experiment_time_settings()
                 self._ensure_detection_data_saved()
                 self.manager.save_experiment(self.experiment, self.current_experiment_path)
             except Exception as e:
@@ -707,6 +754,7 @@ class MainWindow(QMainWindow):
         self._flush_pending_display_settings()
         self._sync_rois_to_experiment()
         self._capture_display_settings()
+        self._capture_experiment_time_settings()
         try:
             self.manager.save_experiment(self.experiment, self.current_experiment_path)
             QMessageBox.information(self, "Saved", "Experiment saved successfully.")
@@ -722,6 +770,7 @@ class MainWindow(QMainWindow):
         self._flush_pending_display_settings()
         self._sync_rois_to_experiment()
         self._capture_display_settings()
+        self._capture_experiment_time_settings()
         try:
             self.manager.save_experiment(self.experiment, file_path)
             self.set_current_experiment_path(file_path, persist_workflow=False)
@@ -806,6 +855,7 @@ class MainWindow(QMainWindow):
             self._flush_pending_display_settings()
             self._sync_rois_to_experiment()
             self._capture_display_settings()
+            self._capture_experiment_time_settings()
             if self.current_experiment_path:
                 try:
                     self.manager.save_experiment(self.experiment, self.current_experiment_path)
@@ -836,6 +886,15 @@ class MainWindow(QMainWindow):
 
             roi_plot_widget = self.analysis.get_roi_plot_widget()
             roi_plot_widget.plot_intensity_time_series(roi_key, intensity_data, roi=roi)
+
+            # Forward the same intensity data to the Lomb–Scargle periodogram widget so it
+            # can reuse the existing ROI intensity pipeline without introducing a new source.
+            try:
+                lomb_scargle_widget = self.analysis.get_lomb_scargle_widget()
+                lomb_scargle_widget.set_intensity_time_series(roi_key, intensity_data)
+            except Exception:
+                # Some tests or lightweight analysis panels may not expose this widget
+                pass
 
             detection_widget = self.analysis.get_neuron_detection_widget()
             if frame_data.ndim == 3:
@@ -913,6 +972,32 @@ class MainWindow(QMainWindow):
         self.experiment.settings["display"]["exposure"] = self.viewer.get_exposure()
         self.experiment.settings["display"]["contrast"] = self.viewer.get_contrast()
 
+    def _capture_experiment_time_settings(self) -> None:
+        """
+        Capture experiment time settings (e.g. Rayleigh experiment start time) into the experiment.
+
+        Stores minutes since midnight in experiment.settings["time"]["start_minutes"] so the
+        Rayleigh plot (and any other time-aware widgets) can be restored on reload.
+        """
+        if not hasattr(self, "analysis"):
+            return
+        try:
+            rayleigh_getter = getattr(self.analysis, "get_rayleigh_plot_widget", None)
+            rayleigh_widget = rayleigh_getter() if callable(rayleigh_getter) else None
+        except Exception:
+            rayleigh_widget = None
+        if rayleigh_widget is None or not hasattr(rayleigh_widget, "get_experiment_start_time_minutes"):
+            return
+
+        try:
+            start_minutes = int(rayleigh_widget.get_experiment_start_time_minutes())
+        except Exception:
+            return
+
+        if "time" not in self.experiment.settings:
+            self.experiment.settings["time"] = {}
+        self.experiment.settings["time"]["start_minutes"] = start_minutes
+
     def _on_display_settings_changed(self, exposure: int, contrast: int) -> None:
         """
         Handle display settings changes with debounced saving.
@@ -983,6 +1068,7 @@ class MainWindow(QMainWindow):
         self._flush_pending_display_settings()
         self._sync_rois_to_experiment()
         self._capture_display_settings()
+        self._capture_experiment_time_settings()
         try:
             self.manager.save_experiment(self.experiment, self.current_experiment_path)
         except Exception:

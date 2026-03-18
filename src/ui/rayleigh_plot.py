@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
 
 from core.circular_stats import rao_spacing_test, rayleigh_test
 from ui.app_settings import get_theme
+from ui.constants import DEFAULT_FRAME_INTERVAL_MINUTES
 from ui.styles import get_mpl_theme
 
 
@@ -81,7 +82,7 @@ class RayLeighPlotWidget(QWidget):
         sidebar_layout.addWidget(roi_row_widget, alignment=Qt.AlignHCenter)
 
         controls_group = QGroupBox("Time Settings")
-        controls_group.setMaximumWidth(280)
+        controls_group.setMaximumWidth(340)
         controls_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         controls_layout = QFormLayout()
         self.start_time_edit = QTimeEdit()
@@ -89,12 +90,21 @@ class RayLeighPlotWidget(QWidget):
         self.start_time_edit.setTime(QTime(0, 0))
         self.start_time_edit.setToolTip("Time of first frame (24-hour time)")
         controls_layout.addRow("Experiment Start Time:", self.start_time_edit)
-        self.interval_minutes_spin = QSpinBox()
-        self.interval_minutes_spin.setRange(1, 1440)
-        self.interval_minutes_spin.setValue(7)
-        self.interval_minutes_spin.setSuffix(" min")
-        self.interval_minutes_spin.setToolTip("Time between consecutive frames in minutes")
-        controls_layout.addRow("Interval Between Photos:", self.interval_minutes_spin)
+        interval_row = QHBoxLayout()
+        interval_row.setSpacing(4)
+        self.interval_spin = QSpinBox()
+        self.interval_spin.setRange(1, 86400)
+        self.interval_spin.setValue(DEFAULT_FRAME_INTERVAL_MINUTES)
+        self.interval_spin.setToolTip("Time between consecutive frames")
+        interval_row.addWidget(self.interval_spin)
+        self.interval_unit_combo = QComboBox()
+        self.interval_unit_combo.addItem("sec", "seconds")
+        self.interval_unit_combo.addItem("min", "minutes")
+        self.interval_unit_combo.addItem("hr", "hours")
+        self.interval_unit_combo.setCurrentIndex(1)  # Default to minutes
+        self.interval_unit_combo.setToolTip("Unit for the interval value")
+        interval_row.addWidget(self.interval_unit_combo)
+        controls_layout.addRow("Interval Between Photos:", interval_row)
         self.plot_btn = QPushButton("Plot Rayleigh Plot")
         self.plot_btn.setEnabled(False)
         self.plot_btn.clicked.connect(self._plot)
@@ -105,7 +115,7 @@ class RayLeighPlotWidget(QWidget):
 
         # Cursor / selection readout (separate from the status banner at top)
         self.cursor_group = QGroupBox("Cursor / Selection")
-        self.cursor_group.setMaximumWidth(280)
+        self.cursor_group.setMaximumWidth(340)
         self.cursor_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
         cursor_layout = QVBoxLayout(self.cursor_group)
         self.cursor_label = QLabel("Hover over the plot to see θ and r.\nClick a dot to pin its peak time.")
@@ -168,6 +178,44 @@ class RayLeighPlotWidget(QWidget):
         self._pick_cid = self.canvas.mpl_connect("pick_event", self._on_pick)
         self._motion_cid = self.canvas.mpl_connect("motion_notify_event", self._on_motion)
 
+    def get_experiment_start_time_minutes(self) -> int:
+        """
+        Return the experiment start time as minutes since midnight (0–1439).
+        """
+        start_time = self.start_time_edit.time()
+        return start_time.hour() * 60 + start_time.minute()
+
+    def set_experiment_start_time_minutes(self, minutes: int) -> None:
+        """
+        Set the experiment start time from minutes since midnight (0–1439).
+        Values outside this range are wrapped modulo 24 hours.
+        """
+        minutes_int = int(minutes) % (24 * 60)
+        hours = minutes_int // 60
+        mins = minutes_int % 60
+        self.start_time_edit.setTime(QTime(hours, mins))
+
+    def _get_interval_minutes(self) -> float:
+        """
+        Return the photo interval converted to minutes based on the selected unit.
+        """
+        value = self.interval_spin.value()
+        unit = self.interval_unit_combo.currentData()
+        if unit == "seconds":
+            return value / 60.0
+        elif unit == "hours":
+            return value * 60.0
+        else:  # minutes
+            return float(value)
+
+    def _get_interval_display(self) -> str:
+        """
+        Return a display string for the interval (e.g., '5 min', '30 sec').
+        """
+        value = self.interval_spin.value()
+        unit_text = self.interval_unit_combo.currentText()
+        return f"{value} {unit_text}"
+
     # This method is called by the main application when new neuron trajectory data is available.
     def set_trajectory_data(
         self,
@@ -224,7 +272,7 @@ class RayLeighPlotWidget(QWidget):
 
         start_time = self.start_time_edit.time()
         start_minutes = start_time.hour() * 60 + start_time.minute()
-        interval_minutes = int(self.interval_minutes_spin.value())
+        interval_minutes = self._get_interval_minutes()
 
         # Build mask of neurons to include based on ROI selector and quality mask
         num_neurons = self.neuron_trajectories.shape[0]
@@ -269,8 +317,13 @@ class RayLeighPlotWidget(QWidget):
         ax.set_theta_direction(-1)
         ax.set_ylim(0, 1.05)
         ax.set_yticks([])
-        ax.set_xticks([0, np.pi / 2, np.pi, 3 * np.pi / 2])
-        ax.set_xticklabels(["24", "6", "12", "18"])
+        # Show tick labels for all even hours around the 24-hour circle.
+        # We label "24" instead of "0" at the top for readability.
+        even_hours = np.arange(0, 24, 2)
+        even_thetas = (even_hours / 24.0) * (2 * np.pi)
+        even_labels = ["24" if h == 0 else str(h) for h in even_hours]
+        ax.set_xticks(even_thetas)
+        ax.set_xticklabels(even_labels)
 
         theme = get_mpl_theme(get_theme())
 
@@ -326,7 +379,7 @@ class RayLeighPlotWidget(QWidget):
 
         title_time = start_time.toString("HH:mm")
         ax.set_title(
-            f"Peak Times (Modulo 24h)\nStart {title_time}  |  Interval {interval_minutes} min",
+            f"Peak Times (Modulo 24h)\nStart {title_time}  |  Interval {self._get_interval_display()}",
             fontsize=12,
         )
         # --- Rayleigh and Rao statistics summary (sidebar only) -------------------

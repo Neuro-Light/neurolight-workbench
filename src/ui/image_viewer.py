@@ -439,12 +439,14 @@ class ImageViewer(QWidget):
                 continue
             painter = QPainter(scaled_pix)
             color = QColor(roi_colors[roi_key])
+            # Draw both ROIs with solid lines for consistent measurement visuals.
+            # The active ROI is shown at full opacity; the other ROI is slightly dimmed.
             is_active = roi_key == self.active_roi_key
             if is_active:
                 pen = QPen(color, 2, Qt.SolidLine)
             else:
-                color.setAlpha(140)
-                pen = QPen(color, 2, Qt.DashLine)
+                color.setAlpha(160)
+                pen = QPen(color, 2, Qt.SolidLine)
             pen.setCosmetic(False)
             painter.setPen(pen)
             painter.setBrush(Qt.NoBrush)
