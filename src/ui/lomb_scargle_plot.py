@@ -226,6 +226,9 @@ class LombScarglePlotWidget(QWidget):
                 self.status_label.setText("All ROI traces hidden. Check a box above to analyze.")
             else:
                 self.status_label.setText("No ROI intensity data available. Select an ROI in the image viewer.")
+            self._results.clear()
+            self.export_png_btn.setEnabled(False)
+            self.export_csv_btn.setEnabled(False)
             self.canvas.draw_idle()
             self.summary_label.setText("No periodogram computed yet.")
             return
@@ -237,6 +240,10 @@ class LombScarglePlotWidget(QWidget):
                 "Invalid Sampling Interval",
                 "Time between frames must be positive.",
             )
+            self._results.clear()
+            self.export_png_btn.setEnabled(False)
+            self.export_csv_btn.setEnabled(False)
+            self.summary_label.setText("No periodogram computed yet.")
             return
 
         ax = self.figure.add_subplot(111)
