@@ -39,8 +39,22 @@ class ImageStackHandler:
     def get_image_at_index(self, index: int) -> np.ndarray:
         if index < 0 or index >= len(self.files):
             raise IndexError("Image index out of range")
-        with Image.open(self.files[index]) as img:
-            return np.array(img)
+        path = self.files[index]
+        suffix = Path(path).suffix.lower()
+
+        # Fast-path TIFFs: tifffile is typically faster and preserves 16-bit well.
+        if suffix in (".tif", ".tiff"):
+            try:
+                import tifffile  # local import keeps base startup fast
+
+                arr = tifffile.imread(path)
+                return np.asarray(arr)
+            except Exception:
+                # Fall back to Pillow below
+                pass
+
+        with Image.open(path) as img:
+            return np.asarray(img)
 
     def get_all_frames_as_array(self) -> Optional[np.ndarray]:
         """Load all frames as a 3D numpy array (frames, height, width).
@@ -49,27 +63,45 @@ class ImageStackHandler:
         """
         if not self.files:
             return None
-        frame_list = []
-        for file_path in self.files:
-            with Image.open(file_path) as img:
-                # Use np.array(img) directly to preserve dtype (consistent with get_image_at_index)
-                pixels = np.array(img)
 
-                # Handle different image modes
-                if pixels.ndim == 2:  # Grayscale (mode 'L')
-                    # Already in correct shape (height, width)
-                    pass
-                elif pixels.ndim == 3:  # Color image (RGB, RGBA, etc.)
-                    # Convert to grayscale by taking mean of color channels
-                    # Preserve dtype during conversion
-                    pixels = pixels.mean(axis=2)
-                else:
-                    # Fallback: try to reshape if needed
-                    if img.mode == "L":  # Grayscale
-                        pixels = pixels.reshape(img.size[1], img.size[0])
+        def _load_one(file_path: str) -> np.ndarray:
+            # NOTE: We avoid calling get_image_at_index (index lookup) inside threads.
+            suffix = Path(file_path).suffix.lower()
+            if suffix in (".tif", ".tiff"):
+                try:
+                    import tifffile
 
-                frame_list.append(pixels)
-        return np.array(frame_list)
+                    img_arr = tifffile.imread(file_path)
+                    pixels = np.asarray(img_arr)
+                except Exception:
+                    with Image.open(file_path) as img:
+                        pixels = np.asarray(img)
+            else:
+                with Image.open(file_path) as img:
+                    pixels = np.asarray(img)
+
+            if pixels.ndim == 2:
+                return pixels
+            if pixels.ndim == 3:
+                # Convert RGB/RGBA to grayscale quickly
+                return pixels.mean(axis=2)
+            return pixels
+
+        # Threaded IO improves total-load time for folder stacks.
+        # (This is usually IO-bound + native decoding that releases the GIL.)
+        try:
+            from concurrent.futures import ThreadPoolExecutor
+
+            max_workers = min(8, len(self.files))
+            if max_workers <= 1:
+                frames = [_load_one(p) for p in self.files]
+            else:
+                with ThreadPoolExecutor(max_workers=max_workers) as ex:
+                    frames = list(ex.map(_load_one, self.files))
+        except Exception:
+            frames = [_load_one(p) for p in self.files]
+
+        return np.asarray(frames)
 
     def associate_with_experiment(self, experiment: Experiment) -> None:
         self._experiment = experiment

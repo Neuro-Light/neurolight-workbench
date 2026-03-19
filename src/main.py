@@ -1,10 +1,21 @@
 import multiprocessing
+import os
 import sys
 from pathlib import Path
 
 from PySide6.QtCore import QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication
+
+# If alignment multiprocessing is enabled in a frozen app, avoid CPU thread
+# oversubscription (OpenMP/BLAS) which can cause instability or hard crashes
+# during SciPy-heavy workloads (e.g., neuron detection).
+if os.environ.get("NEUROLIGHT_ENABLE_MP", "").strip() == "1":
+    os.environ.setdefault("OMP_NUM_THREADS", "1")
+    os.environ.setdefault("OPENBLAS_NUM_THREADS", "1")
+    os.environ.setdefault("MKL_NUM_THREADS", "1")
+    os.environ.setdefault("VECLIB_MAXIMUM_THREADS", "1")
+    os.environ.setdefault("NUMEXPR_NUM_THREADS", "1")
 
 from ui.app_settings import get_theme
 from ui.main_window import MainWindow

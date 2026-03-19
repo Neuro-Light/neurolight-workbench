@@ -8,41 +8,23 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import numpy as np
 from PySide6.QtCore import QThread, Signal
 
-"""PyInstaller frozen apps on macOS (and sometimes Windows) have known issues with
-ProcessPoolExecutor + spawn: infinite process loops, multiple GUI windows
-pickling failures. Disable multiprocessing when frozen."""
+"""Multiprocessing in frozen macOS GUI apps can be fragile if spawned workers
+import Qt/PySide modules. To make it safe, worker functions live in
+`core.alignment_mp` (no Qt imports). We still keep multiprocessing guarded:
+
+- Default: disabled when frozen (conservative).
+- Opt-in: set NEUROLIGHT_ENABLE_MP=1 to allow it.
+"""
 _FROZEN = getattr(sys, "frozen", False)
+_ENABLE_MP_WHEN_FROZEN = os.environ.get("NEUROLIGHT_ENABLE_MP", "").strip() == "1"
 
 
 # Below this threshold, process-spawn overhead exceeds the parallelism gain.
 _MIN_FRAMES_FOR_MP = 10
 
 
-# ------------------------------------------------------------------
-# Module-level worker functions (must be top-level for pickling
-# with the 'spawn' start method used on Windows / macOS).
-# ------------------------------------------------------------------
-
-
-def _register_pair(ref_frame, moving_frame, transform_type):
-    """Register *moving_frame* to *ref_frame*.  Runs in a worker process."""
-    from pystackreg import StackReg
-
-    sr = StackReg(transform_type)
-    return sr.register(ref_frame, moving_frame)
-
-
-def _transform_frame(frame, tmat, transform_type):
-    """Apply *tmat* to a single frame.  Runs in a worker process."""
-    from pystackreg import StackReg
-
-    sr = StackReg(transform_type)
-    result = sr.transform(frame, tmat=tmat)
-    # Convert back to uint16 to reduce IPC serialization size.
-    # Values are in 0-65535 range (input was uint16); clipping handles
-    # any minor interpolation overshoot.
-    np.clip(result, 0, 65535, out=result)
-    return result.astype(np.uint16)
+from core.alignment_mp import register_pair as _register_pair
+from core.alignment_mp import transform_frame as _transform_frame
 
 
 class AlignmentWorker(QThread):
@@ -131,7 +113,7 @@ class AlignmentWorker(QThread):
             # ----------------------------------------------------------
             # Decide whether to use multiprocessing
             # ----------------------------------------------------------
-            use_mp = not _FROZEN and num_frames >= _MIN_FRAMES_FOR_MP
+            use_mp = (not _FROZEN or _ENABLE_MP_WHEN_FROZEN) and num_frames >= _MIN_FRAMES_FOR_MP
             if use_mp:
                 n_workers = max(1, min(os.cpu_count() or 1, num_frames))
                 # 'spawn' is the only start method safe with Qt on all
@@ -258,7 +240,14 @@ class AlignmentWorker(QThread):
             self.error.emit(str(e))
         finally:
             if executor is not None:
-                executor.shutdown(wait=False)
+                # IMPORTANT: ensure worker processes fully exit. Leaving them
+                # around can increase memory pressure and destabilize later
+                # heavy operations (like neuron detection).
+                try:
+                    executor.shutdown(wait=True, cancel_futures=True)
+                except TypeError:
+                    # Py<3.9 compatibility / older executor API
+                    executor.shutdown(wait=True)
 
     # ------------------------------------------------------------------
     # Parallel helpers
