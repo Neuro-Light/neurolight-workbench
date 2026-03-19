@@ -10,6 +10,7 @@ from PyInstaller.utils.hooks import collect_submodules
 
 # Repo root (PyInstaller runs with cwd = directory containing this spec)
 REPO_ROOT = Path.cwd()
+ICON_PATH = REPO_ROOT / "build" / "Neurolight.icns"
 
 # Entry script; imports use package layout under src/
 script = REPO_ROOT / 'src' / 'main.py'
@@ -91,6 +92,6 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name="Neurolight.app",
-    icon=None,
+    icon=str(ICON_PATH) if ICON_PATH.is_file() else None,
     bundle_identifier="com.neurolight.workbench",
 )
