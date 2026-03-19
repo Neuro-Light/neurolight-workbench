@@ -13,10 +13,11 @@ import Qt/PySide modules. To make it safe, worker functions live in
 `core.alignment_mp` (no Qt imports). We still keep multiprocessing guarded:
 
 - Default: disabled when frozen (conservative).
-- Opt-in: set NEUROLIGHT_ENABLE_MP=1 to allow it.
+- User preference: startup screen toggle enables alignment multiprocessing.
+- Env override: NEUROLIGHT_ENABLE_MP=1 is still accepted for compatibility.
 """
 _FROZEN = getattr(sys, "frozen", False)
-_ENABLE_MP_WHEN_FROZEN = os.environ.get("NEUROLIGHT_ENABLE_MP", "").strip() == "1"
+_ENABLE_MP_WHEN_FROZEN_ENV = os.environ.get("NEUROLIGHT_ENABLE_MP", "").strip() == "1"
 
 
 # Below this threshold, process-spawn overhead exceeds the parallelism gain.
@@ -40,12 +41,14 @@ class AlignmentWorker(QThread):
         image_stack: np.ndarray,
         transform_type: str = "RIGID_BODY",
         reference: str = "first",
+        enable_multiprocessing: bool = False,
         parent=None,
     ):
         super().__init__(parent)
         self._image_stack = image_stack
         self._transform_type = transform_type
         self._reference = reference
+        self._enable_multiprocessing = enable_multiprocessing
         self._cancel_requested = False
 
     # ------------------------------------------------------------------
@@ -113,13 +116,19 @@ class AlignmentWorker(QThread):
             # ----------------------------------------------------------
             # Decide whether to use multiprocessing
             # ----------------------------------------------------------
-            use_mp = (not _FROZEN or _ENABLE_MP_WHEN_FROZEN) and num_frames >= _MIN_FRAMES_FOR_MP
+            enable_mp = self._enable_multiprocessing or _ENABLE_MP_WHEN_FROZEN_ENV
+            # If user explicitly enables MP, allow it for small stacks too.
+            min_frames_for_mp = 2 if enable_mp else _MIN_FRAMES_FOR_MP
+            use_mp = (not _FROZEN or enable_mp) and num_frames >= min_frames_for_mp
             if use_mp:
                 n_workers = max(1, min(os.cpu_count() or 1, num_frames))
                 # 'spawn' is the only start method safe with Qt on all
                 # platforms (fork can deadlock on macOS / crash on Windows).
                 ctx = multiprocessing.get_context("spawn")
                 executor = ProcessPoolExecutor(max_workers=n_workers, mp_context=ctx)
+                self.progress.emit(0, num_frames, f"Using multiprocessing ({n_workers} workers)...")
+            else:
+                self.progress.emit(0, num_frames, "Using single-process alignment...")
 
             # ----------------------------------------------------------
             # Registration
