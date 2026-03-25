@@ -25,4 +25,3 @@ def transform_frame(frame: np.ndarray, tmat: np.ndarray, transform_type: int) ->
     result = sr.transform(frame, tmat=tmat)
     np.clip(result, 0, 65535, out=result)
     return result.astype(np.uint16)
-

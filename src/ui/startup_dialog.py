@@ -206,8 +206,7 @@ class StartupDialog(QDialog):
         self.enable_mp_checkbox = QCheckBox("Enable multiprocessing for image alignment (experimental)")
         self.enable_mp_checkbox.setChecked(get_enable_alignment_multiprocessing())
         self.enable_mp_checkbox.setToolTip(
-            "Speeds up image alignment on larger stacks. "
-            "Neuron detection remains single-process."
+            "Speeds up image alignment on larger stacks. Neuron detection remains single-process."
         )
         self.enable_mp_checkbox.toggled.connect(self._on_alignment_mp_toggled)
         buttons_layout.addWidget(self.enable_mp_checkbox)
