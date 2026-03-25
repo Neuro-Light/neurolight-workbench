@@ -498,9 +498,25 @@ class ImageProcessor:
         # Step 1: Image Preprocessing
         # ============================================================
         _progress(0, "Extracting ROI and preprocessing frames...")
-        roi_region_stack = np.zeros((num_frames, height, width), dtype=frame_data.dtype)
-        for t in range(num_frames):
-            roi_region_stack[t] = frame_data[t] * roi_mask.astype(frame_data.dtype)
+        # Memory optimization: work on the ROI bounding box instead of allocating a
+        # full (frames, height, width) stack. This avoids huge peak memory usage
+        # (which can cause the packaged app to be killed by the OS).
+        if not np.any(roi_mask):
+            _progress(_total_steps, "ROI mask is empty.")
+            return (
+                np.array([], dtype=np.int32).reshape(0, 2),
+                np.array([]).reshape(0, num_frames),
+                np.array([], dtype=bool),
+            )
+
+        ys, xs = np.where(roi_mask)
+        ymin, ymax = int(ys.min()), int(ys.max())
+        xmin, xmax = int(xs.min()), int(xs.max())
+        roi_mask_crop = roi_mask[ymin : ymax + 1, xmin : xmax + 1]
+
+        # Crop frames to ROI bounding box and zero outside ROI.
+        roi_frames = frame_data[:, ymin : ymax + 1, xmin : xmax + 1].astype(np.float32, copy=False)
+        roi_region_stack = roi_frames * roi_mask_crop.astype(np.float32, copy=False)
 
         # Rescale pixel values to 0.0-1.0 range (per-frame min/max within ROI)
         frame_min = np.min(roi_region_stack)
@@ -554,12 +570,13 @@ class ImageProcessor:
 
         # Convert peaks to (y, x) format
         # peak_local_max returns coordinates as (row, col) = (y, x)
+        # Coordinates are in cropped ROI space; convert to full-image space below.
         neuron_locations = peaks  # Shape: (num_neurons, 2) with columns [y, x]
 
         # Filter to only include neurons within ROI mask
         valid_neurons = []
         for i, (y, x) in enumerate(neuron_locations):
-            if 0 <= y < height and 0 <= x < width and roi_mask[y, x]:
+            if 0 <= y < roi_mask_crop.shape[0] and 0 <= x < roi_mask_crop.shape[1] and roi_mask_crop[y, x]:
                 valid_neurons.append(i)
 
         if len(valid_neurons) == 0:
@@ -571,6 +588,10 @@ class ImageProcessor:
             )
 
         neuron_locations = neuron_locations[valid_neurons]
+        # Convert back to original image coordinates
+        neuron_locations = neuron_locations.astype(np.int32, copy=False)
+        neuron_locations[:, 0] += ymin
+        neuron_locations[:, 1] += xmin
         num_neurons = len(neuron_locations)
 
         # ============================================================
@@ -580,7 +601,9 @@ class ImageProcessor:
         radius = cell_size / 2
         neuron_trajectories = np.zeros((num_neurons, num_frames), dtype=np.float32)
 
-        y_coords, x_coords = np.ogrid[:height, :width]
+        # Build coordinate grids in cropped ROI space to keep masks small.
+        crop_h, crop_w = roi_mask_crop.shape
+        y_coords, x_coords = np.ogrid[:crop_h, :crop_w]
         _report_every = max(1, num_neurons // 20)  # Report ~20 times during loop
 
         for neuron_idx, (y_center, x_center) in enumerate(neuron_locations):
@@ -591,13 +614,16 @@ class ImageProcessor:
                     f"Extracting trajectories... neuron {neuron_idx + 1} of {num_neurons}",
                 )
             # Create circular mask around neuron center
-            dist_sq = (y_coords - y_center) ** 2 + (x_coords - x_center) ** 2
+            # Convert centers to cropped space
+            y0 = y_center - ymin
+            x0 = x_center - xmin
+            dist_sq = (y_coords - y0) ** 2 + (x_coords - x0) ** 2
             circle_mask = dist_sq <= (radius**2)
 
             # Extract mean intensity for each frame within circular region
             for t in range(num_frames):
                 # Only consider pixels within both circle and ROI
-                valid_pixels = roi_region_stack[t][circle_mask & roi_mask]
+                valid_pixels = roi_region_stack[t][circle_mask & roi_mask_crop]
                 if len(valid_pixels) > 0:
                     neuron_trajectories[neuron_idx, t] = np.mean(valid_pixels)
                 else:

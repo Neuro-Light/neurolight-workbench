@@ -8,6 +8,7 @@ from typing import Callable, Optional
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -30,6 +31,10 @@ from PySide6.QtWidgets import (
 )
 
 from core.experiment_manager import Experiment, ExperimentManager
+from ui.app_settings import (
+    get_enable_alignment_multiprocessing,
+    set_enable_alignment_multiprocessing,
+)
 from ui.settings_dialog import SettingsDialog
 
 EXPERIMENTS_DIR = Path(__file__).resolve().parents[2] / "experiments"
@@ -198,6 +203,13 @@ class StartupDialog(QDialog):
 
         # Bottom bar: Preferences on the right (Delete/Export are on each row's ... menu)
         buttons_layout = QHBoxLayout()
+        self.enable_mp_checkbox = QCheckBox("Enable multiprocessing for image alignment (experimental)")
+        self.enable_mp_checkbox.setChecked(get_enable_alignment_multiprocessing())
+        self.enable_mp_checkbox.setToolTip(
+            "Speeds up image alignment on larger stacks. Neuron detection remains single-process."
+        )
+        self.enable_mp_checkbox.toggled.connect(self._on_alignment_mp_toggled)
+        buttons_layout.addWidget(self.enable_mp_checkbox)
         buttons_layout.addStretch()
         self.settings_btn = QPushButton("Preferences...")
         self.settings_btn.clicked.connect(self._open_settings)
@@ -357,6 +369,9 @@ class StartupDialog(QDialog):
         """Open the Preferences dialog."""
         dlg = SettingsDialog(self)
         dlg.exec()
+
+    def _on_alignment_mp_toggled(self, enabled: bool) -> None:
+        set_enable_alignment_multiprocessing(enabled)
 
     def _show_context_menu(self, position) -> None:
         """Show context menu for right-click on experiment list."""

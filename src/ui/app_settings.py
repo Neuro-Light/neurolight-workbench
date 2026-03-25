@@ -16,6 +16,7 @@ DEFAULTS: Dict[str, Any] = {
     "avg_trajectory_color": "#e879f9",
     "avg_trajectory_roi_1_color": "#22aaff",  # Brighter blue for ROI 1 average
     "avg_trajectory_roi_2_color": "#ff9944",  # Brighter orange for ROI 2 average
+    "enable_alignment_multiprocessing": False,
 }
 
 
@@ -122,4 +123,17 @@ def set_avg_trajectory_roi_color(roi_key: str, hex_color: str) -> None:
         raise ValueError(f"Invalid roi_key {roi_key!r}; expected one of {sorted(_ALLOWED_ROI_KEYS)}")
     settings = load_settings()
     settings[f"avg_trajectory_{roi_key}_color"] = hex_color
+    save_settings(settings)
+
+
+def get_enable_alignment_multiprocessing() -> bool:
+    """Return whether alignment multiprocessing is enabled."""
+    settings = load_settings()
+    return bool(settings.get("enable_alignment_multiprocessing", DEFAULTS["enable_alignment_multiprocessing"]))
+
+
+def set_enable_alignment_multiprocessing(enabled: bool) -> None:
+    """Persist alignment multiprocessing preference."""
+    settings = load_settings()
+    settings["enable_alignment_multiprocessing"] = bool(enabled)
     save_settings(settings)
