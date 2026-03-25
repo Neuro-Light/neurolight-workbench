@@ -29,8 +29,8 @@ from core.roi import ROI, ROIShape
 from ui.alignment_dialog import AlignmentDialog
 from ui.alignment_progress_dialog import AlignmentProgressDialog
 from ui.alignment_worker import AlignmentWorker
-from ui.app_settings import get_enable_alignment_multiprocessing
 from ui.analysis_panel import AnalysisPanel
+from ui.app_settings import get_enable_alignment_multiprocessing
 from ui.image_viewer import ImageViewer
 from ui.loading_dialog import LoadingDialog
 from ui.settings_dialog import SettingsDialog

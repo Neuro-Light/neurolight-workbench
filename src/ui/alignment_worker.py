@@ -8,6 +8,9 @@ from concurrent.futures import ProcessPoolExecutor, as_completed
 import numpy as np
 from PySide6.QtCore import QThread, Signal
 
+from core.alignment_mp import register_pair as _register_pair
+from core.alignment_mp import transform_frame as _transform_frame
+
 """Multiprocessing in frozen macOS GUI apps can be fragile if spawned workers
 import Qt/PySide modules. To make it safe, worker functions live in
 `core.alignment_mp` (no Qt imports). We still keep multiprocessing guarded:
@@ -22,10 +25,6 @@ _ENABLE_MP_WHEN_FROZEN_ENV = os.environ.get("NEUROLIGHT_ENABLE_MP", "").strip() 
 
 # Below this threshold, process-spawn overhead exceeds the parallelism gain.
 _MIN_FRAMES_FOR_MP = 10
-
-
-from core.alignment_mp import register_pair as _register_pair
-from core.alignment_mp import transform_frame as _transform_frame
 
 
 class AlignmentWorker(QThread):
