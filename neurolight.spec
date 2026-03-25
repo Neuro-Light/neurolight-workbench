@@ -5,6 +5,7 @@
 #   pyinstaller neurolight.spec
 # after installing the project and PyInstaller.
 
+import sys
 from pathlib import Path
 from PyInstaller.utils.hooks import collect_submodules
 
@@ -89,9 +90,10 @@ coll = COLLECT(
     name="Neurolight",
 )
 
-app = BUNDLE(
-    coll,
-    name="Neurolight.app",
-    icon=str(ICON_PATH) if ICON_PATH.is_file() else None,
-    bundle_identifier="com.neurolight.workbench",
-)
+if sys.platform == "darwin":
+    app = BUNDLE(
+        coll,
+        name="Neurolight.app",
+        icon=str(ICON_PATH) if ICON_PATH.is_file() else None,
+        bundle_identifier="com.neurolight.workbench",
+    )
