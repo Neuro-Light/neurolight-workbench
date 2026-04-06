@@ -84,10 +84,7 @@ class TestRayleighTest:
         assert result["r"] == pytest.approx(1.0, abs=1e-9)
         assert result["Z"] == pytest.approx(5.0, abs=1e-9)
         expected_p = math.exp(-5.0) * (
-            1
-            + (2 * 5.0 - 5.0**2) / (4 * 5)
-            - (24 * 5.0 - 132 * 5.0**2 + 76 * 5.0**3 - 9 * 5.0**4)
-            / (288 * 5**2)
+            1 + (2 * 5.0 - 5.0**2) / (4 * 5) - (24 * 5.0 - 132 * 5.0**2 + 76 * 5.0**3 - 9 * 5.0**4) / (288 * 5**2)
         )
         assert result["p_value"] == pytest.approx(expected_p, rel=1e-9)
 
