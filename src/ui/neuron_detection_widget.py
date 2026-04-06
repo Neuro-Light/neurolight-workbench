@@ -433,15 +433,33 @@ class NeuronDetectionWidget(QWidget):
 
         effective = self._effective_mask()
         if self.frame_data is not None and effective is not None:
-            roi_region_stack = np.zeros_like(self.frame_data)
-            for t in range(self.frame_data.shape[0]):
-                roi_region_stack[t] = self.frame_data[t] * effective.astype(self.frame_data.dtype)
-            frame_min = np.min(roi_region_stack)
-            frame_max = np.max(roi_region_stack)
-            if frame_max > frame_min:
-                roi_region_stack = (roi_region_stack - frame_min) / (frame_max - frame_min)
-            self.mean_frame = np.mean(roi_region_stack, axis=0)
-            self._display_frame = roi_region_stack[0].copy()
+            # Memory optimization: avoid allocating a full 3D stack just for display.
+            if np.any(effective):
+                ys, xs = np.where(effective)
+                ymin, ymax = int(ys.min()), int(ys.max())
+                xmin, xmax = int(xs.min()), int(xs.max())
+                mask_crop = effective[ymin : ymax + 1, xmin : xmax + 1].astype(np.float32, copy=False)
+
+                frames_crop = self.frame_data[:, ymin : ymax + 1, xmin : xmax + 1].astype(np.float32, copy=False)
+                masked_crop = frames_crop * mask_crop
+
+                # Normalize for visualization only.
+                frame_min = float(masked_crop.min())
+                frame_max = float(masked_crop.max())
+                if frame_max > frame_min:
+                    masked_crop = (masked_crop - frame_min) / (frame_max - frame_min)
+
+                mean_crop = np.mean(masked_crop, axis=0)
+                first_crop = masked_crop[0].copy()
+
+                self.mean_frame = np.zeros(self.frame_data.shape[1:], dtype=np.float32)
+                self.mean_frame[ymin : ymax + 1, xmin : xmax + 1] = mean_crop
+
+                self._display_frame = np.zeros(self.frame_data.shape[1:], dtype=np.float32)
+                self._display_frame[ymin : ymax + 1, xmin : xmax + 1] = first_crop
+            else:
+                self.mean_frame = None
+                self._display_frame = None
         else:
             self.mean_frame = None
             self._display_frame = None

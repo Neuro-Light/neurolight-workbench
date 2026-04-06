@@ -5,10 +5,13 @@
 #   pyinstaller neurolight.spec
 # after installing the project and PyInstaller.
 
+import sys
 from pathlib import Path
+from PyInstaller.utils.hooks import collect_submodules
 
 # Repo root (PyInstaller runs with cwd = directory containing this spec)
 REPO_ROOT = Path.cwd()
+ICON_PATH = REPO_ROOT / "build" / "Neurolight.icns"
 
 # Entry script; imports use package layout under src/
 script = REPO_ROOT / 'src' / 'main.py'
@@ -28,11 +31,22 @@ a = Analysis(
     pathex=[str(REPO_ROOT / 'src')],
     binaries=[],
     datas=datas,
-    hiddenimports=[
-        'PySide6.QtCore',
-        'PySide6.QtGui',
-        'PySide6.QtWidgets',
-    ],
+    hiddenimports=(
+        [
+            'PySide6.QtCore',
+            'PySide6.QtGui',
+            'PySide6.QtWidgets',
+            # Pillow plugins are imported dynamically; ensure they're bundled so
+            # TIFF/GIF loading works in frozen macOS apps.
+            'PIL.TiffImagePlugin',
+            'PIL.GifImagePlugin',
+            'PIL.ImageSequence',
+            'PIL.ImageQt',
+            # Some stacks are loaded via tifffile elsewhere in the app.
+            'tifffile',
+        ]
+        + collect_submodules("PIL")
+    ),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -46,12 +60,11 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
-    name='neurolight',
+    name='Neurolight',
     debug=False,
     bootloader_ignore_signals=False,
+    exclude_binaries=True,
     strip=False,
     upx=True,
     upx_exclude=[],
@@ -63,3 +76,24 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
 )
+
+# On macOS, build an actual .app bundle so it can be launched via Finder and
+# packaged cleanly into a .pkg/.dmg. (EXE alone produces a standalone binary.)
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    name="Neurolight",
+)
+
+if sys.platform == "darwin":
+    app = BUNDLE(
+        coll,
+        name="Neurolight.app",
+        icon=str(ICON_PATH) if ICON_PATH.is_file() else None,
+        bundle_identifier="com.neurolight.workbench",
+    )

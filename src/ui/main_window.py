@@ -30,6 +30,7 @@ from ui.alignment_dialog import AlignmentDialog
 from ui.alignment_progress_dialog import AlignmentProgressDialog
 from ui.alignment_worker import AlignmentWorker
 from ui.analysis_panel import AnalysisPanel
+from ui.app_settings import get_enable_alignment_multiprocessing
 from ui.image_viewer import ImageViewer
 from ui.loading_dialog import LoadingDialog
 from ui.settings_dialog import SettingsDialog
@@ -1194,6 +1195,7 @@ class MainWindow(QMainWindow):
             frame_data,
             transform_type=self._alignment_params["transform_type"],
             reference=self._alignment_params["reference"],
+            enable_multiprocessing=get_enable_alignment_multiprocessing(),
             parent=self,
         )
         self._alignment_worker = worker

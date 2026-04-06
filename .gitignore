@@ -33,3 +33,5 @@ experiments/*
 logs/
 *.log
 
+# codecov
+.coverage
