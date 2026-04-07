@@ -116,10 +116,13 @@ class ImageProcessor:
         """
         Crop an entire image stack to ROI region.
 
+        The bounding-box slice and any polygon/ellipse mask are computed once
+        and reused for every frame, avoiding redundant per-frame work.
+
         Args:
             image_stack: 3D numpy array (frames, height, width)
             roi: ROI object defining the region
-            apply_mask: If True and ROI is ellipse, apply ellipse mask
+            apply_mask: If True, apply shape mask (ellipse or polygon)
 
         Returns:
             Cropped image stack (frames, cropped_height, cropped_width)
@@ -127,22 +130,41 @@ class ImageProcessor:
         if image_stack.ndim != 3:
             raise ValueError("Image stack must be 3D array (frames, height, width)")
 
-        num_frames = image_stack.shape[0]
+        num_frames, height, width = image_stack.shape
 
-        # Crop first frame to get dimensions
-        first_cropped = self.crop_to_roi(image_stack[0], roi, apply_mask)
+        # Compute bounding-box coordinates once — identical for every frame.
+        x1 = max(0, roi.x)
+        y1 = max(0, roi.y)
+        x2 = min(width, roi.x + roi.width)
+        y2 = min(height, roi.y + roi.height)
+        crop_h, crop_w = y2 - y1, x2 - x1
 
-        # Allocate output array
-        cropped_stack = np.zeros(
-            (num_frames, first_cropped.shape[0], first_cropped.shape[1]),
-            dtype=image_stack.dtype,
-        )
-        cropped_stack[0] = first_cropped
+        # Slice all frames in one vectorised operation.
+        cropped_stack = image_stack[:, y1:y2, x1:x2].copy()
 
-        # Crop remaining frames
-        for i in range(1, num_frames):
-            cropped_stack[i] = self.crop_to_roi(image_stack[i], roi, apply_mask)
+        # Build the mask once and broadcast it across all frames.
+        if apply_mask and roi.shape == ROIShape.POLYGON and roi.points and len(roi.points) >= 3:
+            mask = np.zeros((crop_h, crop_w), dtype=np.uint8)
+            contour = np.array([[p[0] - x1, p[1] - y1] for p in roi.points], dtype=np.float32)
+            for yy in range(crop_h):
+                y_pt = float(yy)
+                for xx in range(crop_w):
+                    if cv2.pointPolygonTest(contour, (float(xx), y_pt), False) > 0:
+                        mask[yy, xx] = 255
+            # Apply mask to every frame: zero out pixels outside the polygon.
+            cropped_stack[:, mask == 0] = 0
 
+        elif apply_mask and roi.shape == ROIShape.ELLIPSE:
+            rx = roi.width / 2
+            ry = roi.height / 2
+            if rx > 0 and ry > 0:
+                cx = roi.x + rx - x1
+                cy = roi.y + ry - y1
+                y_coords, x_coords = np.ogrid[:crop_h, :crop_w]
+                ellipse_mask = ((x_coords - cx) / rx) ** 2 + ((y_coords - cy) / ry) ** 2 <= 1
+                cropped_stack[:, ~ellipse_mask] = 0
+
+        self.log_processing_step("crop_stack", {"roi": roi.to_dict(), "apply_mask": apply_mask})
         return cropped_stack
 
     # Placeholders for future expansion
