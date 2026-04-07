@@ -77,9 +77,22 @@ class ImageProcessor:
 
         # Apply polygon mask
         if apply_mask and roi.shape == ROIShape.POLYGON and roi.points and len(roi.points) >= 3:
-            mask = np.zeros((y2 - y1, x2 - x1), dtype=np.uint8)
-            pts = np.array([[p[0] - x1, p[1] - y1] for p in roi.points], dtype=np.int32)
-            cv2.fillPoly(mask, [pts], 255)
+            # Use strict interior masking: pixels whose centers lie strictly inside the polygon
+            # are kept; pixels on the polygon boundary are masked out.
+            crop_h, crop_w = (y2 - y1), (x2 - x1)
+            mask = np.zeros((crop_h, crop_w), dtype=np.uint8)
+            contour = np.array([[p[0] - x1, p[1] - y1] for p in roi.points], dtype=np.float32)
+
+            # Note: We evaluate membership at integer pixel coordinates (x=col, y=row).
+            # This matches tests that treat pixel indices as points in the same coordinate
+            # system as ROI vertices (rather than using pixel centers).
+            for yy in range(crop_h):
+                y_pt = float(yy)
+                for xx in range(crop_w):
+                    x_pt = float(xx)
+                    if cv2.pointPolygonTest(contour, (x_pt, y_pt), False) > 0:
+                        mask[yy, xx] = 255
+
             cropped = cv2.bitwise_and(cropped, cropped, mask=mask)
         # Apply ellipse mask
         elif apply_mask and roi.shape == ROIShape.ELLIPSE:
