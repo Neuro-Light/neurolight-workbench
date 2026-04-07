@@ -15,6 +15,7 @@ def _make_processor() -> ImageProcessor:
 
 # ── crop_to_roi ───────────────────────────────────────────────────────────────
 
+
 def test_crop_to_roi_polygon_masks_outside_pixels():
     processor = _make_processor()
     image = np.zeros((10, 10), dtype=np.uint8)
@@ -75,6 +76,7 @@ def test_crop_to_roi_ellipse_zero_rx_skips_mask():
 
 # ── crop_stack_to_roi ─────────────────────────────────────────────────────────
 
+
 def test_crop_stack_to_roi_applies_crop_to_each_frame():
     processor = _make_processor()
     stack = np.stack([np.full((8, 8), fill_value=i, dtype=np.uint8) for i in range(3)])
@@ -97,7 +99,10 @@ def test_crop_stack_to_roi_polygon_computes_mask_once():
     processor = _make_processor()
     stack = np.full((3, 10, 10), 100, dtype=np.uint8)
     roi = ROI(
-        x=2, y=2, width=5, height=5,
+        x=2,
+        y=2,
+        width=5,
+        height=5,
         shape=ROIShape.POLYGON,
         points=[(2, 2), (7, 2), (4, 7)],
     )
@@ -120,6 +125,7 @@ def test_crop_stack_to_roi_ellipse_with_mask():
 
 # ── load_image ────────────────────────────────────────────────────────────────
 
+
 def test_load_image_returns_array(tmp_path):
     path = tmp_path / "frame.png"
     cv2.imwrite(str(path), np.zeros((10, 10), dtype=np.uint8))
@@ -136,6 +142,7 @@ def test_load_image_raises_for_missing_file():
 
 # ── preprocess_image ──────────────────────────────────────────────────────────
 
+
 def test_preprocess_image_blurs_image():
     processor = _make_processor()
     image = np.random.randint(0, 255, (20, 20), dtype=np.uint8)
@@ -150,6 +157,7 @@ def test_preprocess_image_uses_default_ksize():
 
 
 # ── apply_opencv_filter ───────────────────────────────────────────────────────
+
 
 def test_apply_opencv_filter_edges():
     processor = _make_processor()
@@ -167,6 +175,7 @@ def test_apply_opencv_filter_unknown_returns_input():
 
 # ── detect_objects / extract_features placeholders ───────────────────────────
 
+
 def test_detect_objects_returns_empty_list():
     assert _make_processor().detect_objects(np.zeros((10, 10), dtype=np.uint8)) == []
 
@@ -176,6 +185,7 @@ def test_extract_features_returns_empty_dict():
 
 
 # ── detect_neurons ────────────────────────────────────────────────────────────
+
 
 def test_detect_neurons_returns_bright_spot_centroids():
     processor = _make_processor()
@@ -198,6 +208,7 @@ def test_detect_neurons_normalizes_non_uint8():
 
 
 # ── load_image_for_alignment ──────────────────────────────────────────────────
+
 
 def test_load_image_for_alignment_2d_tiff(tmp_path):
     img = np.random.randint(0, 1000, (20, 20), dtype=np.uint16)
@@ -272,6 +283,7 @@ def test_load_image_for_alignment_bad_png_raises(tmp_path):
 
 def test_load_image_for_alignment_1d_raises(tmp_path, monkeypatch):
     import tifffile as tf
+
     monkeypatch.setattr(tf, "imread", lambda *a, **kw: np.array([1, 2, 3]))
     path = tmp_path / "fake.tif"
     path.touch()
@@ -281,6 +293,7 @@ def test_load_image_for_alignment_1d_raises(tmp_path, monkeypatch):
 
 def test_load_image_for_alignment_4d_raises(tmp_path, monkeypatch):
     import tifffile as tf
+
     monkeypatch.setattr(tf, "imread", lambda *a, **kw: np.zeros((2, 10, 10, 3), dtype=np.uint8))
     path = tmp_path / "fake.tif"
     path.touch()
@@ -289,6 +302,7 @@ def test_load_image_for_alignment_4d_raises(tmp_path, monkeypatch):
 
 
 # ── align_image_stack ─────────────────────────────────────────────────────────
+
 
 def _small_stack(frames=3, h=16, w=16, dtype=np.uint8):
     rng = np.random.default_rng(0)
@@ -322,7 +336,6 @@ def test_align_image_stack_mean_reference():
     assert len(scores) == 3
 
 
-
 def test_align_image_stack_flat_stack_skips_normalization():
     stack = np.full((3, 16, 16), 100, dtype=np.uint8)
     aligned, tmats, scores = _make_processor().align_image_stack(stack, reference="first")
@@ -350,19 +363,18 @@ def test_align_image_stack_progress_callback_called():
 def test_align_image_stack_progress_callback_cancel_returns_early():
     stack = _small_stack()
 
-    aligned, tmats, scores = _make_processor().align_image_stack(
-        stack, progress_callback=lambda *_: False
-    )
+    aligned, tmats, scores = _make_processor().align_image_stack(stack, progress_callback=lambda *_: False)
     assert aligned.shape == stack.shape
     assert scores == []
 
 
 # ── detect_neurons_in_roi ─────────────────────────────────────────────────────
 
+
 def _neuron_stack(frames=5, h=20, w=20, spots=None):
     """Return a synthetic image stack with bright spots at given (y, x) positions."""
     stack = np.zeros((frames, h, w), dtype=np.uint16)
-    for y, x in (spots or []):
+    for y, x in spots or []:
         for f in range(frames):
             stack[f, y, x] = 1000
             if x + 1 < w:
@@ -387,9 +399,7 @@ def test_detect_neurons_in_roi_no_peaks_returns_empty():
     processor = _make_processor()
     stack = np.random.randint(0, 255, (3, 4, 4), dtype=np.uint8)
     roi_mask = np.ones((4, 4), dtype=bool)
-    locs, trajs, quality = processor.detect_neurons_in_roi(
-        stack, roi_mask, cell_size=6, threshold_rel=0.01
-    )
+    locs, trajs, quality = processor.detect_neurons_in_roi(stack, roi_mask, cell_size=6, threshold_rel=0.01)
     assert locs.shape == (0, 2)
 
 
@@ -398,8 +408,13 @@ def test_detect_neurons_in_roi_single_neuron_quality_true():
     stack = _neuron_stack(spots=[(10, 10)])
     roi_mask = np.ones((20, 20), dtype=bool)
     locs, trajs, quality = processor.detect_neurons_in_roi(
-        stack, roi_mask, cell_size=3, num_peaks=5,
-        correlation_threshold=0.0, threshold_rel=0.1, apply_detrending=False,
+        stack,
+        roi_mask,
+        cell_size=3,
+        num_peaks=5,
+        correlation_threshold=0.0,
+        threshold_rel=0.1,
+        apply_detrending=False,
     )
     assert len(quality) == 1
     assert quality[0] is True or quality[0] == True  # noqa: E712
@@ -411,8 +426,13 @@ def test_detect_neurons_in_roi_basic_detection():
     stack = _neuron_stack(h=30, w=30, spots=[(5, 5), (22, 22)])
     roi_mask = np.ones((30, 30), dtype=bool)
     locs, trajs, quality = processor.detect_neurons_in_roi(
-        stack, roi_mask, cell_size=3, num_peaks=10,
-        correlation_threshold=-1.0, threshold_rel=0.1, apply_detrending=False,
+        stack,
+        roi_mask,
+        cell_size=3,
+        num_peaks=10,
+        correlation_threshold=-1.0,
+        threshold_rel=0.1,
+        apply_detrending=False,
     )
     assert locs.shape[1] == 2
     assert trajs.shape[1] == 5
@@ -423,9 +443,7 @@ def test_detect_neurons_in_roi_uniform_frame_zeros_projection():
     # All-same-value frames → frame_max == frame_min → zeros_like branch
     stack = np.full((3, 15, 15), 50, dtype=np.uint8)
     roi_mask = np.ones((15, 15), dtype=bool)
-    locs, trajs, quality = processor.detect_neurons_in_roi(
-        stack, roi_mask, cell_size=3, threshold_rel=0.01
-    )
+    locs, trajs, quality = processor.detect_neurons_in_roi(stack, roi_mask, cell_size=3, threshold_rel=0.01)
     assert isinstance(locs, np.ndarray)
 
 
@@ -436,8 +454,13 @@ def test_detect_neurons_in_roi_with_detrending():
     stack[:, 10, 10] = 1000
     roi_mask = np.ones((20, 20), dtype=bool)
     locs, trajs, quality = processor.detect_neurons_in_roi(
-        stack, roi_mask, cell_size=3, num_peaks=5,
-        correlation_threshold=0.0, threshold_rel=0.1, apply_detrending=True,
+        stack,
+        roi_mask,
+        cell_size=3,
+        num_peaks=5,
+        correlation_threshold=0.0,
+        threshold_rel=0.1,
+        apply_detrending=True,
     )
     assert isinstance(trajs, np.ndarray)
 
@@ -476,9 +499,14 @@ def test_detect_neurons_in_roi_with_progress_callback():
         calls.append(step)
 
     processor.detect_neurons_in_roi(
-        stack, roi_mask, cell_size=3, num_peaks=5,
-        correlation_threshold=0.0, threshold_rel=0.1,
-        apply_detrending=False, progress_callback=cb,
+        stack,
+        roi_mask,
+        cell_size=3,
+        num_peaks=5,
+        correlation_threshold=0.0,
+        threshold_rel=0.1,
+        apply_detrending=False,
+        progress_callback=cb,
     )
     assert len(calls) > 0
 
@@ -488,7 +516,12 @@ def test_detect_neurons_in_roi_mean_projection():
     stack = _neuron_stack(spots=[(10, 10)])
     roi_mask = np.ones((20, 20), dtype=bool)
     locs, trajs, quality = processor.detect_neurons_in_roi(
-        stack, roi_mask, cell_size=3, num_peaks=5,
-        threshold_rel=0.1, use_max_projection=False, apply_detrending=False,
+        stack,
+        roi_mask,
+        cell_size=3,
+        num_peaks=5,
+        threshold_rel=0.1,
+        use_max_projection=False,
+        apply_detrending=False,
     )
     assert isinstance(locs, np.ndarray)
