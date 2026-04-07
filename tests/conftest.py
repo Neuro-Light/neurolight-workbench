@@ -55,7 +55,16 @@ try:
 
     if not QApplication.instance():
         _qapp = QApplication(sys.argv or [""])
-except Exception:
-    # Non-graphical / headless environments: fall back gracefully.
+except (ImportError, RuntimeError):
+    # PySide6 not installed, or Qt platform plugin unavailable (headless CI).
     # Tests that actually render widgets will be skipped or fail on their own.
     pass
+except Exception:
+    import warnings
+
+    warnings.warn(
+        "Unexpected error during QApplication setup — check your Qt/PySide6 installation.",
+        RuntimeWarning,
+        stacklevel=1,
+    )
+    raise
