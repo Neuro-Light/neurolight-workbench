@@ -45,6 +45,10 @@ class ROIIntensityPlotWidget(QWidget):
         self._rois: Dict[str, Optional[ROI]] = {"roi_1": None, "roi_2": None}
         self.experiment: Optional["Experiment"] = None
         self._hover_cid = None
+        self._pick_cid = None
+        self._marker_annotation = None
+        self._peak_data: list[tuple[int, float, str, int]] = []  # (frame, value, type, order)
+        self._trough_data: list[tuple[int, float, str, int]] = []
 
         layout = QVBoxLayout(self)
 
@@ -79,8 +83,16 @@ class ROIIntensityPlotWidget(QWidget):
         self.show_peaks_checkbox = QCheckBox("Show Peaks/Troughs")
         self.show_peaks_checkbox.setChecked(False)
         self.show_peaks_checkbox.setToolTip("Overlay peak (maxima) and trough (minima) markers on the graph")
-        self.show_peaks_checkbox.toggled.connect(self._replot)
+        self.show_peaks_checkbox.toggled.connect(self._on_show_peaks_toggled)
         toggle_row.addWidget(self.show_peaks_checkbox)
+
+        # Peak numbering toggle (hidden until Show Peaks/Troughs is enabled)
+        self.number_peaks_checkbox = QCheckBox("Number Markers")
+        self.number_peaks_checkbox.setChecked(False)
+        self.number_peaks_checkbox.setToolTip("Show order numbers (1, 2, 3...) on peak and trough markers")
+        self.number_peaks_checkbox.toggled.connect(self._replot)
+        self.number_peaks_checkbox.setVisible(False)
+        toggle_row.addWidget(self.number_peaks_checkbox)
 
         layout.addLayout(toggle_row)
 
@@ -116,6 +128,13 @@ class ROIIntensityPlotWidget(QWidget):
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+
+    def _on_show_peaks_toggled(self, checked: bool) -> None:
+        """Show/hide the Number Markers checkbox based on Show Peaks/Troughs state."""
+        self.number_peaks_checkbox.setVisible(checked)
+        if not checked:
+            self.number_peaks_checkbox.setChecked(False)
+        self._replot()
 
     def plot_intensity_time_series(self, roi_key: str, intensity_data: np.ndarray, roi: ROI) -> None:
         """Store intensity data for *roi_key* and redraw."""
@@ -189,9 +208,14 @@ class ROIIntensityPlotWidget(QWidget):
             ax.plot(frames, data, linewidth=2, color=color_map[key], label=label)
 
         # Overlay peak/trough markers if enabled
+        self._peak_data = []
+        self._trough_data = []
         if self.show_peaks_checkbox.isChecked():
             peak_color = theme.get("peak_marker_color", "#f97316")
             trough_color = theme.get("trough_marker_color", "#06b6d4")
+            show_numbers = self.number_peaks_checkbox.isChecked()
+            peak_order = 0
+            trough_order = 0
             for key, data in visible.items():
                 frames = np.arange(len(data))
                 peaks, troughs = self._find_peaks_and_troughs(data)
@@ -206,7 +230,23 @@ class ROIIntensityPlotWidget(QWidget):
                         label="Peaks" if key == list(visible.keys())[0] else "",
                         edgecolors="white",
                         linewidths=0.5,
+                        picker=True,
+                        pickradius=5,
                     )
+                    for i, idx in enumerate(peaks):
+                        peak_order += 1
+                        self._peak_data.append((int(frames[idx]), float(data[idx]), "peak", peak_order))
+                        if show_numbers:
+                            ax.annotate(
+                                str(peak_order),
+                                (frames[idx], data[idx]),
+                                textcoords="offset points",
+                                xytext=(0, 8),
+                                ha="center",
+                                fontsize=8,
+                                color=peak_color,
+                                fontweight="bold",
+                            )
                 if len(troughs) > 0:
                     ax.scatter(
                         frames[troughs],
@@ -218,28 +258,80 @@ class ROIIntensityPlotWidget(QWidget):
                         label="Troughs" if key == list(visible.keys())[0] else "",
                         edgecolors="white",
                         linewidths=0.5,
+                        picker=True,
+                        pickradius=5,
                     )
+                    for i, idx in enumerate(troughs):
+                        trough_order += 1
+                        self._trough_data.append((int(frames[idx]), float(data[idx]), "trough", trough_order))
+                        if show_numbers:
+                            ax.annotate(
+                                str(trough_order),
+                                (frames[idx], data[idx]),
+                                textcoords="offset points",
+                                xytext=(0, -12),
+                                ha="center",
+                                fontsize=8,
+                                color=trough_color,
+                                fontweight="bold",
+                            )
 
         ax.set_xlabel("Frame Number", fontsize=12)
         ax.set_ylabel("Mean Pixel Intensity", fontsize=12)
         ax.set_title("ROI Intensity Over Time", fontsize=14)
-        if len(visible) > 1:
+        if len(visible) > 1 or self.show_peaks_checkbox.isChecked():
             ax.legend(loc="best")
         self._apply_theme(ax, theme)
 
         # Status text
         parts = []
+        warnings = []
         for key, data in visible.items():
             name = ROI_DISPLAY_NAMES[key]
-            parts.append(f"{name}: {len(data)} frames, mean {np.mean(data):.2f}")
-        self.status_label.setText(" | ".join(parts))
+            status = f"{name}: {len(data)} frames, mean {np.mean(data):.2f}"
+            if self.show_peaks_checkbox.isChecked():
+                peaks, troughs = self._find_peaks_and_troughs(data)
+                status += f" ({len(peaks)} peaks, {len(troughs)} troughs)"
+                if len(peaks) > 0 and len(troughs) == 0:
+                    warnings.append(f"{name}: No troughs detected — signal may be mostly rising or troughs too subtle")
+                elif len(troughs) > 0 and len(peaks) == 0:
+                    warnings.append(f"{name}: No peaks detected — signal may be mostly falling or peaks too subtle")
+                elif len(peaks) == 0 and len(troughs) == 0:
+                    warnings.append(f"{name}: No peaks/troughs detected — signal may be too flat or noisy")
+            parts.append(status)
+        status_text = " | ".join(parts)
+        if warnings:
+            warning_text = " | ".join(warnings)
+            status_text += (
+                f'<br><span style="background-color: rgba(250, 204, 21, 0.25); '
+                f'padding: 2px 6px; border-radius: 3px;">⚠ {warning_text}</span>'
+            )
+            self.status_label.setTextFormat(Qt.RichText)
+        else:
+            self.status_label.setTextFormat(Qt.PlainText)
+        self.status_label.setText(status_text)
 
         self.export_btn.setEnabled(True)
         self.export_png_btn.setEnabled(True)
 
+        # Create annotation for marker tooltips (hidden initially)
+        self._marker_annotation = ax.annotate(
+            "",
+            xy=(0, 0),
+            xytext=(10, 10),
+            textcoords="offset points",
+            bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor="gray", alpha=0.9),
+            fontsize=9,
+            visible=False,
+            zorder=10,
+        )
+
         if self._hover_cid is not None:
             self.canvas.mpl_disconnect(self._hover_cid)
+        if self._pick_cid is not None:
+            self.canvas.mpl_disconnect(self._pick_cid)
         self._hover_cid = self.canvas.mpl_connect("motion_notify_event", self._on_motion)
+        self._pick_cid = self.canvas.mpl_connect("pick_event", self._on_pick)
         self.canvas.draw_idle()
 
     def _apply_theme(self, ax, theme: dict) -> None:
@@ -257,18 +349,48 @@ class ROIIntensityPlotWidget(QWidget):
         """Find local maxima (peaks) and minima (troughs) in the signal."""
         if len(data) < 3:
             return np.array([], dtype=int), np.array([], dtype=int)
-        prominence = (np.max(data) - np.min(data)) * 0.05
-        if prominence < 1e-6:
-            prominence = 1e-6
-        peaks, _ = find_peaks(data, prominence=prominence, distance=3)
-        troughs, _ = find_peaks(-data, prominence=prominence, distance=3)
+        data_range = np.max(data) - np.min(data)
+        prominence = data_range * 0.01 if data_range > 1e-6 else 1e-6
+        distance = max(2, len(data) // 100)
+        peaks, _ = find_peaks(data, prominence=prominence, distance=distance)
+        troughs, _ = find_peaks(-data, prominence=prominence, distance=distance)
         return peaks, troughs
 
     def _on_motion(self, event) -> None:
         if event.inaxes is None or event.xdata is None:
             self.hover_label.setText("Hover over plot for frame and intensity.")
+            if self._marker_annotation:
+                self._marker_annotation.set_visible(False)
+                self.canvas.draw_idle()
             return
+
         frame_idx = int(round(event.xdata))
+
+        # Check if hovering near a marker and show tooltip
+        marker_found = False
+        if self.show_peaks_checkbox.isChecked() and self._marker_annotation:
+            all_markers = self._peak_data + self._trough_data
+            for m_frame, m_value, m_type, m_order in all_markers:
+                if (
+                    abs(event.xdata - m_frame) < 1.5
+                    and abs(event.ydata - m_value)
+                    < (self.figure.axes[0].get_ylim()[1] - self.figure.axes[0].get_ylim()[0]) * 0.05
+                ):
+                    marker_found = True
+                    prev_frame = self._get_previous_marker_frame(m_frame, m_type)
+                    interval_text = f"\nInterval: {m_frame - prev_frame} frames" if prev_frame is not None else ""
+                    tooltip = f"{m_type.title()} #{m_order}\nFrame: {m_frame}\nValue: {m_value:.3f}{interval_text}"
+                    self._marker_annotation.xy = (m_frame, m_value)
+                    self._marker_annotation.set_text(tooltip)
+                    self._marker_annotation.set_visible(True)
+                    self.canvas.draw_idle()
+                    break
+
+            if not marker_found:
+                self._marker_annotation.set_visible(False)
+                self.canvas.draw_idle()
+
+        # Update hover label with frame info
         parts = []
         for key in ROI_KEYS:
             data = self._intensity.get(key)
@@ -279,6 +401,38 @@ class ROIIntensityPlotWidget(QWidget):
             self.hover_label.setText(f"Frame {frame_idx}  ·  " + "  ·  ".join(parts))
         else:
             self.hover_label.setText("Hover over plot for frame and intensity.")
+
+    def _get_previous_marker_frame(self, current_frame: int, marker_type: str) -> Optional[int]:
+        """Get the frame number of the previous marker of the same type."""
+        markers = self._peak_data if marker_type == "peak" else self._trough_data
+        prev_frame = None
+        for m_frame, _, _, _ in markers:
+            if m_frame < current_frame:
+                prev_frame = m_frame
+            else:
+                break
+        return prev_frame
+
+    def _on_pick(self, event) -> None:
+        """Handle click on a marker to show details in hover label."""
+        if not hasattr(event, "ind") or event.ind is None or len(event.ind) == 0:
+            return
+
+        artist = event.artist
+        ind = event.ind[0]
+        xdata = artist.get_offsets()[ind][0]
+        ydata = artist.get_offsets()[ind][1]
+
+        # Find which marker was clicked
+        all_markers = self._peak_data + self._trough_data
+        for m_frame, m_value, m_type, m_order in all_markers:
+            if abs(xdata - m_frame) < 0.5 and abs(ydata - m_value) < 0.001:
+                prev_frame = self._get_previous_marker_frame(m_frame, m_type)
+                interval_text = f" | Interval from previous: {m_frame - prev_frame} frames" if prev_frame else ""
+                self.hover_label.setText(
+                    f"Selected: {m_type.title()} #{m_order} at Frame {m_frame}, Value: {m_value:.3f}{interval_text}"
+                )
+                break
 
     # ------------------------------------------------------------------
     # Export
