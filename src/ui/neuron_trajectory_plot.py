@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from scipy.signal import find_peaks
 
 from ui.app_settings import get_theme
 from ui.draggable_spinbox import DraggableSpinBox
@@ -114,6 +115,15 @@ class NeuronTrajectoryPlotWidget(QWidget):
         )
         self.smoothing_spin.valueChanged.connect(self._update_plot)
         options_layout.addRow("Smoothing (frames):", self.smoothing_spin)
+
+        # Show peaks/troughs on average line
+        self.show_peaks_checkbox = QCheckBox()
+        self.show_peaks_checkbox.setChecked(False)
+        self.show_peaks_checkbox.setToolTip(
+            "Overlay peak (maxima) and trough (minima) markers on the average trajectory"
+        )
+        self.show_peaks_checkbox.stateChanged.connect(self._update_plot)
+        options_layout.addRow("Show Peaks/Troughs:", self.show_peaks_checkbox)
 
         options_group.setLayout(options_layout)
         layout.addWidget(options_group)
@@ -212,6 +222,17 @@ class NeuronTrajectoryPlotWidget(QWidget):
             leg.get_frame().set_edgecolor(theme["legend_edgecolor"])
             for t in leg.get_texts():
                 t.set_color(theme["text_color"])
+
+    def _find_peaks_and_troughs(self, data: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Find local maxima (peaks) and minima (troughs) in the signal."""
+        if len(data) < 3:
+            return np.array([], dtype=int), np.array([], dtype=int)
+        prominence = (np.max(data) - np.min(data)) * 0.05
+        if prominence < 1e-6:
+            prominence = 1e-6
+        peaks, _ = find_peaks(data, prominence=prominence, distance=3)
+        troughs, _ = find_peaks(-data, prominence=prominence, distance=3)
+        return peaks, troughs
 
     def _on_motion(self, event) -> None:
         """Show frame and intensity under cursor in hover label."""
@@ -380,51 +401,166 @@ class NeuronTrajectoryPlotWidget(QWidget):
 
         if show_average and len(neurons_to_plot) > 0:
             avg_color = theme.get("avg_trajectory_color", theme.get("average_color", "#e879f9"))
+            show_peaks = self.show_peaks_checkbox.isChecked()
+            peak_color = theme.get("peak_marker_color", "#f97316")
+            trough_color = theme.get("trough_marker_color", "#06b6d4")
+            peaks_labeled = False
+
             if use_roi_colors:
                 avg_roi_1_color = theme.get("avg_trajectory_roi_1_color", roi_1_color)
                 avg_roi_2_color = theme.get("avg_trajectory_roi_2_color", roi_2_color)
                 if roi_1_indices:
                     avg_1 = np.mean(self.neuron_trajectories[roi_1_indices], axis=0)
+                    display_avg_1 = _display_series(avg_1)
                     ax.plot(
                         frames,
-                        _display_series(avg_1),
+                        display_avg_1,
                         color=avg_roi_1_color,
                         linewidth=2.5,
                         antialiased=True,
                         label="Average (ROI 1)",
                     )
+                    if show_peaks:
+                        peaks, troughs = self._find_peaks_and_troughs(display_avg_1)
+                        if len(peaks) > 0:
+                            ax.scatter(
+                                frames[peaks],
+                                display_avg_1[peaks],
+                                marker="^",
+                                s=60,
+                                color=peak_color,
+                                zorder=5,
+                                label="Peaks" if not peaks_labeled else "",
+                                edgecolors="white",
+                                linewidths=0.5,
+                            )
+                        if len(troughs) > 0:
+                            ax.scatter(
+                                frames[troughs],
+                                display_avg_1[troughs],
+                                marker="v",
+                                s=60,
+                                color=trough_color,
+                                zorder=5,
+                                label="Troughs" if not peaks_labeled else "",
+                                edgecolors="white",
+                                linewidths=0.5,
+                            )
+                        peaks_labeled = True
                 if roi_2_indices:
                     avg_2 = np.mean(self.neuron_trajectories[roi_2_indices], axis=0)
+                    display_avg_2 = _display_series(avg_2)
                     ax.plot(
                         frames,
-                        _display_series(avg_2),
+                        display_avg_2,
                         color=avg_roi_2_color,
                         linewidth=2.5,
                         antialiased=True,
                         label="Average (ROI 2)",
                     )
+                    if show_peaks:
+                        peaks, troughs = self._find_peaks_and_troughs(display_avg_2)
+                        if len(peaks) > 0:
+                            ax.scatter(
+                                frames[peaks],
+                                display_avg_2[peaks],
+                                marker="^",
+                                s=60,
+                                color=peak_color,
+                                zorder=5,
+                                label="Peaks" if not peaks_labeled else "",
+                                edgecolors="white",
+                                linewidths=0.5,
+                            )
+                        if len(troughs) > 0:
+                            ax.scatter(
+                                frames[troughs],
+                                display_avg_2[troughs],
+                                marker="v",
+                                s=60,
+                                color=trough_color,
+                                zorder=5,
+                                label="Troughs" if not peaks_labeled else "",
+                                edgecolors="white",
+                                linewidths=0.5,
+                            )
+                        peaks_labeled = True
             elif self.quality_mask is not None and show_good:
                 good_in_plot = [i for i in neurons_to_plot if self.quality_mask[i]]
                 if good_in_plot:
                     avg_trajectory = np.mean(self.neuron_trajectories[good_in_plot], axis=0)
+                    display_avg = _display_series(avg_trajectory)
                     ax.plot(
                         frames,
-                        _display_series(avg_trajectory),
+                        display_avg,
                         color=avg_color,
                         linewidth=2.5,
                         antialiased=True,
                         label="Average (Good Neurons)",
                     )
+                    if show_peaks:
+                        peaks, troughs = self._find_peaks_and_troughs(display_avg)
+                        if len(peaks) > 0:
+                            ax.scatter(
+                                frames[peaks],
+                                display_avg[peaks],
+                                marker="^",
+                                s=60,
+                                color=peak_color,
+                                zorder=5,
+                                label="Peaks",
+                                edgecolors="white",
+                                linewidths=0.5,
+                            )
+                        if len(troughs) > 0:
+                            ax.scatter(
+                                frames[troughs],
+                                display_avg[troughs],
+                                marker="v",
+                                s=60,
+                                color=trough_color,
+                                zorder=5,
+                                label="Troughs",
+                                edgecolors="white",
+                                linewidths=0.5,
+                            )
             else:
                 avg_trajectory = np.mean(self.neuron_trajectories[neurons_to_plot], axis=0)
+                display_avg = _display_series(avg_trajectory)
                 ax.plot(
                     frames,
-                    _display_series(avg_trajectory),
+                    display_avg,
                     color=avg_color,
                     linewidth=2.5,
                     antialiased=True,
                     label="Average",
                 )
+                if show_peaks:
+                    peaks, troughs = self._find_peaks_and_troughs(display_avg)
+                    if len(peaks) > 0:
+                        ax.scatter(
+                            frames[peaks],
+                            display_avg[peaks],
+                            marker="^",
+                            s=60,
+                            color=peak_color,
+                            zorder=5,
+                            label="Peaks",
+                            edgecolors="white",
+                            linewidths=0.5,
+                        )
+                    if len(troughs) > 0:
+                        ax.scatter(
+                            frames[troughs],
+                            display_avg[troughs],
+                            marker="v",
+                            s=60,
+                            color=trough_color,
+                            zorder=5,
+                            label="Troughs",
+                            edgecolors="white",
+                            linewidths=0.5,
+                        )
 
         ax.set_xlabel("Frame Number", fontsize=12)
         ax.set_ylabel("Intensity", fontsize=12)

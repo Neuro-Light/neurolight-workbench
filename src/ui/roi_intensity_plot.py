@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from scipy.signal import find_peaks
 
 from core.roi import ROI, ROIShape
 from ui.app_settings import get_roi_colors, get_theme
@@ -73,6 +74,14 @@ class ROIIntensityPlotWidget(QWidget):
             toggle_row.addSpacing(12)
 
         toggle_row.addStretch()
+
+        # Peak/Trough markers toggle
+        self.show_peaks_checkbox = QCheckBox("Show Peaks/Troughs")
+        self.show_peaks_checkbox.setChecked(False)
+        self.show_peaks_checkbox.setToolTip("Overlay peak (maxima) and trough (minima) markers on the graph")
+        self.show_peaks_checkbox.toggled.connect(self._replot)
+        toggle_row.addWidget(self.show_peaks_checkbox)
+
         layout.addLayout(toggle_row)
 
         # Matplotlib figure and canvas
@@ -179,6 +188,38 @@ class ROIIntensityPlotWidget(QWidget):
                 label += f" ({len(roi.points)} pts)"
             ax.plot(frames, data, linewidth=2, color=color_map[key], label=label)
 
+        # Overlay peak/trough markers if enabled
+        if self.show_peaks_checkbox.isChecked():
+            peak_color = theme.get("peak_marker_color", "#f97316")
+            trough_color = theme.get("trough_marker_color", "#06b6d4")
+            for key, data in visible.items():
+                frames = np.arange(len(data))
+                peaks, troughs = self._find_peaks_and_troughs(data)
+                if len(peaks) > 0:
+                    ax.scatter(
+                        frames[peaks],
+                        data[peaks],
+                        marker="^",
+                        s=60,
+                        color=peak_color,
+                        zorder=5,
+                        label="Peaks" if key == list(visible.keys())[0] else "",
+                        edgecolors="white",
+                        linewidths=0.5,
+                    )
+                if len(troughs) > 0:
+                    ax.scatter(
+                        frames[troughs],
+                        data[troughs],
+                        marker="v",
+                        s=60,
+                        color=trough_color,
+                        zorder=5,
+                        label="Troughs" if key == list(visible.keys())[0] else "",
+                        edgecolors="white",
+                        linewidths=0.5,
+                    )
+
         ax.set_xlabel("Frame Number", fontsize=12)
         ax.set_ylabel("Mean Pixel Intensity", fontsize=12)
         ax.set_title("ROI Intensity Over Time", fontsize=14)
@@ -211,6 +252,17 @@ class ROIIntensityPlotWidget(QWidget):
         for spine in ax.spines.values():
             spine.set_color(theme["axes_edgecolor"])
         ax.grid(True, alpha=0.35, color=theme["grid_color"])
+
+    def _find_peaks_and_troughs(self, data: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Find local maxima (peaks) and minima (troughs) in the signal."""
+        if len(data) < 3:
+            return np.array([], dtype=int), np.array([], dtype=int)
+        prominence = (np.max(data) - np.min(data)) * 0.05
+        if prominence < 1e-6:
+            prominence = 1e-6
+        peaks, _ = find_peaks(data, prominence=prominence, distance=3)
+        troughs, _ = find_peaks(-data, prominence=prominence, distance=3)
+        return peaks, troughs
 
     def _on_motion(self, event) -> None:
         if event.inaxes is None or event.xdata is None:

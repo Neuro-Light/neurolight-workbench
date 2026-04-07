@@ -175,6 +175,8 @@ def get_mpl_theme(theme: str = "dark") -> dict:
                 "average_color": "#e2e8f0",
                 "average_good_color": "#4ade80",
                 "roi_line_color": roi_colors["roi_1"],
+                "peak_marker_color": "#f97316",
+                "trough_marker_color": "#06b6d4",
             }
         )
     else:
@@ -186,6 +188,8 @@ def get_mpl_theme(theme: str = "dark") -> dict:
                 "average_color": "black",
                 "average_good_color": "darkgreen",
                 "roi_line_color": roi_colors["roi_1"],
+                "peak_marker_color": "#ea580c",
+                "trough_marker_color": "#0891b2",
             }
         )
 
