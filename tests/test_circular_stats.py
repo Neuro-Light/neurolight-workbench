@@ -53,6 +53,12 @@ class TestRaoSpacingTest:
         assert out["significant"] is False
         assert out["p_value"] == "> 0.10"
 
+    def test_identical_angles_flags_rejection(self) -> None:
+        out = rao_spacing_test(np.zeros(8))
+        assert out["U"] > 300.0
+        assert out["significant"] is True
+        assert out["p_value"] == "< 0.001"
+
     def test_2d_input_is_raveled(self) -> None:
         a = np.array([[0.0, 90.0], [180.0, 270.0]])
         out = rao_spacing_test(a)
@@ -68,6 +74,19 @@ class TestRayleighTest:
     def test_empty_raises(self) -> None:
         with pytest.raises(ValueError, match="at least one"):
             rayleigh_test(np.array([]))
+
+    def test_all_angles_identical_produces_expected_pvalue(self) -> None:
+        theta = np.zeros(5)
+
+        result = rayleigh_test(theta)
+
+        assert result["n"] == 5
+        assert result["r"] == pytest.approx(1.0, abs=1e-9)
+        assert result["Z"] == pytest.approx(5.0, abs=1e-9)
+        expected_p = math.exp(-5.0) * (
+            1 + (2 * 5.0 - 5.0**2) / (4 * 5) - (24 * 5.0 - 132 * 5.0**2 + 76 * 5.0**3 - 9 * 5.0**4) / (288 * 5**2)
+        )
+        assert result["p_value"] == pytest.approx(expected_p, rel=1e-9)
 
     def test_uniform_on_circle_low_r(self) -> None:
         angles = np.linspace(0, 2 * math.pi, 12, endpoint=False)

@@ -73,3 +73,16 @@ def test_compute_lomb_scargle_flags_uneven_sampling():
     y = np.sin(2.0 * np.pi * 0.8 * t)
     out = compute_lomb_scargle(t, y, num_freqs=500)
     assert out["uneven_sampling"] is True
+
+
+def test_compute_lomb_scargle_discards_nonfinite_samples():
+    t = np.linspace(0.0, 5.0, 20)
+    y = np.sin(2.0 * np.pi * 0.5 * t)
+    t[3] = np.nan
+    y[5] = np.inf
+
+    mask = np.isfinite(t) & np.isfinite(y)
+    out = compute_lomb_scargle(t, y, num_freqs=100)
+
+    assert out["n_samples"] == int(mask.sum())
+    assert out["frequency"].size == 100
