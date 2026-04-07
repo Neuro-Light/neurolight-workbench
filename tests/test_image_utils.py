@@ -11,7 +11,6 @@ from PySide6.QtGui import QImage
 
 from utils.image_utils import numpy_to_qimage
 
-
 # ---------------------------------------------------------------------------
 # 2-D grayscale — uint8
 # ---------------------------------------------------------------------------

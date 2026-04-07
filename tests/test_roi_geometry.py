@@ -1,5 +1,6 @@
-import pytest
 import numpy as np
+import pytest
+
 from core.roi import ROI, ROIHandle, ROIShape
 
 
@@ -57,7 +58,10 @@ def test_roi_contains_point_and_create_mask_work_for_both_shapes():
 def test_get_center_polygon_returns_mean_of_vertices():
     """Polygon get_center returns the arithmetic mean of all vertex coordinates."""
     roi = ROI(
-        x=0, y=0, width=10, height=10,
+        x=0,
+        y=0,
+        width=10,
+        height=10,
         shape=ROIShape.POLYGON,
         points=[(0, 0), (4, 0), (4, 4), (0, 4)],
     )
@@ -69,7 +73,10 @@ def test_get_center_polygon_returns_mean_of_vertices():
 def test_get_center_polygon_triangle_centroid():
     """Triangle centroid is computed as the mean of its three vertices."""
     roi = ROI(
-        x=0, y=0, width=6, height=6,
+        x=0,
+        y=0,
+        width=6,
+        height=6,
         shape=ROIShape.POLYGON,
         points=[(0, 0), (6, 0), (3, 6)],
     )
@@ -103,7 +110,10 @@ def test_contains_point_zero_height_ellipse_returns_false():
 def test_get_handle_at_point_polygon_vertex_hit_returns_vertex_tuple():
     """A point on a polygon vertex returns (ROIHandle.VERTEX, index)."""
     roi = ROI(
-        x=0, y=0, width=20, height=20,
+        x=0,
+        y=0,
+        width=20,
+        height=20,
         shape=ROIShape.POLYGON,
         points=[(0, 0), (20, 0), (20, 20), (0, 20)],
     )
@@ -114,7 +124,10 @@ def test_get_handle_at_point_polygon_vertex_hit_returns_vertex_tuple():
 def test_get_handle_at_point_polygon_second_vertex_hit():
     """A point on the second polygon vertex returns (VERTEX, 1)."""
     roi = ROI(
-        x=0, y=0, width=20, height=20,
+        x=0,
+        y=0,
+        width=20,
+        height=20,
         shape=ROIShape.POLYGON,
         points=[(0, 0), (20, 0), (20, 20), (0, 20)],
     )
@@ -125,7 +138,10 @@ def test_get_handle_at_point_polygon_second_vertex_hit():
 def test_get_handle_at_point_polygon_inside_returns_move():
     """A point inside the polygon (not on a vertex) returns MOVE."""
     roi = ROI(
-        x=0, y=0, width=40, height=40,
+        x=0,
+        y=0,
+        width=40,
+        height=40,
         shape=ROIShape.POLYGON,
         points=[(0, 0), (40, 0), (40, 40), (0, 40)],
     )
@@ -136,7 +152,10 @@ def test_get_handle_at_point_polygon_inside_returns_move():
 def test_get_handle_at_point_polygon_outside_returns_none():
     """A point outside the polygon (and not on a vertex) returns NONE."""
     roi = ROI(
-        x=0, y=0, width=10, height=10,
+        x=0,
+        y=0,
+        width=10,
+        height=10,
         shape=ROIShape.POLYGON,
         points=[(0, 0), (10, 0), (10, 10), (0, 10)],
     )
@@ -188,7 +207,10 @@ def test_get_handle_at_point_ellipse_far_outside_returns_none():
 def test_adjust_with_handle_polygon_move_shifts_all_vertices():
     """MOVE handle shifts every polygon vertex by (dx, dy)."""
     roi = ROI(
-        x=5, y=5, width=10, height=10,
+        x=5,
+        y=5,
+        width=10,
+        height=10,
         shape=ROIShape.POLYGON,
         points=[(5, 5), (15, 5), (15, 15), (5, 15)],
     )
@@ -202,7 +224,10 @@ def test_adjust_with_handle_polygon_move_shifts_all_vertices():
 def test_adjust_with_handle_polygon_move_clamps_to_image_bounds():
     """MOVE handle clamps all polygon vertices so they stay within image bounds."""
     roi = ROI(
-        x=0, y=0, width=5, height=5,
+        x=0,
+        y=0,
+        width=5,
+        height=5,
         shape=ROIShape.POLYGON,
         points=[(0, 0), (5, 0), (5, 5), (0, 5)],
     )
@@ -215,7 +240,10 @@ def test_adjust_with_handle_polygon_move_clamps_to_image_bounds():
 def test_adjust_with_handle_polygon_vertex_moves_single_vertex():
     """VERTEX handle with vertex_index moves only the specified vertex."""
     roi = ROI(
-        x=0, y=0, width=10, height=10,
+        x=0,
+        y=0,
+        width=10,
+        height=10,
         shape=ROIShape.POLYGON,
         points=[(0, 0), (10, 0), (10, 10), (0, 10)],
     )
@@ -227,7 +255,10 @@ def test_adjust_with_handle_polygon_vertex_moves_single_vertex():
 def test_adjust_with_handle_polygon_tuple_handle_unpacked_correctly():
     """Tuple (VERTEX, index) handle is unpacked and moves the correct vertex."""
     roi = ROI(
-        x=0, y=0, width=10, height=10,
+        x=0,
+        y=0,
+        width=10,
+        height=10,
         shape=ROIShape.POLYGON,
         points=[(0, 0), (10, 0), (10, 10), (0, 10)],
     )
@@ -239,7 +270,10 @@ def test_adjust_with_handle_polygon_tuple_handle_unpacked_correctly():
 def test_adjust_with_handle_polygon_vertex_clamps_to_bounds():
     """VERTEX handle clamps the moved vertex to [0, image_dim-1]."""
     roi = ROI(
-        x=0, y=0, width=10, height=10,
+        x=0,
+        y=0,
+        width=10,
+        height=10,
         shape=ROIShape.POLYGON,
         points=[(0, 0), (10, 0), (10, 10), (0, 10)],
     )
@@ -313,7 +347,10 @@ def test_adjust_with_handle_ellipse_bottom_right_resizes():
 def test_update_bbox_from_points_is_noop_when_points_empty():
     """_update_bbox_from_points does not change bbox when points list is empty."""
     roi = ROI(
-        x=5, y=5, width=10, height=10,
+        x=5,
+        y=5,
+        width=10,
+        height=10,
         shape=ROIShape.POLYGON,
         points=[(0, 0), (10, 0), (10, 10)],
     )
@@ -326,7 +363,10 @@ def test_update_bbox_from_points_is_noop_when_points_empty():
 def test_update_bbox_from_points_recomputes_after_vertex_edit():
     """_update_bbox_from_points correctly recomputes bbox when a vertex is moved."""
     roi = ROI(
-        x=0, y=0, width=11, height=11,
+        x=0,
+        y=0,
+        width=11,
+        height=11,
         shape=ROIShape.POLYGON,
         points=[(0, 0), (10, 0), (10, 10), (0, 10)],
     )
@@ -345,7 +385,10 @@ def test_update_bbox_from_points_recomputes_after_vertex_edit():
 def test_delete_vertex_removes_vertex_when_more_than_3():
     """delete_vertex removes the indexed vertex and returns True for a 4-vertex polygon."""
     roi = ROI(
-        x=0, y=0, width=10, height=10,
+        x=0,
+        y=0,
+        width=10,
+        height=10,
         shape=ROIShape.POLYGON,
         points=[(0, 0), (10, 0), (10, 10), (0, 10)],
     )
@@ -358,7 +401,10 @@ def test_delete_vertex_removes_vertex_when_more_than_3():
 def test_delete_vertex_bbox_updated_after_deletion():
     """delete_vertex updates the bounding box after removing a vertex."""
     roi = ROI(
-        x=0, y=0, width=21, height=21,
+        x=0,
+        y=0,
+        width=21,
+        height=21,
         shape=ROIShape.POLYGON,
         points=[(0, 0), (20, 0), (20, 20), (0, 10), (0, 20)],
     )
@@ -370,7 +416,10 @@ def test_delete_vertex_bbox_updated_after_deletion():
 def test_delete_vertex_refuses_when_exactly_3_vertices():
     """delete_vertex returns False without modifying the polygon when it has only 3 vertices."""
     roi = ROI(
-        x=0, y=0, width=10, height=10,
+        x=0,
+        y=0,
+        width=10,
+        height=10,
         shape=ROIShape.POLYGON,
         points=[(0, 0), (10, 0), (5, 10)],
     )
@@ -387,7 +436,10 @@ def test_delete_vertex_refuses_for_ellipse_roi():
 def test_delete_vertex_refuses_out_of_range_index():
     """delete_vertex returns False when the index is out of range."""
     roi = ROI(
-        x=0, y=0, width=10, height=10,
+        x=0,
+        y=0,
+        width=10,
+        height=10,
         shape=ROIShape.POLYGON,
         points=[(0, 0), (10, 0), (10, 10), (0, 10)],
     )
@@ -400,11 +452,14 @@ def test_delete_vertex_refuses_out_of_range_index():
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("img_w,img_h,roi_x,roi_y", [
-    (10, 10, 0, 0),
-    (50, 50, 20, 20),
-    (100, 80, 40, 30),
-])
+@pytest.mark.parametrize(
+    "img_w,img_h,roi_x,roi_y",
+    [
+        (10, 10, 0, 0),
+        (50, 50, 20, 20),
+        (100, 80, 40, 30),
+    ],
+)
 def test_create_mask_polygon_shape_matches_image_dimensions(img_w, img_h, roi_x, roi_y):
     """create_mask for a polygon returns a uint8 mask with (img_h, img_w) shape."""
     pts = [(roi_x, roi_y), (roi_x + 4, roi_y), (roi_x + 2, roi_y + 4)]

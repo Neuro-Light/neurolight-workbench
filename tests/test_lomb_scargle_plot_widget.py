@@ -1,5 +1,6 @@
 import matplotlib
-matplotlib.use('Agg')
+
+matplotlib.use("Agg")
 
 from unittest.mock import Mock, patch
 
