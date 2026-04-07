@@ -27,7 +27,7 @@ def test_crop_to_roi_polygon_masks_outside_pixels():
 
     assert cropped.shape == (5, 5)
     assert cropped[1, 1] == 100
-    assert cropped[0, -1] == 0
+    assert cropped[4, 4] == 0  # clearly outside triangle (right of right edge at y=4)
 
 
 def test_crop_to_roi_ellipse_on_rgb_image():

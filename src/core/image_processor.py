@@ -77,22 +77,10 @@ class ImageProcessor:
 
         # Apply polygon mask
         if apply_mask and roi.shape == ROIShape.POLYGON and roi.points and len(roi.points) >= 3:
-            # Use strict interior masking: pixels whose centers lie strictly inside the polygon
-            # are kept; pixels on the polygon boundary are masked out.
             crop_h, crop_w = (y2 - y1), (x2 - x1)
             mask = np.zeros((crop_h, crop_w), dtype=np.uint8)
-            contour = np.array([[p[0] - x1, p[1] - y1] for p in roi.points], dtype=np.float32)
-
-            # Note: We evaluate membership at integer pixel coordinates (x=col, y=row).
-            # This matches tests that treat pixel indices as points in the same coordinate
-            # system as ROI vertices (rather than using pixel centers).
-            for yy in range(crop_h):
-                y_pt = float(yy)
-                for xx in range(crop_w):
-                    x_pt = float(xx)
-                    if cv2.pointPolygonTest(contour, (x_pt, y_pt), False) > 0:
-                        mask[yy, xx] = 255
-
+            contour = np.array([[p[0] - x1, p[1] - y1] for p in roi.points], dtype=np.int32)
+            cv2.fillPoly(mask, [contour], 255)
             cropped = cv2.bitwise_and(cropped, cropped, mask=mask)
         # Apply ellipse mask
         elif apply_mask and roi.shape == ROIShape.ELLIPSE:
@@ -128,18 +116,37 @@ class ImageProcessor:
             raise ValueError("Image stack must be 3D array (frames, height, width)")
 
         num_frames = image_stack.shape[0]
+        height, width = image_stack.shape[1], image_stack.shape[2]
 
-        # Crop first frame to get dimensions
+        # For polygon ROIs, compute the raster mask once and reuse across all frames
+        if apply_mask and roi.shape == ROIShape.POLYGON and roi.points and len(roi.points) >= 3:
+            x1 = max(0, roi.x)
+            y1 = max(0, roi.y)
+            x2 = min(width, roi.x + roi.width)
+            y2 = min(height, roi.y + roi.height)
+            crop_h, crop_w = y2 - y1, x2 - x1
+
+            mask = np.zeros((crop_h, crop_w), dtype=np.uint8)
+            contour = np.array([[p[0] - x1, p[1] - y1] for p in roi.points], dtype=np.int32)
+            cv2.fillPoly(mask, [contour], 255)
+
+            cropped_stack = np.zeros((num_frames, crop_h, crop_w), dtype=image_stack.dtype)
+            for i in range(num_frames):
+                frame = image_stack[i, y1:y2, x1:x2].copy()
+                cropped_stack[i] = cv2.bitwise_and(frame, frame, mask=mask)
+
+            self.log_processing_step("crop", {"roi": roi.to_dict(), "apply_mask": apply_mask})
+            return cropped_stack
+
+        # For rectangle and ellipse ROIs, delegate per-frame (mask doesn't vary)
         first_cropped = self.crop_to_roi(image_stack[0], roi, apply_mask)
 
-        # Allocate output array
         cropped_stack = np.zeros(
             (num_frames, first_cropped.shape[0], first_cropped.shape[1]),
             dtype=image_stack.dtype,
         )
         cropped_stack[0] = first_cropped
 
-        # Crop remaining frames
         for i in range(1, num_frames):
             cropped_stack[i] = self.crop_to_roi(image_stack[i], roi, apply_mask)
 
