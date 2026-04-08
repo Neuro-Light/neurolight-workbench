@@ -59,7 +59,8 @@ STEP_DEFINITIONS: Dict[WorkflowStep, StepMeta] = {
         tooltip=("Adjust exposure and contrast so structures of interest are clearly visible."),
         description=(
             "Use the Display options panel to adjust exposure and "
-            "contrast until neurons and background are clearly separated."
+            "contrast until neurons and background are clearly separated. "
+            "Display setting do not effect the underlying data, just how it's visualized in the viewer."
         ),
     ),
     WorkflowStep.ALIGN_IMAGES: StepMeta(
