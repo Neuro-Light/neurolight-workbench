@@ -214,8 +214,10 @@ class ROIIntensityPlotWidget(QWidget):
             peak_color = theme.get("peak_marker_color", "#f97316")
             trough_color = theme.get("trough_marker_color", "#06b6d4")
             show_numbers = self.number_peaks_checkbox.isChecked()
-            peak_order = 0
-            trough_order = 0
+
+            # First pass: collect all markers across visible ROIs (without order)
+            raw_peaks: list[tuple[int, float]] = []
+            raw_troughs: list[tuple[int, float]] = []
             for key, data in visible.items():
                 frames = np.arange(len(data))
                 peaks, troughs = self._find_peaks_and_troughs(data)
@@ -233,20 +235,8 @@ class ROIIntensityPlotWidget(QWidget):
                         picker=True,
                         pickradius=5,
                     )
-                    for i, idx in enumerate(peaks):
-                        peak_order += 1
-                        self._peak_data.append((int(frames[idx]), float(data[idx]), "peak", peak_order))
-                        if show_numbers:
-                            ax.annotate(
-                                str(peak_order),
-                                (frames[idx], data[idx]),
-                                textcoords="offset points",
-                                xytext=(0, 8),
-                                ha="center",
-                                fontsize=8,
-                                color=peak_color,
-                                fontweight="bold",
-                            )
+                    for idx in peaks:
+                        raw_peaks.append((int(frames[idx]), float(data[idx])))
                 if len(troughs) > 0:
                     ax.scatter(
                         frames[troughs],
@@ -261,20 +251,42 @@ class ROIIntensityPlotWidget(QWidget):
                         picker=True,
                         pickradius=5,
                     )
-                    for i, idx in enumerate(troughs):
-                        trough_order += 1
-                        self._trough_data.append((int(frames[idx]), float(data[idx]), "trough", trough_order))
-                        if show_numbers:
-                            ax.annotate(
-                                str(trough_order),
-                                (frames[idx], data[idx]),
-                                textcoords="offset points",
-                                xytext=(0, -12),
-                                ha="center",
-                                fontsize=8,
-                                color=trough_color,
-                                fontweight="bold",
-                            )
+                    for idx in troughs:
+                        raw_troughs.append((int(frames[idx]), float(data[idx])))
+
+            # Second pass: sort by frame and assign chronological order numbers
+            raw_peaks.sort(key=lambda x: x[0])
+            raw_troughs.sort(key=lambda x: x[0])
+
+            for order, (frame, value) in enumerate(raw_peaks, start=1):
+                self._peak_data.append((frame, value, "peak", order))
+            for order, (frame, value) in enumerate(raw_troughs, start=1):
+                self._trough_data.append((frame, value, "trough", order))
+
+            # Add number annotations if enabled (using sorted order)
+            if show_numbers:
+                for frame, value, _, order in self._peak_data:
+                    ax.annotate(
+                        str(order),
+                        (frame, value),
+                        textcoords="offset points",
+                        xytext=(0, 8),
+                        ha="center",
+                        fontsize=8,
+                        color=peak_color,
+                        fontweight="bold",
+                    )
+                for frame, value, _, order in self._trough_data:
+                    ax.annotate(
+                        str(order),
+                        (frame, value),
+                        textcoords="offset points",
+                        xytext=(0, -12),
+                        ha="center",
+                        fontsize=8,
+                        color=trough_color,
+                        fontweight="bold",
+                    )
 
         ax.set_xlabel("Frame Number", fontsize=12)
         ax.set_ylabel("Mean Pixel Intensity", fontsize=12)

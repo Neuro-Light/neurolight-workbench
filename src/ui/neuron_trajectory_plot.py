@@ -257,7 +257,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
         troughs, _ = find_peaks(-data, prominence=prominence, distance=distance)
         return peaks, troughs
 
-    def _plot_markers(
+    def _collect_markers(
         self,
         ax,
         frames: np.ndarray,
@@ -268,9 +268,10 @@ class NeuronTrajectoryPlotWidget(QWidget):
         trough_color: str,
         add_peak_label: bool,
         add_trough_label: bool,
+        raw_peaks: list,
+        raw_troughs: list,
     ) -> None:
-        """Plot peak and trough markers with optional numbering."""
-        show_numbers = self.number_peaks_checkbox.isChecked()
+        """Collect and plot marker scatter points (without order numbers yet)."""
         if len(peaks) > 0:
             ax.scatter(
                 frames[peaks],
@@ -285,20 +286,8 @@ class NeuronTrajectoryPlotWidget(QWidget):
                 picker=True,
                 pickradius=5,
             )
-            for i, idx in enumerate(peaks):
-                order = len(self._peak_data) + 1
-                self._peak_data.append((int(frames[idx]), float(data[idx]), "peak", order))
-                if show_numbers:
-                    ax.annotate(
-                        str(order),
-                        (frames[idx], data[idx]),
-                        textcoords="offset points",
-                        xytext=(0, 8),
-                        ha="center",
-                        fontsize=8,
-                        color=peak_color,
-                        fontweight="bold",
-                    )
+            for idx in peaks:
+                raw_peaks.append((int(frames[idx]), float(data[idx])))
         if len(troughs) > 0:
             ax.scatter(
                 frames[troughs],
@@ -313,20 +302,42 @@ class NeuronTrajectoryPlotWidget(QWidget):
                 picker=True,
                 pickradius=5,
             )
-            for i, idx in enumerate(troughs):
-                order = len(self._trough_data) + 1
-                self._trough_data.append((int(frames[idx]), float(data[idx]), "trough", order))
-                if show_numbers:
-                    ax.annotate(
-                        str(order),
-                        (frames[idx], data[idx]),
-                        textcoords="offset points",
-                        xytext=(0, -12),
-                        ha="center",
-                        fontsize=8,
-                        color=trough_color,
-                        fontweight="bold",
-                    )
+            for idx in troughs:
+                raw_troughs.append((int(frames[idx]), float(data[idx])))
+
+    def _finalize_markers(self, ax, raw_peaks: list, raw_troughs: list, peak_color: str, trough_color: str) -> None:
+        """Sort markers by frame, assign order numbers, and add annotations if enabled."""
+        raw_peaks.sort(key=lambda x: x[0])
+        raw_troughs.sort(key=lambda x: x[0])
+
+        for order, (frame, value) in enumerate(raw_peaks, start=1):
+            self._peak_data.append((frame, value, "peak", order))
+        for order, (frame, value) in enumerate(raw_troughs, start=1):
+            self._trough_data.append((frame, value, "trough", order))
+
+        if self.number_peaks_checkbox.isChecked():
+            for frame, value, _, order in self._peak_data:
+                ax.annotate(
+                    str(order),
+                    (frame, value),
+                    textcoords="offset points",
+                    xytext=(0, 8),
+                    ha="center",
+                    fontsize=8,
+                    color=peak_color,
+                    fontweight="bold",
+                )
+            for frame, value, _, order in self._trough_data:
+                ax.annotate(
+                    str(order),
+                    (frame, value),
+                    textcoords="offset points",
+                    xytext=(0, -12),
+                    ha="center",
+                    fontsize=8,
+                    color=trough_color,
+                    fontweight="bold",
+                )
 
     def _get_previous_marker_frame(self, current_frame: int, marker_type: str) -> Optional[int]:
         """Get the frame number of the previous marker of the same type."""
@@ -558,6 +569,10 @@ class NeuronTrajectoryPlotWidget(QWidget):
             trough_color = theme.get("trough_marker_color", "#06b6d4")
             peaks_labeled = False
 
+            # Collect raw markers across all averages first, then sort and assign order
+            raw_peaks: list[tuple[int, float]] = []
+            raw_troughs: list[tuple[int, float]] = []
+
             if use_roi_colors:
                 avg_roi_1_color = theme.get("avg_trajectory_roi_1_color", roi_1_color)
                 avg_roi_2_color = theme.get("avg_trajectory_roi_2_color", roi_2_color)
@@ -574,7 +589,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
                     )
                     if show_peaks:
                         peaks, troughs = self._find_peaks_and_troughs(display_avg_1)
-                        self._plot_markers(
+                        self._collect_markers(
                             ax,
                             frames,
                             display_avg_1,
@@ -584,6 +599,8 @@ class NeuronTrajectoryPlotWidget(QWidget):
                             trough_color,
                             not peaks_labeled,
                             not peaks_labeled,
+                            raw_peaks,
+                            raw_troughs,
                         )
                         peaks_labeled = True
                 if roi_2_indices:
@@ -599,7 +616,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
                     )
                     if show_peaks:
                         peaks, troughs = self._find_peaks_and_troughs(display_avg_2)
-                        self._plot_markers(
+                        self._collect_markers(
                             ax,
                             frames,
                             display_avg_2,
@@ -609,6 +626,8 @@ class NeuronTrajectoryPlotWidget(QWidget):
                             trough_color,
                             not peaks_labeled,
                             not peaks_labeled,
+                            raw_peaks,
+                            raw_troughs,
                         )
                         peaks_labeled = True
             elif self.quality_mask is not None and show_good:
@@ -626,8 +645,9 @@ class NeuronTrajectoryPlotWidget(QWidget):
                     )
                     if show_peaks:
                         peaks, troughs = self._find_peaks_and_troughs(display_avg)
-                        self._plot_markers(
-                            ax, frames, display_avg, peaks, troughs, peak_color, trough_color, True, True
+                        self._collect_markers(
+                            ax, frames, display_avg, peaks, troughs, peak_color, trough_color, True, True,
+                            raw_peaks, raw_troughs
                         )
             else:
                 avg_trajectory = np.mean(self.neuron_trajectories[neurons_to_plot], axis=0)
@@ -642,7 +662,14 @@ class NeuronTrajectoryPlotWidget(QWidget):
                 )
                 if show_peaks:
                     peaks, troughs = self._find_peaks_and_troughs(display_avg)
-                    self._plot_markers(ax, frames, display_avg, peaks, troughs, peak_color, trough_color, True, True)
+                    self._collect_markers(
+                        ax, frames, display_avg, peaks, troughs, peak_color, trough_color, True, True,
+                        raw_peaks, raw_troughs
+                    )
+
+            # Sort by frame and assign chronological order numbers
+            if show_peaks:
+                self._finalize_markers(ax, raw_peaks, raw_troughs, peak_color, trough_color)
 
         ax.set_xlabel("Frame Number", fontsize=12)
         ax.set_ylabel("Intensity", fontsize=12)
