@@ -251,7 +251,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
         if len(data) < 3:
             return np.array([], dtype=int), np.array([], dtype=int)
         data_range = np.max(data) - np.min(data)
-        prominence = data_range * 0.01 if data_range > 1e-6 else 1e-6
+        prominence = data_range * 0.10 if data_range > 1e-6 else 1e-6
         distance = max(2, len(data) // 100)
         peaks, _ = find_peaks(data, prominence=prominence, distance=distance)
         troughs, _ = find_peaks(-data, prominence=prominence, distance=distance)
