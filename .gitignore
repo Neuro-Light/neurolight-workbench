@@ -35,3 +35,8 @@ logs/
 
 # codecov
 .coverage
+.coverage.*
+coverage.json
+coverage.xml
+htmlcov/
+coverage_report.txt

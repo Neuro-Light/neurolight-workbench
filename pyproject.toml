@@ -22,7 +22,7 @@ dependencies = [
 neurolight = "src.main:main"
 
 [project.optional-dependencies]
-test = ["pytest>=7.0.0", "pytest-cov>=4.0.0"]
+test = ["pytest>=7.0.0", "pytest-cov>=4.0.0", "pytest-env>=1.0.0"]
 dev = ["mypy>=1.0.0"]
 build = ["pyinstaller>=6.0.0"]
 
@@ -48,4 +48,5 @@ select = ["F", "E", "I"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+env = ["MPLBACKEND=Agg"]
 
