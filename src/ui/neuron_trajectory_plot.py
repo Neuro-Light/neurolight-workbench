@@ -657,8 +657,17 @@ class NeuronTrajectoryPlotWidget(QWidget):
                     if show_peaks:
                         peaks, troughs = self._find_peaks_and_troughs(display_avg)
                         self._collect_markers(
-                            ax, frames, display_avg, peaks, troughs, peak_color, trough_color, True, True,
-                            raw_peaks, raw_troughs
+                            ax,
+                            frames,
+                            display_avg,
+                            peaks,
+                            troughs,
+                            peak_color,
+                            trough_color,
+                            True,
+                            True,
+                            raw_peaks,
+                            raw_troughs,
                         )
             else:
                 avg_trajectory = np.mean(self.neuron_trajectories[neurons_to_plot], axis=0)
@@ -674,8 +683,17 @@ class NeuronTrajectoryPlotWidget(QWidget):
                 if show_peaks:
                     peaks, troughs = self._find_peaks_and_troughs(display_avg)
                     self._collect_markers(
-                        ax, frames, display_avg, peaks, troughs, peak_color, trough_color, True, True,
-                        raw_peaks, raw_troughs
+                        ax,
+                        frames,
+                        display_avg,
+                        peaks,
+                        troughs,
+                        peak_color,
+                        trough_color,
+                        True,
+                        True,
+                        raw_peaks,
+                        raw_troughs,
                     )
 
             # Sort by frame and assign chronological order numbers
