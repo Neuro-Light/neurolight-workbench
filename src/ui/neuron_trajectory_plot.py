@@ -362,7 +362,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
         for m_frame, m_value, m_type, m_order in all_markers:
             if abs(xdata - m_frame) < 0.5 and abs(ydata - m_value) < 0.001:
                 prev_frame = self._get_previous_marker_frame(m_frame, m_type)
-                interval = f" | Interval: {m_frame - prev_frame} frames" if prev_frame else ""
+                interval = f" | Interval: {m_frame - prev_frame} frames" if prev_frame is not None else ""
                 self.hover_label.setTextFormat(Qt.PlainText)
                 self.hover_label.setText(
                     f"Selected: {m_type.title()} #{m_order} at Frame {m_frame}, Value: {m_value:.3f}{interval}"
@@ -392,7 +392,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
                 if abs(event.xdata - m_frame) < 1.5 and abs(event.ydata - m_value) < (y_range[1] - y_range[0]) * 0.05:
                     marker_found = True
                     prev_frame = self._get_previous_marker_frame(m_frame, m_type)
-                    interval_text = f"\nInterval: {m_frame - prev_frame} frames" if prev_frame else ""
+                    interval_text = f"\nInterval: {m_frame - prev_frame} frames" if prev_frame is not None else ""
                     tooltip = f"{m_type.title()} #{m_order}\nFrame: {m_frame}\nValue: {m_value:.3f}{interval_text}"
                     self._marker_annotation.xy = (m_frame, m_value)
                     self._marker_annotation.set_text(tooltip)
@@ -404,8 +404,12 @@ class NeuronTrajectoryPlotWidget(QWidget):
                 self.canvas.draw_idle()
 
         # Show mean intensity across displayed neurons at this frame
-        intensity = float(np.mean(self.neuron_trajectories[:, frame_idx]))
-        self.hover_label.setText(f"Frame {frame_idx}  ·  Intensity {intensity:.3f}")
+        displayed = self._get_displayed_neuron_indices()
+        if displayed:
+            intensity = float(np.mean(self.neuron_trajectories[displayed, frame_idx]))
+            self.hover_label.setText(f"Frame {frame_idx}  ·  Intensity {intensity:.3f}")
+        else:
+            self.hover_label.setText(f"Frame {frame_idx}  ·  No neurons displayed")
 
     def _get_displayed_neuron_indices(self) -> list[int]:
         if self.neuron_trajectories is None or len(self.neuron_trajectories) == 0:
@@ -568,6 +572,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
             peak_color = theme.get("peak_marker_color", "#f97316")
             trough_color = theme.get("trough_marker_color", "#06b6d4")
             peaks_labeled = False
+            troughs_labeled = False
 
             # Collect raw markers across all averages first, then sort and assign order
             raw_peaks: list[tuple[int, float]] = []
@@ -598,11 +603,14 @@ class NeuronTrajectoryPlotWidget(QWidget):
                             peak_color,
                             trough_color,
                             not peaks_labeled,
-                            not peaks_labeled,
+                            not troughs_labeled,
                             raw_peaks,
                             raw_troughs,
                         )
-                        peaks_labeled = True
+                        if len(peaks) > 0:
+                            peaks_labeled = True
+                        if len(troughs) > 0:
+                            troughs_labeled = True
                 if roi_2_indices:
                     avg_2 = np.mean(self.neuron_trajectories[roi_2_indices], axis=0)
                     display_avg_2 = _display_series(avg_2)
@@ -625,11 +633,14 @@ class NeuronTrajectoryPlotWidget(QWidget):
                             peak_color,
                             trough_color,
                             not peaks_labeled,
-                            not peaks_labeled,
+                            not troughs_labeled,
                             raw_peaks,
                             raw_troughs,
                         )
-                        peaks_labeled = True
+                        if len(peaks) > 0:
+                            peaks_labeled = True
+                        if len(troughs) > 0:
+                            troughs_labeled = True
             elif self.quality_mask is not None and show_good:
                 good_in_plot = [i for i in neurons_to_plot if self.quality_mask[i]]
                 if good_in_plot:
