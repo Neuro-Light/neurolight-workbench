@@ -153,6 +153,9 @@ class ROIIntensityPlotWidget(QWidget):
         if self._hover_cid is not None:
             self.canvas.mpl_disconnect(self._hover_cid)
             self._hover_cid = None
+        if self._pick_cid is not None:
+            self.canvas.mpl_disconnect(self._pick_cid)
+            self._pick_cid = None
         self.figure.clear()
         self.canvas.draw()
         self._intensity = {"roi_1": None, "roi_2": None}
@@ -210,10 +213,13 @@ class ROIIntensityPlotWidget(QWidget):
         # Overlay peak/trough markers if enabled
         self._peak_data = []
         self._trough_data = []
+        roi_counts: Dict[str, tuple[int, int]] = {}  # Cache peak/trough counts per ROI
         if self.show_peaks_checkbox.isChecked():
             peak_color = theme.get("peak_marker_color", "#f97316")
             trough_color = theme.get("trough_marker_color", "#06b6d4")
             show_numbers = self.number_peaks_checkbox.isChecked()
+            peaks_label_added = False
+            troughs_label_added = False
 
             # First pass: collect all markers across visible ROIs (without order)
             raw_peaks: list[tuple[int, float]] = []
@@ -221,6 +227,7 @@ class ROIIntensityPlotWidget(QWidget):
             for key, data in visible.items():
                 frames = np.arange(len(data))
                 peaks, troughs = self._find_peaks_and_troughs(data)
+                roi_counts[key] = (len(peaks), len(troughs))
                 if len(peaks) > 0:
                     ax.scatter(
                         frames[peaks],
@@ -229,12 +236,13 @@ class ROIIntensityPlotWidget(QWidget):
                         s=60,
                         color=peak_color,
                         zorder=5,
-                        label="Peaks" if key == list(visible.keys())[0] else "",
+                        label="Peaks" if not peaks_label_added else "",
                         edgecolors="white",
                         linewidths=0.5,
                         picker=True,
                         pickradius=5,
                     )
+                    peaks_label_added = True
                     for idx in peaks:
                         raw_peaks.append((int(frames[idx]), float(data[idx])))
                 if len(troughs) > 0:
@@ -245,12 +253,13 @@ class ROIIntensityPlotWidget(QWidget):
                         s=60,
                         color=trough_color,
                         zorder=5,
-                        label="Troughs" if key == list(visible.keys())[0] else "",
+                        label="Troughs" if not troughs_label_added else "",
                         edgecolors="white",
                         linewidths=0.5,
                         picker=True,
                         pickradius=5,
                     )
+                    troughs_label_added = True
                     for idx in troughs:
                         raw_troughs.append((int(frames[idx]), float(data[idx])))
 
@@ -302,13 +311,13 @@ class ROIIntensityPlotWidget(QWidget):
             name = ROI_DISPLAY_NAMES[key]
             status = f"{name}: {len(data)} frames, mean {np.mean(data):.2f}"
             if self.show_peaks_checkbox.isChecked():
-                peaks, troughs = self._find_peaks_and_troughs(data)
-                status += f" ({len(peaks)} peaks, {len(troughs)} troughs)"
-                if len(peaks) > 0 and len(troughs) == 0:
+                peak_count, trough_count = roi_counts.get(key, (0, 0))
+                status += f" ({peak_count} peaks, {trough_count} troughs)"
+                if peak_count > 0 and trough_count == 0:
                     warnings.append(f"{name}: No troughs detected — signal may be mostly rising or troughs too subtle")
-                elif len(troughs) > 0 and len(peaks) == 0:
+                elif trough_count > 0 and peak_count == 0:
                     warnings.append(f"{name}: No peaks detected — signal may be mostly falling or peaks too subtle")
-                elif len(peaks) == 0 and len(troughs) == 0:
+                elif peak_count == 0 and trough_count == 0:
                     warnings.append(f"{name}: No peaks/troughs detected — signal may be too flat or noisy")
             parts.append(status)
         status_text = " | ".join(parts)
@@ -398,7 +407,7 @@ class ROIIntensityPlotWidget(QWidget):
                     self.canvas.draw_idle()
                     break
 
-            if not marker_found:
+            if not marker_found and self._marker_annotation.get_visible():
                 self._marker_annotation.set_visible(False)
                 self.canvas.draw_idle()
 
@@ -437,8 +446,10 @@ class ROIIntensityPlotWidget(QWidget):
 
         # Find which marker was clicked
         all_markers = self._peak_data + self._trough_data
+        y_range = self.figure.axes[0].get_ylim() if self.figure.axes else (0, 1)
+        y_tol = (y_range[1] - y_range[0]) * 0.05
         for m_frame, m_value, m_type, m_order in all_markers:
-            if abs(xdata - m_frame) < 0.5 and abs(ydata - m_value) < 0.001:
+            if abs(xdata - m_frame) < 0.5 and abs(ydata - m_value) < y_tol:
                 prev_frame = self._get_previous_marker_frame(m_frame, m_type)
                 if prev_frame is not None:
                     interval_text = f" | Interval from previous: {m_frame - prev_frame} frames"

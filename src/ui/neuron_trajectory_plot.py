@@ -359,8 +359,10 @@ class NeuronTrajectoryPlotWidget(QWidget):
         xdata = artist.get_offsets()[ind][0]
         ydata = artist.get_offsets()[ind][1]
         all_markers = self._peak_data + self._trough_data
+        y_range = self.figure.axes[0].get_ylim() if self.figure.axes else (0, 1)
+        y_tol = (y_range[1] - y_range[0]) * 0.05
         for m_frame, m_value, m_type, m_order in all_markers:
-            if abs(xdata - m_frame) < 0.5 and abs(ydata - m_value) < 0.001:
+            if abs(xdata - m_frame) < 0.5 and abs(ydata - m_value) < y_tol:
                 prev_frame = self._get_previous_marker_frame(m_frame, m_type)
                 interval = f" | Interval: {m_frame - prev_frame} frames" if prev_frame is not None else ""
                 self.hover_label.setTextFormat(Qt.PlainText)
@@ -754,6 +756,11 @@ class NeuronTrajectoryPlotWidget(QWidget):
             else:
                 self.status_label.setTextFormat(Qt.PlainText)
             self.status_label.setText(status_text)
+        else:
+            # Reset status when peaks/troughs are not being shown
+            num_neurons_display = len(neurons_to_plot) if neurons_to_plot else 0
+            self.status_label.setTextFormat(Qt.PlainText)
+            self.status_label.setText(f"Displaying {num_neurons_display} trajectories")
 
         # Create annotation for marker tooltips (hidden initially)
         self._marker_annotation = ax.annotate(
@@ -861,6 +868,9 @@ class NeuronTrajectoryPlotWidget(QWidget):
         if getattr(self, "_hover_cid", None) is not None:
             self.canvas.mpl_disconnect(self._hover_cid)
             self._hover_cid = None
+        if getattr(self, "_pick_cid", None) is not None:
+            self.canvas.mpl_disconnect(self._pick_cid)
+            self._pick_cid = None
         self.figure.clear()
         self.canvas.draw()
         self.neuron_trajectories = None
