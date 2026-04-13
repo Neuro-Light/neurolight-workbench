@@ -839,17 +839,17 @@ class MainWindow(QMainWindow):
         self.workflow_manager.complete_step_if_current(WorkflowStep.LOAD_IMAGES)
 
     def _confirm_start_time_from_loaded_stack(self) -> None:
-        """Confirm metadata-derived start time immediately after loading a stack."""
+        """Always prompt to confirm start time immediately after loading a stack."""
         if not self.stack_handler.files:
             return
         first_file = self.stack_handler.files[0]
         inferred = _get_exif_timestamp(first_file)
-        if inferred is None:
-            return
-
         qtime = _parse_time_string(inferred)
+
         if qtime is None:
-            return
+            # Fall back to currently saved acquisition time, then midnight.
+            acquisition = self.experiment.settings.get("acquisition") or {}
+            qtime = _parse_time_string(acquisition.get("experiment_start_time")) or QTime(0, 0, 0)
 
         uniformity_note = None
         if len(self.stack_handler.files) > 1:
@@ -860,6 +860,12 @@ class MainWindow(QMainWindow):
                     "Warning: sampled image timestamps match exactly. "
                     "If this stack was pre-aligned/exported, adjust start time manually here."
                 )
+        if inferred is None:
+            missing_note = (
+                "No parseable timestamp was found in first-frame metadata. "
+                "Please confirm the correct experiment start time."
+            )
+            uniformity_note = f"{uniformity_note}\n{missing_note}" if uniformity_note else missing_note
 
         dlg = _ConfirmStartTimeDialog(
             suggested_time=qtime,
