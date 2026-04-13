@@ -682,7 +682,6 @@ class MainWindow(QMainWindow):
         self.workflow_manager.reset_from_step(WorkflowStep.EDIT_IMAGES)
 
     def _on_stack_loaded(self, directory_path: str) -> None:
-
         # ImageStackHandler already updates experiment association for path/count
         self.stack_handler.associate_with_experiment(self.experiment)
 
