@@ -420,11 +420,16 @@ class NeuronTrajectoryPlotWidget(QWidget):
             x_tol = interval * 1.5
             for m_frame, m_value, m_type, m_order in all_markers:
                 y_range = self.figure.axes[0].get_ylim()
-                if abs(elapsed_minutes - m_frame) < x_tol and abs(event.ydata - m_value) < (y_range[1] - y_range[0]) * 0.05:
+                if (
+                    abs(elapsed_minutes - m_frame) < x_tol
+                    and abs(event.ydata - m_value) < (y_range[1] - y_range[0]) * 0.05
+                ):
                     marker_found = True
                     prev_frame = self._get_previous_marker_frame(m_frame, m_type)
                     interval_text = f"\nInterval: {m_frame - prev_frame:.2f} min" if prev_frame is not None else ""
-                    tooltip = f"{m_type.title()} #{m_order}\nTime: {m_frame:.2f} min\nValue: {m_value:.3f}{interval_text}"
+                    tooltip = (
+                        f"{m_type.title()} #{m_order}\nTime: {m_frame:.2f} min\nValue: {m_value:.3f}{interval_text}"
+                    )
                     self._marker_annotation.xy = (m_frame, m_value)
                     self._marker_annotation.set_text(tooltip)
                     self._marker_annotation.set_visible(True)

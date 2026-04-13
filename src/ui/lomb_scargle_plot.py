@@ -79,8 +79,7 @@ class LombScarglePlotWidget(QWidget):
         self.sampling_interval_spin.setValue(DEFAULT_FRAME_INTERVAL_MINUTES)
         self.sampling_interval_spin.setMinimumWidth(90)
         self.sampling_interval_spin.setToolTip(
-            "Time between successive frames in minutes.\n"
-            "Set this to match the experiment's acquisition interval."
+            "Time between successive frames in minutes.\nSet this to match the experiment's acquisition interval."
         )
         self.sampling_interval_spin.valueChanged.connect(self._update_plot)
         controls_row.addWidget(self.sampling_interval_spin)
