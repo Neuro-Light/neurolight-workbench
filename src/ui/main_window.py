@@ -519,17 +519,35 @@ class MainWindow(QMainWindow):
             rayleigh_widget = rayleigh_getter() if callable(rayleigh_getter) else None
         except Exception:
             rayleigh_widget = None
-        if rayleigh_widget is None:
-            return
+        if rayleigh_widget is not None:
+            time_settings = self.experiment.settings.get("time") or {}
+            start_minutes = time_settings.get("start_minutes")
+            if start_minutes is not None:
+                try:
+                    rayleigh_widget.set_experiment_start_time_minutes(int(start_minutes))
+                except Exception:
+                    pass
 
-        time_settings = self.experiment.settings.get("time") or {}
-        start_minutes = time_settings.get("start_minutes")
-        if start_minutes is None:
-            return
+        # Frame interval and start time for trajectory and Lomb-Scargle plots
+        acquisition = self.experiment.settings.get("acquisition") or {}
+        frame_interval = acquisition.get("frame_interval_minutes")
+        start_time = acquisition.get("experiment_start_time")
+
         try:
-            rayleigh_widget.set_experiment_start_time_minutes(int(start_minutes))
+            traj_widget = self.analysis.get_neuron_trajectory_plot_widget()
+            traj_widget.set_time_settings(
+                interval_minutes=float(frame_interval) if frame_interval is not None else 30.0,
+                start_time=start_time,
+            )
         except Exception:
-            # If anything goes wrong here, fall back to widget defaults
+            pass
+
+        try:
+            ls_getter = getattr(self.analysis, "get_lomb_scargle_widget", None)
+            ls_widget = ls_getter() if callable(ls_getter) else None
+            if ls_widget is not None and frame_interval is not None:
+                ls_widget.set_frame_interval_minutes(float(frame_interval))
+        except Exception:
             pass
 
     def _auto_load_experiment_data(self) -> None:

@@ -9,6 +9,44 @@ from PIL import Image
 from core.experiment_manager import Experiment
 
 
+def _get_exif_timestamp(file_path: str) -> Optional[str]:
+    """
+    Try to extract a DateTimeOriginal (or DateTime) timestamp from TIFF/image EXIF.
+
+    Returns an ISO-format time string "HH:MM:SS" on success, or None if unavailable.
+    """
+    try:
+        with Image.open(file_path) as img:
+            exif_data = img._getexif() if hasattr(img, "_getexif") else None
+            if exif_data:
+                # EXIF tag 36867 = DateTimeOriginal, 306 = DateTime
+                for tag_id in (36867, 306):
+                    raw = exif_data.get(tag_id)
+                    if raw:
+                        # Standard EXIF format: "YYYY:MM:DD HH:MM:SS"
+                        parts = str(raw).strip().split()
+                        if len(parts) >= 2:
+                            return parts[1]  # Return "HH:MM:SS" portion
+                        return str(raw).strip()
+    except Exception:
+        pass
+    # Fallback: check TIFF ImageDescription or DateTime tag via tifffile
+    try:
+        import tifffile
+
+        with tifffile.TiffFile(file_path) as tif:
+            for tag in tif.pages[0].tags.values():
+                if tag.name in ("DateTime", "DateTimeOriginal"):
+                    raw = str(tag.value).strip()
+                    parts = raw.split()
+                    if len(parts) >= 2:
+                        return parts[1]
+                    return raw
+    except Exception:
+        pass
+    return None
+
+
 class ImageStackHandler:
     def __init__(self) -> None:
         self.files: List[str] = []
@@ -111,3 +149,9 @@ class ImageStackHandler:
             experiment.image_stack_path = str(Path(self.files[0]).parent)
             # Save the actual list of selected files
             experiment.image_stack_files = self.files.copy()
+            # Try to extract EXIF timestamp from the first image; store only if found
+            start_time = _get_exif_timestamp(self.files[0])
+            if start_time is not None:
+                if "acquisition" not in experiment.settings:
+                    experiment.settings["acquisition"] = {}
+                experiment.settings["acquisition"]["experiment_start_time"] = start_time

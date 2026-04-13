@@ -55,8 +55,11 @@ class NeuronTrajectoryPlotWidget(QWidget):
         self._hover_cid = None
         self._pick_cid = None
         self._marker_annotation = None
-        self._peak_data: list[tuple[int, float, str, int]] = []  # (frame, value, type, order)
-        self._trough_data: list[tuple[int, float, str, int]] = []
+        self._peak_data: list[tuple[float, float, str, int]] = []  # (time_min, value, type, order)
+        self._trough_data: list[tuple[float, float, str, int]] = []
+        # Time axis settings
+        self._frame_interval_minutes: float = 30.0
+        self._experiment_start_time: Optional[str] = None
 
         layout = QVBoxLayout(self)
 
@@ -150,8 +153,8 @@ class NeuronTrajectoryPlotWidget(QWidget):
         layout.addWidget(self.toolbar)
         layout.addWidget(self.canvas)
 
-        # Hover status: show frame and intensity when moving over plot
-        self.hover_label = QLabel("Hover over plot for frame and intensity.")
+        # Hover status: show time and intensity when moving over plot
+        self.hover_label = QLabel("Hover over plot for time and intensity.")
         self.hover_label.setAlignment(Qt.AlignCenter)
         self.hover_label.setProperty("class", "plot-hover")
         layout.addWidget(self.hover_label)
@@ -227,6 +230,20 @@ class NeuronTrajectoryPlotWidget(QWidget):
         # Update plot
         self._update_plot()
 
+    def set_time_settings(self, interval_minutes: float, start_time: Optional[str] = None) -> None:
+        """
+        Configure the time axis for the trajectory plot.
+
+        Args:
+            interval_minutes: Minutes per frame (e.g. 0.5 for 30-second intervals).
+            start_time: Optional "HH:MM:SS" string for the experiment start time shown as a subtitle.
+        """
+        if interval_minutes > 0:
+            self._frame_interval_minutes = float(interval_minutes)
+        self._experiment_start_time = start_time
+        if self.neuron_trajectories is not None and len(self.neuron_trajectories) > 0:
+            self._update_plot()
+
     def _apply_theme(self, ax) -> None:
         """Apply current app theme to figure and axes."""
         theme = get_mpl_theme(get_theme())
@@ -287,7 +304,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
                 pickradius=5,
             )
             for idx in peaks:
-                raw_peaks.append((int(frames[idx]), float(data[idx])))
+                raw_peaks.append((float(frames[idx]), float(data[idx])))
         if len(troughs) > 0:
             ax.scatter(
                 frames[troughs],
@@ -303,7 +320,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
                 pickradius=5,
             )
             for idx in troughs:
-                raw_troughs.append((int(frames[idx]), float(data[idx])))
+                raw_troughs.append((float(frames[idx]), float(data[idx])))
 
     def _finalize_markers(self, ax, raw_peaks: list, raw_troughs: list, peak_color: str, trough_color: str) -> None:
         """Sort markers by frame, assign order numbers, and add annotations if enabled."""
@@ -316,10 +333,10 @@ class NeuronTrajectoryPlotWidget(QWidget):
             self._trough_data.append((frame, value, "trough", order))
 
         if self.number_peaks_checkbox.isChecked():
-            for frame, value, _, order in self._peak_data:
+            for time_min, value, _, order in self._peak_data:
                 ax.annotate(
                     str(order),
-                    (frame, value),
+                    (time_min, value),
                     textcoords="offset points",
                     xytext=(0, 8),
                     ha="center",
@@ -327,10 +344,10 @@ class NeuronTrajectoryPlotWidget(QWidget):
                     color=peak_color,
                     fontweight="bold",
                 )
-            for frame, value, _, order in self._trough_data:
+            for time_min, value, _, order in self._trough_data:
                 ax.annotate(
                     str(order),
-                    (frame, value),
+                    (time_min, value),
                     textcoords="offset points",
                     xytext=(0, -12),
                     ha="center",
@@ -339,8 +356,8 @@ class NeuronTrajectoryPlotWidget(QWidget):
                     fontweight="bold",
                 )
 
-    def _get_previous_marker_frame(self, current_frame: int, marker_type: str) -> Optional[int]:
-        """Get the frame number of the previous marker of the same type."""
+    def _get_previous_marker_frame(self, current_frame: float, marker_type: str) -> Optional[float]:
+        """Get the time (in minutes) of the previous marker of the same type."""
         markers = self._peak_data if marker_type == "peak" else self._trough_data
         prev_frame = None
         for m_frame, _, _, _ in markers:
@@ -361,41 +378,45 @@ class NeuronTrajectoryPlotWidget(QWidget):
         all_markers = self._peak_data + self._trough_data
         y_range = self.figure.axes[0].get_ylim() if self.figure.axes else (0, 1)
         y_tol = (y_range[1] - y_range[0]) * 0.05
+        x_tol = self._frame_interval_minutes * 0.5
         for m_frame, m_value, m_type, m_order in all_markers:
-            if abs(xdata - m_frame) < 0.5 and abs(ydata - m_value) < y_tol:
+            if abs(xdata - m_frame) < x_tol and abs(ydata - m_value) < y_tol:
                 prev_frame = self._get_previous_marker_frame(m_frame, m_type)
-                interval = f" | Interval: {m_frame - prev_frame} frames" if prev_frame is not None else ""
+                interval = f" | Interval: {m_frame - prev_frame:.2f} min" if prev_frame is not None else ""
                 self.hover_label.setTextFormat(Qt.PlainText)
                 self.hover_label.setText(
-                    f"Selected: {m_type.title()} #{m_order} at Frame {m_frame}, Value: {m_value:.3f}{interval}"
+                    f"Selected: {m_type.title()} #{m_order} at {m_frame:.2f} min, Value: {m_value:.3f}{interval}"
                 )
                 break
 
     def _on_motion(self, event) -> None:
-        """Show frame and intensity under cursor in hover label."""
+        """Show time and intensity under cursor in hover label."""
         if self.neuron_trajectories is None or event.inaxes is None or event.xdata is None or event.ydata is None:
-            self.hover_label.setText("Hover over plot for frame and intensity.")
+            self.hover_label.setText("Hover over plot for time and intensity.")
             if self._marker_annotation:
                 self._marker_annotation.set_visible(False)
                 self.canvas.draw_idle()
             return
-        frame_idx = int(round(event.xdata))
+        elapsed_minutes = event.xdata
+        interval = self._frame_interval_minutes if self._frame_interval_minutes > 0 else 1.0
+        frame_idx = int(round(elapsed_minutes / interval))
         num_frames = self.neuron_trajectories.shape[1]
         if frame_idx < 0 or frame_idx >= num_frames:
-            self.hover_label.setText("Hover over plot for frame and intensity.")
+            self.hover_label.setText("Hover over plot for time and intensity.")
             return
 
         # Check if hovering near a marker and show tooltip
         marker_found = False
         if self.show_peaks_checkbox.isChecked() and self._marker_annotation:
             all_markers = self._peak_data + self._trough_data
+            x_tol = interval * 1.5
             for m_frame, m_value, m_type, m_order in all_markers:
                 y_range = self.figure.axes[0].get_ylim()
-                if abs(event.xdata - m_frame) < 1.5 and abs(event.ydata - m_value) < (y_range[1] - y_range[0]) * 0.05:
+                if abs(elapsed_minutes - m_frame) < x_tol and abs(event.ydata - m_value) < (y_range[1] - y_range[0]) * 0.05:
                     marker_found = True
                     prev_frame = self._get_previous_marker_frame(m_frame, m_type)
-                    interval_text = f"\nInterval: {m_frame - prev_frame} frames" if prev_frame is not None else ""
-                    tooltip = f"{m_type.title()} #{m_order}\nFrame: {m_frame}\nValue: {m_value:.3f}{interval_text}"
+                    interval_text = f"\nInterval: {m_frame - prev_frame:.2f} min" if prev_frame is not None else ""
+                    tooltip = f"{m_type.title()} #{m_order}\nTime: {m_frame:.2f} min\nValue: {m_value:.3f}{interval_text}"
                     self._marker_annotation.xy = (m_frame, m_value)
                     self._marker_annotation.set_text(tooltip)
                     self._marker_annotation.set_visible(True)
@@ -409,9 +430,9 @@ class NeuronTrajectoryPlotWidget(QWidget):
         displayed = self._get_displayed_neuron_indices()
         if displayed:
             intensity = float(np.mean(self.neuron_trajectories[displayed, frame_idx]))
-            self.hover_label.setText(f"Frame {frame_idx}  ·  Intensity {intensity:.3f}")
+            self.hover_label.setText(f"Time {elapsed_minutes:.2f} min  ·  Intensity {intensity:.3f}")
         else:
-            self.hover_label.setText(f"Frame {frame_idx}  ·  No neurons displayed")
+            self.hover_label.setText(f"Time {elapsed_minutes:.2f} min  ·  No neurons displayed")
 
     def _get_displayed_neuron_indices(self) -> list[int]:
         if self.neuron_trajectories is None or len(self.neuron_trajectories) == 0:
@@ -450,7 +471,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
         ax = self.figure.add_subplot(111)
 
         num_neurons, num_frames = self.neuron_trajectories.shape
-        frames = np.arange(num_frames)
+        frames = np.arange(num_frames) * self._frame_interval_minutes
 
         # Get display options
         show_good = self.show_good_checkbox.isChecked()
@@ -702,9 +723,22 @@ class NeuronTrajectoryPlotWidget(QWidget):
             if show_peaks:
                 self._finalize_markers(ax, raw_peaks, raw_troughs, peak_color, trough_color)
 
-        ax.set_xlabel("Frame Number", fontsize=12)
+        ax.set_xlabel("Time (minutes)", fontsize=12)
         ax.set_ylabel("Intensity", fontsize=12)
-        ax.set_title("Neuron Intensity Trajectories Over Time", fontsize=14)
+        title = "Neuron Intensity Trajectories Over Time"
+        ax.set_title(title, fontsize=14)
+        if self._experiment_start_time:
+            ax.set_title(title, fontsize=14)
+            ax.title.set_text(title)
+            ax.annotate(
+                f"Start: {self._experiment_start_time}",
+                xy=(0.01, 0.99),
+                xycoords="axes fraction",
+                ha="left",
+                va="top",
+                fontsize=9,
+                alpha=0.7,
+            )
         ax.legend(loc="best")
         self._apply_theme(ax)
 
