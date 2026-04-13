@@ -444,6 +444,24 @@ class ROIIntensityPlotWidget(QWidget):
                 break
         return prev_time
 
+    def _get_previous_marker_frame(self, current_frame: int, marker_type: str) -> Optional[int]:
+        """
+        Backward-compatible wrapper for frame-based callers/tests.
+
+        This intentionally mirrors the legacy behavior and treats marker x-values
+        as frame-like coordinates for compatibility with existing tests/callers.
+        """
+        markers = self._peak_data if marker_type == "peak" else self._trough_data
+        prev_frame = None
+        for m_frame, _, _, _ in markers:
+            if m_frame < current_frame:
+                prev_frame = m_frame
+            else:
+                break
+        if prev_frame is None:
+            return None
+        return int(prev_frame)
+
     def _on_pick(self, event) -> None:
         """Handle click on a marker to show details in hover label."""
         if not hasattr(event, "ind") or event.ind is None or len(event.ind) == 0:
