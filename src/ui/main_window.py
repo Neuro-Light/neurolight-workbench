@@ -143,6 +143,7 @@ class MainWindow(QMainWindow):
         self.workflow_stepper = WorkflowStepper(self.workflow_manager, self)
         # Wire stepper actions
         self.workflow_stepper.requestAlignImages.connect(self._align_images)
+        self.workflow_stepper.requestLoadFolder.connect(self._load_folder_from_stepper)
 
         self._init_menu()
         self._init_layout()
@@ -681,7 +682,14 @@ class MainWindow(QMainWindow):
         # Reset downstream steps because the data source changed
         self.workflow_manager.reset_from_step(WorkflowStep.EDIT_IMAGES)
 
+    def _load_folder_from_stepper(self, directory: str) -> None:
+        self.viewer.set_stack(directory)
+        self.workflow_manager.reset_from_step(WorkflowStep.EDIT_IMAGES)
+
     def _on_stack_loaded(self, directory_path: str) -> None:
+        # Keep the stepper's folder path field in sync regardless of load method
+        self.workflow_stepper.set_folder_path(directory_path)
+
         # ImageStackHandler already updates experiment association for path/count
         self.stack_handler.associate_with_experiment(self.experiment)
 
