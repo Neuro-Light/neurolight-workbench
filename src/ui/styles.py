@@ -40,11 +40,11 @@ COLORS_LIGHT = {
     "disabled": "#E0E0E0",
     "success": "#059669",
     "warning": "#d97706",
-    # Matplotlib toolbar: dark bg in light mode so white icons are visible
-    "mpl_toolbar_bg": "#334155",
-    "mpl_toolbar_text": "#f1f5f9",
-    "mpl_toolbar_border": "#475569",
-    "mpl_toolbar_hover": "#475569",
+    # Matplotlib toolbar: light bg with primary accent for light mode
+    "mpl_toolbar_bg": "#E8F0FE",
+    "mpl_toolbar_text": "#1a73e8",
+    "mpl_toolbar_border": "#c2d7f7",
+    "mpl_toolbar_hover": "#d2e3fc",
 }
 
 COLORS_DARK = {
@@ -88,10 +88,11 @@ COLORS_LIGHT_HC = {
     "disabled": "#CCCCCC",
     "success": "#0D7D4D",
     "warning": "#B35C00",
-    "mpl_toolbar_bg": "#1A1A1A",
-    "mpl_toolbar_text": "#FFFFFF",
-    "mpl_toolbar_border": "#333333",
-    "mpl_toolbar_hover": "#333333",
+    # Matplotlib toolbar: high contrast light with strong borders
+    "mpl_toolbar_bg": "#E0E8F5",
+    "mpl_toolbar_text": "#0066CC",
+    "mpl_toolbar_border": "#0066CC",
+    "mpl_toolbar_hover": "#CCE0FF",
 }
 
 COLORS_DARK_HC = {
@@ -140,7 +141,9 @@ def get_mpl_theme(theme: str = "dark") -> dict:
     from ui.app_settings import (
         get_avg_trajectory_color,
         get_avg_trajectory_roi_colors,
+        get_peak_marker_color,
         get_roi_colors,
+        get_trough_marker_color,
     )
 
     c = _palette(theme)
@@ -150,6 +153,8 @@ def get_mpl_theme(theme: str = "dark") -> dict:
     roi_colors = get_roi_colors()
     avg_traj_color = get_avg_trajectory_color()
     avg_traj_roi_colors = get_avg_trajectory_roi_colors()
+    peak_color = get_peak_marker_color()
+    trough_color = get_trough_marker_color()
 
     base: dict = {
         "figure_facecolor": c["surface"],
@@ -164,6 +169,8 @@ def get_mpl_theme(theme: str = "dark") -> dict:
         "avg_trajectory_color": avg_traj_color,
         "avg_trajectory_roi_1_color": avg_traj_roi_colors["roi_1"],
         "avg_trajectory_roi_2_color": avg_traj_roi_colors["roi_2"],
+        "peak_marker_color": peak_color,
+        "trough_marker_color": trough_color,
     }
 
     if is_dark:
