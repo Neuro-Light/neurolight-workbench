@@ -13,6 +13,7 @@ from matplotlib.collections import PathCollection
 from matplotlib.figure import Figure
 from PySide6.QtCore import Qt, QTime
 from PySide6.QtWidgets import (
+    QAbstractSpinBox,
     QComboBox,
     QFormLayout,
     QFrame,
@@ -88,7 +89,10 @@ class RayLeighPlotWidget(QWidget):
         self.start_time_edit = QTimeEdit()
         self.start_time_edit.setDisplayFormat("HH:mm")
         self.start_time_edit.setTime(QTime(0, 0))
-        self.start_time_edit.setToolTip("Time of first frame (24-hour time)")
+        self.start_time_edit.setReadOnly(True)
+        self.start_time_edit.setButtonSymbols(QAbstractSpinBox.ButtonSymbols.NoButtons)
+        self.start_time_edit.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.start_time_edit.setToolTip("Time of first frame (read-only, from frame metadata)")
         controls_layout.addRow("Experiment Start Time:", self.start_time_edit)
         interval_row = QHBoxLayout()
         interval_row.setSpacing(4)

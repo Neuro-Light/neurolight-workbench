@@ -29,7 +29,7 @@ from scipy.signal import find_peaks
 
 from core.roi import ROI, ROIShape
 from ui.app_settings import get_roi_colors, get_theme
-from ui.constants import ROI_DISPLAY_NAMES, ROI_KEYS
+from ui.constants import DEFAULT_FRAME_INTERVAL_MINUTES, ROI_DISPLAY_NAMES, ROI_KEYS
 from ui.styles import get_mpl_theme
 
 
@@ -44,11 +44,12 @@ class ROIIntensityPlotWidget(QWidget):
         }
         self._rois: Dict[str, Optional[ROI]] = {"roi_1": None, "roi_2": None}
         self.experiment: Optional["Experiment"] = None
+        self._frame_interval_minutes: float = DEFAULT_FRAME_INTERVAL_MINUTES
         self._hover_cid = None
         self._pick_cid = None
         self._marker_annotation = None
-        self._peak_data: list[tuple[int, float, str, int]] = []  # (frame, value, type, order)
-        self._trough_data: list[tuple[int, float, str, int]] = []
+        self._peak_data: list[tuple[float, float, str, int]] = []  # (time_min, value, type, order)
+        self._trough_data: list[tuple[float, float, str, int]] = []
 
         layout = QVBoxLayout(self)
 
@@ -105,7 +106,7 @@ class ROIIntensityPlotWidget(QWidget):
         layout.addWidget(self.canvas)
 
         # Hover label
-        self.hover_label = QLabel("Hover over plot for frame and intensity.")
+        self.hover_label = QLabel("Hover over plot for time and intensity.")
         self.hover_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.hover_label)
 
@@ -161,13 +162,19 @@ class ROIIntensityPlotWidget(QWidget):
         self._intensity = {"roi_1": None, "roi_2": None}
         self._rois = {"roi_1": None, "roi_2": None}
         self.status_label.setText("No ROI selected. Select an ROI in the image viewer.")
-        self.hover_label.setText("Hover over plot for frame and intensity.")
+        self.hover_label.setText("Hover over plot for time and intensity.")
         self.export_btn.setEnabled(False)
         self.export_png_btn.setEnabled(False)
 
     def refresh_theme(self) -> None:
         """Redraw the plot with the current app theme / ROI colours."""
         self._replot()
+
+    def set_frame_interval_minutes(self, minutes: float) -> None:
+        """Set minutes-per-frame for the x-axis and hover/marker readouts."""
+        if minutes > 0:
+            self._frame_interval_minutes = float(minutes)
+            self._replot()
 
     # ------------------------------------------------------------------
     # Internal plotting
@@ -203,12 +210,12 @@ class ROIIntensityPlotWidget(QWidget):
         }
 
         for key, data in visible.items():
-            frames = np.arange(len(data))
+            times_min = np.arange(len(data), dtype=float) * self._frame_interval_minutes
             roi = self._rois.get(key)
             label = ROI_DISPLAY_NAMES[key]
             if roi is not None and roi.shape == ROIShape.POLYGON and roi.points:
                 label += f" ({len(roi.points)} pts)"
-            ax.plot(frames, data, linewidth=2, color=color_map[key], label=label)
+            ax.plot(times_min, data, linewidth=2, color=color_map[key], label=label)
 
         # Overlay peak/trough markers if enabled
         self._peak_data = []
@@ -222,15 +229,15 @@ class ROIIntensityPlotWidget(QWidget):
             troughs_label_added = False
 
             # First pass: collect all markers across visible ROIs (without order)
-            raw_peaks: list[tuple[int, float]] = []
-            raw_troughs: list[tuple[int, float]] = []
+            raw_peaks: list[tuple[float, float]] = []
+            raw_troughs: list[tuple[float, float]] = []
             for key, data in visible.items():
-                frames = np.arange(len(data))
+                times_min = np.arange(len(data), dtype=float) * self._frame_interval_minutes
                 peaks, troughs = self._find_peaks_and_troughs(data)
                 roi_counts[key] = (len(peaks), len(troughs))
                 if len(peaks) > 0:
                     ax.scatter(
-                        frames[peaks],
+                        times_min[peaks],
                         data[peaks],
                         marker="^",
                         s=60,
@@ -244,10 +251,10 @@ class ROIIntensityPlotWidget(QWidget):
                     )
                     peaks_label_added = True
                     for idx in peaks:
-                        raw_peaks.append((int(frames[idx]), float(data[idx])))
+                        raw_peaks.append((float(times_min[idx]), float(data[idx])))
                 if len(troughs) > 0:
                     ax.scatter(
-                        frames[troughs],
+                        times_min[troughs],
                         data[troughs],
                         marker="v",
                         s=60,
@@ -261,23 +268,23 @@ class ROIIntensityPlotWidget(QWidget):
                     )
                     troughs_label_added = True
                     for idx in troughs:
-                        raw_troughs.append((int(frames[idx]), float(data[idx])))
+                        raw_troughs.append((float(times_min[idx]), float(data[idx])))
 
-            # Second pass: sort by frame and assign chronological order numbers
+            # Second pass: sort by time and assign chronological order numbers
             raw_peaks.sort(key=lambda x: x[0])
             raw_troughs.sort(key=lambda x: x[0])
 
-            for order, (frame, value) in enumerate(raw_peaks, start=1):
-                self._peak_data.append((frame, value, "peak", order))
-            for order, (frame, value) in enumerate(raw_troughs, start=1):
-                self._trough_data.append((frame, value, "trough", order))
+            for order, (time_min, value) in enumerate(raw_peaks, start=1):
+                self._peak_data.append((time_min, value, "peak", order))
+            for order, (time_min, value) in enumerate(raw_troughs, start=1):
+                self._trough_data.append((time_min, value, "trough", order))
 
             # Add number annotations if enabled (using sorted order)
             if show_numbers:
-                for frame, value, _, order in self._peak_data:
+                for time_min, value, _, order in self._peak_data:
                     ax.annotate(
                         str(order),
-                        (frame, value),
+                        (time_min, value),
                         textcoords="offset points",
                         xytext=(0, 8),
                         ha="center",
@@ -285,10 +292,10 @@ class ROIIntensityPlotWidget(QWidget):
                         color=peak_color,
                         fontweight="bold",
                     )
-                for frame, value, _, order in self._trough_data:
+                for time_min, value, _, order in self._trough_data:
                     ax.annotate(
                         str(order),
-                        (frame, value),
+                        (time_min, value),
                         textcoords="offset points",
                         xytext=(0, -12),
                         ha="center",
@@ -297,7 +304,7 @@ class ROIIntensityPlotWidget(QWidget):
                         fontweight="bold",
                     )
 
-        ax.set_xlabel("Frame Number", fontsize=12)
+        ax.set_xlabel("Time (min)", fontsize=12)
         ax.set_ylabel("Mean Pixel Intensity", fontsize=12)
         ax.set_title("ROI Intensity Over Time", fontsize=14)
         if len(visible) > 1 or self.show_peaks_checkbox.isChecked():
@@ -379,29 +386,32 @@ class ROIIntensityPlotWidget(QWidget):
 
     def _on_motion(self, event) -> None:
         if event.inaxes is None or event.xdata is None:
-            self.hover_label.setText("Hover over plot for frame and intensity.")
+            self.hover_label.setText("Hover over plot for time and intensity.")
             if self._marker_annotation:
                 self._marker_annotation.set_visible(False)
                 self.canvas.draw_idle()
             return
 
-        frame_idx = int(round(event.xdata))
+        frame_idx = int(round(event.xdata / self._frame_interval_minutes))
 
         # Check if hovering near a marker and show tooltip
         marker_found = False
         if self.show_peaks_checkbox.isChecked() and self._marker_annotation:
             all_markers = self._peak_data + self._trough_data
-            for m_frame, m_value, m_type, m_order in all_markers:
+            x_tol = self._frame_interval_minutes * 0.5
+            for m_time, m_value, m_type, m_order in all_markers:
                 if (
-                    abs(event.xdata - m_frame) < 1.5
+                    abs(event.xdata - m_time) < x_tol
                     and abs(event.ydata - m_value)
                     < (self.figure.axes[0].get_ylim()[1] - self.figure.axes[0].get_ylim()[0]) * 0.05
                 ):
                     marker_found = True
-                    prev_frame = self._get_previous_marker_frame(m_frame, m_type)
-                    interval_text = f"\nInterval: {m_frame - prev_frame} frames" if prev_frame is not None else ""
-                    tooltip = f"{m_type.title()} #{m_order}\nFrame: {m_frame}\nValue: {m_value:.3f}{interval_text}"
-                    self._marker_annotation.xy = (m_frame, m_value)
+                    prev_time = self._get_previous_marker_time(m_time, m_type)
+                    interval_text = f"\nInterval: {m_time - prev_time:.2f} min" if prev_time is not None else ""
+                    tooltip = (
+                        f"{m_type.title()} #{m_order}\nTime: {m_time:.2f} min\nValue: {m_value:.3f}{interval_text}"
+                    )
+                    self._marker_annotation.xy = (m_time, m_value)
                     self._marker_annotation.set_text(tooltip)
                     self._marker_annotation.set_visible(True)
                     self.canvas.draw_idle()
@@ -419,12 +429,28 @@ class ROIIntensityPlotWidget(QWidget):
                 if 0 <= frame_idx < len(data):
                     parts.append(f"{ROI_DISPLAY_NAMES[key]}: {data[frame_idx]:.3f}")
         if parts:
-            self.hover_label.setText(f"Frame {frame_idx}  ·  " + "  ·  ".join(parts))
+            self.hover_label.setText(f"Time {event.xdata:.2f} min  ·  " + "  ·  ".join(parts))
         else:
-            self.hover_label.setText("Hover over plot for frame and intensity.")
+            self.hover_label.setText("Hover over plot for time and intensity.")
+
+    def _get_previous_marker_time(self, current_time: float, marker_type: str) -> Optional[float]:
+        """Get the time of the previous marker of the same type."""
+        markers = self._peak_data if marker_type == "peak" else self._trough_data
+        prev_time = None
+        for m_time, _, _, _ in markers:
+            if m_time < current_time:
+                prev_time = m_time
+            else:
+                break
+        return prev_time
 
     def _get_previous_marker_frame(self, current_frame: int, marker_type: str) -> Optional[int]:
-        """Get the frame number of the previous marker of the same type."""
+        """
+        Backward-compatible wrapper for frame-based callers/tests.
+
+        This intentionally mirrors the legacy behavior and treats marker x-values
+        as frame-like coordinates for compatibility with existing tests/callers.
+        """
         markers = self._peak_data if marker_type == "peak" else self._trough_data
         prev_frame = None
         for m_frame, _, _, _ in markers:
@@ -432,7 +458,9 @@ class ROIIntensityPlotWidget(QWidget):
                 prev_frame = m_frame
             else:
                 break
-        return prev_frame
+        if prev_frame is None:
+            return None
+        return int(prev_frame)
 
     def _on_pick(self, event) -> None:
         """Handle click on a marker to show details in hover label."""
@@ -448,15 +476,17 @@ class ROIIntensityPlotWidget(QWidget):
         all_markers = self._peak_data + self._trough_data
         y_range = self.figure.axes[0].get_ylim() if self.figure.axes else (0, 1)
         y_tol = (y_range[1] - y_range[0]) * 0.05
-        for m_frame, m_value, m_type, m_order in all_markers:
-            if abs(xdata - m_frame) < 0.5 and abs(ydata - m_value) < y_tol:
-                prev_frame = self._get_previous_marker_frame(m_frame, m_type)
-                if prev_frame is not None:
-                    interval_text = f" | Interval from previous: {m_frame - prev_frame} frames"
+        x_tol = self._frame_interval_minutes * 0.5
+        for m_time, m_value, m_type, m_order in all_markers:
+            if abs(xdata - m_time) < x_tol and abs(ydata - m_value) < y_tol:
+                prev_time = self._get_previous_marker_time(m_time, m_type)
+                if prev_time is not None:
+                    interval_text = f" | Interval from previous: {m_time - prev_time:.2f} min"
                 else:
                     interval_text = ""
                 self.hover_label.setText(
-                    f"Selected: {m_type.title()} #{m_order} at Frame {m_frame}, Value: {m_value:.3f}{interval_text}"
+                    f"Selected: {m_type.title()} #{m_order} at Time {m_time:.2f} min, "
+                    f"Value: {m_value:.3f}{interval_text}"
                 )
                 break
 
@@ -497,7 +527,7 @@ class ROIIntensityPlotWidget(QWidget):
             return
         try:
             columns = []
-            header_parts = ["Frame"]
+            header_parts = ["Time_Minutes"]
             for key in ROI_KEYS:
                 data = self._intensity.get(key)
                 if data is not None:
@@ -509,7 +539,7 @@ class ROIIntensityPlotWidget(QWidget):
                 return
 
             max_len = max(len(c) for c in columns)
-            frames = np.arange(max_len)
+            times_min = np.arange(max_len, dtype=float) * self._frame_interval_minutes
             padded = []
             for c in columns:
                 if len(c) < max_len:
@@ -518,9 +548,9 @@ class ROIIntensityPlotWidget(QWidget):
                     padded_col = c
                 padded.append(padded_col)
 
-            data_to_save = np.column_stack([frames] + padded)
+            data_to_save = np.column_stack([times_min] + padded)
             header = ",".join(header_parts)
-            fmt = ",".join(["%d"] + ["%.6f"] * len(padded))
+            fmt = ",".join(["%.6f"] + ["%.6f"] * len(padded))
             np.savetxt(
                 file_path,
                 data_to_save,

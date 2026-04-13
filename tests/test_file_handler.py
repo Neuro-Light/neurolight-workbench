@@ -9,7 +9,7 @@ import pytest
 import tifffile
 
 from core.experiment_manager import Experiment
-from utils.file_handler import ImageStackHandler
+from utils.file_handler import ImageStackHandler, _extract_valid_time
 
 
 def test_load_stack_from_list_filters_non_tiff(tmp_path: Path) -> None:
@@ -79,3 +79,19 @@ def test_associate_with_experiment_updates_metadata() -> None:
     assert exp.image_count == 1
     assert exp.image_stack_path == "/data/stack"
     assert exp.image_stack_files == ["/data/stack/frame.tif"]
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("2024:01:02 09:10:11", "09:10:11"),
+        ("09:10", "09:10"),
+        (b"2024:01:02 21:59:00", "21:59:00"),
+        ("invalid", None),
+        ("2024:01:02", None),
+        ("99:99:99", None),
+        (None, None),
+    ],
+)
+def test_extract_valid_time_normalizes_and_validates(raw, expected) -> None:
+    assert _extract_valid_time(raw) == expected

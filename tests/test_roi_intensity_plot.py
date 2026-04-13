@@ -4,7 +4,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
@@ -276,3 +276,80 @@ class TestROIIntensityPlotWidgetReplot:
         w._replot()
 
         assert "No ROI selected" in w.status_label.text()
+
+
+class TestROIIntensityPlotWidgetTimeSettingsAndExport:
+    """Tests for time-axis settings and CSV export formatting."""
+
+    def test_set_frame_interval_minutes_updates_and_replots(self, app):
+        w = ROIIntensityPlotWidget()
+        w._replot = Mock()
+
+        w.set_frame_interval_minutes(2.5)
+
+        assert w._frame_interval_minutes == pytest.approx(2.5)
+        w._replot.assert_called_once()
+
+    def test_set_frame_interval_minutes_ignores_non_positive_values(self, app):
+        w = ROIIntensityPlotWidget()
+        w._replot = Mock()
+        original = w._frame_interval_minutes
+
+        w.set_frame_interval_minutes(0)
+
+        assert w._frame_interval_minutes == original
+        w._replot.assert_not_called()
+
+    def test_export_csv_uses_time_minutes_header_and_float_time_column(self, app):
+        w = ROIIntensityPlotWidget()
+        w._intensity["roi_1"] = np.array([1.0, 2.0, 3.0], dtype=float)
+        w._frame_interval_minutes = 2.5
+        captured = {}
+
+        def _capture_savetxt(*args, **kwargs):
+            # numpy.savetxt signature: path, array, ...
+            captured["array"] = args[1]
+            captured["header"] = kwargs.get("header")
+            captured["fmt"] = kwargs.get("fmt")
+
+        with (
+            patch(
+                "ui.roi_intensity_plot.QFileDialog.getSaveFileName", return_value=("/tmp/out.csv", "CSV Files (*.csv)")
+            ),
+            patch("ui.roi_intensity_plot.np.savetxt", side_effect=_capture_savetxt),
+            patch("ui.roi_intensity_plot.QMessageBox.information"),
+        ):
+            w._export_to_csv()
+
+        assert captured["header"].startswith("Time_Minutes")
+        assert captured["fmt"].startswith("%.6f")
+        # First column should be time minutes based on current interval.
+        np.testing.assert_allclose(captured["array"][:, 0], np.array([0.0, 2.5, 5.0]))
+
+    def test_export_png_returns_when_cancelled(self, app):
+        w = ROIIntensityPlotWidget()
+        with patch("ui.roi_intensity_plot.QFileDialog.getSaveFileName", return_value=("", "")):
+            w._export_to_png()
+
+    def test_export_png_reports_failure(self, app):
+        w = ROIIntensityPlotWidget()
+        with (
+            patch(
+                "ui.roi_intensity_plot.QFileDialog.getSaveFileName", return_value=("/tmp/out.png", "PNG Files (*.png)")
+            ),
+            patch.object(w.figure, "savefig", side_effect=RuntimeError("boom")),
+            patch("ui.roi_intensity_plot.QMessageBox.critical") as critical,
+        ):
+            w._export_to_png()
+        critical.assert_called_once()
+
+    def test_export_csv_warns_when_no_data(self, app):
+        w = ROIIntensityPlotWidget()
+        with (
+            patch(
+                "ui.roi_intensity_plot.QFileDialog.getSaveFileName", return_value=("/tmp/out.csv", "CSV Files (*.csv)")
+            ),
+            patch("ui.roi_intensity_plot.QMessageBox.warning") as warning,
+        ):
+            w._export_to_csv()
+        warning.assert_called_once()
