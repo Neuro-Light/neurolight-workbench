@@ -86,15 +86,18 @@ class NeuronTrajectoryPlotWidget(QWidget):
 
         # Show checkboxes
         controls_row.addWidget(QLabel("Show:"))
+        controls_row.addSpacing(4)
         self.show_good_checkbox = QCheckBox("Good")
         self.show_good_checkbox.setChecked(True)
         self.show_good_checkbox.stateChanged.connect(self._update_plot)
         controls_row.addWidget(self.show_good_checkbox)
+        controls_row.addSpacing(8)
 
         self.show_bad_checkbox = QCheckBox("Bad")
         self.show_bad_checkbox.setChecked(False)
         self.show_bad_checkbox.stateChanged.connect(self._update_plot)
         controls_row.addWidget(self.show_bad_checkbox)
+        controls_row.addSpacing(8)
 
         self.show_average_checkbox = QCheckBox("Avg")
         self.show_average_checkbox.setChecked(True)

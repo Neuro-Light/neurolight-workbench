@@ -60,13 +60,16 @@ class LombScarglePlotWidget(QWidget):
 
         # ROI checkboxes
         controls_row.addWidget(QLabel("ROIs:"))
+        controls_row.addSpacing(4)
         self._roi_checkboxes: Dict[str, QCheckBox] = {}
-        for key in ROI_KEYS:
+        for idx, key in enumerate(ROI_KEYS):
             cb = QCheckBox(ROI_DISPLAY_NAMES[key])
             cb.setChecked(True)
             cb.toggled.connect(self._update_plot)
             self._roi_checkboxes[key] = cb
             controls_row.addWidget(cb)
+            if idx < len(ROI_KEYS) - 1:
+                controls_row.addSpacing(8)
 
         controls_row.addSpacing(12)
 

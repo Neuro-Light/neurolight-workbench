@@ -550,6 +550,13 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+        try:
+            roi_widget = self.analysis.get_roi_plot_widget()
+            if frame_interval is not None:
+                roi_widget.set_frame_interval_minutes(float(frame_interval))
+        except Exception:
+            pass
+
     def _auto_load_experiment_data(self) -> None:
         """Auto-load image stack, ROI, and display settings if experiment has saved data."""
         # Always apply saved or neutral display settings up front
