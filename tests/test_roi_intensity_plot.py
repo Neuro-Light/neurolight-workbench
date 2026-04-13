@@ -325,3 +325,27 @@ class TestROIIntensityPlotWidgetTimeSettingsAndExport:
         assert captured["fmt"].startswith("%.6f")
         # First column should be time minutes based on current interval.
         np.testing.assert_allclose(captured["array"][:, 0], np.array([0.0, 2.5, 5.0]))
+
+    def test_export_png_returns_when_cancelled(self, app):
+        w = ROIIntensityPlotWidget()
+        with patch("ui.roi_intensity_plot.QFileDialog.getSaveFileName", return_value=("", "")):
+            w._export_to_png()
+
+    def test_export_png_reports_failure(self, app):
+        w = ROIIntensityPlotWidget()
+        with (
+            patch("ui.roi_intensity_plot.QFileDialog.getSaveFileName", return_value=("/tmp/out.png", "PNG Files (*.png)")),
+            patch.object(w.figure, "savefig", side_effect=RuntimeError("boom")),
+            patch("ui.roi_intensity_plot.QMessageBox.critical") as critical,
+        ):
+            w._export_to_png()
+        critical.assert_called_once()
+
+    def test_export_csv_warns_when_no_data(self, app):
+        w = ROIIntensityPlotWidget()
+        with (
+            patch("ui.roi_intensity_plot.QFileDialog.getSaveFileName", return_value=("/tmp/out.csv", "CSV Files (*.csv)")),
+            patch("ui.roi_intensity_plot.QMessageBox.warning") as warning,
+        ):
+            w._export_to_csv()
+        warning.assert_called_once()

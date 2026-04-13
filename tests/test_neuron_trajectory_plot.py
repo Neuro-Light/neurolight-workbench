@@ -4,7 +4,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import numpy as np
 import pytest
@@ -18,6 +18,17 @@ def app():
     if not QApplication.instance():
         return QApplication([])
     return QApplication.instance()
+
+
+@pytest.fixture(autouse=True)
+def _suppress_modal_message_boxes():
+    """Prevent blocking modal dialogs during headless test runs."""
+    with (
+        patch("ui.neuron_trajectory_plot.QMessageBox.warning"),
+        patch("ui.neuron_trajectory_plot.QMessageBox.information"),
+        patch("ui.neuron_trajectory_plot.QMessageBox.critical"),
+    ):
+        yield
 
 
 class TestSmoothDisplay:
@@ -296,3 +307,17 @@ class TestNeuronTrajectoryPlotWidgetTimeSettings:
         w.set_time_settings(5.0, "08:00:00")
 
         w._update_plot.assert_called_once()
+
+
+class TestNeuronTrajectoryPlotWidgetExport:
+    """Tests for export dialog branches."""
+
+    def test_export_png_returns_when_cancelled(self, app):
+        w = NeuronTrajectoryPlotWidget()
+        with patch("ui.neuron_trajectory_plot.QFileDialog.getSaveFileName", return_value=("", "")):
+            w._export_to_png()
+
+    def test_export_csv_returns_when_cancelled(self, app):
+        w = NeuronTrajectoryPlotWidget()
+        with patch("ui.neuron_trajectory_plot.QFileDialog.getSaveFileName", return_value=("", "")):
+            w._export_to_csv()
