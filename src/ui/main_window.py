@@ -184,6 +184,9 @@ class MainWindow(QMainWindow):
                 panel = getattr(self.viewer, "cull_controls_panel", None)
                 if panel is not None:
                     panel.setVisible(show_cull)
+                # After the cull step, hide excluded frames from navigation
+                cull_index = STEP_DEFINITIONS[WorkflowStep.CULL_FRAMES].index
+                self.viewer.set_filter_excluded(current_index > cull_index)
 
             # Step 4: Align Images
             enable_align = current == WorkflowStep.ALIGN_IMAGES

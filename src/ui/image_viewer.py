@@ -64,6 +64,7 @@ class ImageViewer(QWidget):
 
         # Frame culling state
         self._excluded_frames: Set[int] = set()
+        self._filter_excluded: bool = False
 
         # Dual ROI state
         self.current_rois: Dict[str, Optional[ROI]] = {"roi_1": None, "roi_2": None}
@@ -269,14 +270,14 @@ class ImageViewer(QWidget):
 
     def set_stack(self, files) -> None:
         self.handler.load_image_stack(files)
-        count = self.handler.get_image_count()
-        self.slider.setRange(0, max(0, count - 1))
-        self.index = 0
-        self._update_frame_index_label(count)
+        vis = self._visible_indices
+        self.slider.setRange(0, max(0, len(vis) - 1))
+        self.index = vis[0] if vis else 0
+        self._update_frame_index_label(len(vis))
         self._show_current()
 
         # Hide upload button when images are loaded
-        if count > 0:
+        if len(vis) > 0:
             self.upload_btn.hide()
 
         # Determine directory path and emit
@@ -299,6 +300,7 @@ class ImageViewer(QWidget):
         self.index = 0
         self.cache = _LRUCache(20)
         self._excluded_frames = set()
+        self._filter_excluded = False
         self.current_rois = {"roi_1": None, "roi_2": None}
         self.active_roi_key = "roi_1"
         self._populate_roi_selector()
@@ -415,7 +417,8 @@ class ImageViewer(QWidget):
         return unit_8
 
     def _show_current(self) -> None:
-        count = self.handler.get_image_count()
+        vis = self._visible_indices
+        count = len(vis)
         if count == 0:
             self.image_label.clear()
             self.frame_index_label.setText("— / —")
@@ -512,8 +515,9 @@ class ImageViewer(QWidget):
 
         self.image_label.setPixmap(scaled_pix)
         current_path = Path(self.handler.files[self.index])
+        display_pos = vis.index(self.index) + 1 if self.index in vis else self.index + 1
         self._update_frame_index_label(count)
-        self.filename_label.setText(f"{self.index + 1}/{count}: \n{current_path.name}")
+        self.filename_label.setText(f"{display_pos}/{count}: \n{current_path.name}")
 
         self._refresh_cull_button()
 
@@ -560,23 +564,35 @@ class ImageViewer(QWidget):
             self.set_stack(files)
 
     def prev_image(self) -> None:
-        if self.index > 0:
-            self.index -= 1
+        vis = self._visible_indices
+        if not vis:
+            return
+        pos = vis.index(self.index) if self.index in vis else 0
+        if pos > 0:
+            self.index = vis[pos - 1]
             self.slider.blockSignals(True)
-            self.slider.setValue(self.index)
+            self.slider.setValue(pos - 1)
             self.slider.blockSignals(False)
             self._show_current()
 
     def next_image(self) -> None:
-        if self.index < max(0, self.handler.get_image_count() - 1):
-            self.index += 1
+        vis = self._visible_indices
+        if not vis:
+            return
+        pos = vis.index(self.index) if self.index in vis else 0
+        if pos < len(vis) - 1:
+            self.index = vis[pos + 1]
             self.slider.blockSignals(True)
-            self.slider.setValue(self.index)
+            self.slider.setValue(pos + 1)
             self.slider.blockSignals(False)
             self._show_current()
 
     def _on_slider(self, value: int) -> None:
-        self.index = value
+        vis = self._visible_indices
+        if vis and 0 <= value < len(vis):
+            self.index = vis[value]
+        else:
+            self.index = value
         self._show_current()
 
     def _update_frame_index_label(self, count: int) -> None:
@@ -704,6 +720,31 @@ class ImageViewer(QWidget):
     # ------------------------------------------------------------------
     # Frame culling helpers
     # ------------------------------------------------------------------
+
+    @property
+    def _visible_indices(self) -> list:
+        """Raw file indices the viewer should navigate through."""
+        total = self.handler.get_image_count()
+        if not self._filter_excluded or not self._excluded_frames:
+            return list(range(total))
+        return [i for i in range(total) if i not in self._excluded_frames]
+
+    def set_filter_excluded(self, enabled: bool) -> None:
+        """Toggle whether excluded frames are hidden from navigation."""
+        if self._filter_excluded == enabled:
+            return
+        self._filter_excluded = enabled
+        vis = self._visible_indices
+        if not vis:
+            return
+        self.slider.blockSignals(True)
+        self.slider.setRange(0, max(0, len(vis) - 1))
+        # Snap current index to the nearest visible frame
+        if self.index not in vis:
+            self.index = vis[0]
+        self.slider.setValue(vis.index(self.index))
+        self.slider.blockSignals(False)
+        self._show_current()
 
     def get_excluded_frames(self) -> Set[int]:
         return set(self._excluded_frames)
