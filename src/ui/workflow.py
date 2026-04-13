@@ -60,7 +60,7 @@ STEP_DEFINITIONS: Dict[WorkflowStep, StepMeta] = {
         description=(
             "Use the Display options panel to adjust exposure and "
             "contrast until neurons and background are clearly separated. "
-            "Display setting do not effect the underlying data, just how it's visualized in the viewer."
+            "Display settings do not affect the underlying data, only how it is visualized in the viewer."
         ),
     ),
     WorkflowStep.ALIGN_IMAGES: StepMeta(
