@@ -408,7 +408,9 @@ class ROIIntensityPlotWidget(QWidget):
                     marker_found = True
                     prev_time = self._get_previous_marker_time(m_time, m_type)
                     interval_text = f"\nInterval: {m_time - prev_time:.2f} min" if prev_time is not None else ""
-                    tooltip = f"{m_type.title()} #{m_order}\nTime: {m_time:.2f} min\nValue: {m_value:.3f}{interval_text}"
+                    tooltip = (
+                        f"{m_type.title()} #{m_order}\nTime: {m_time:.2f} min\nValue: {m_value:.3f}{interval_text}"
+                    )
                     self._marker_annotation.xy = (m_time, m_value)
                     self._marker_annotation.set_text(tooltip)
                     self._marker_annotation.set_visible(True)
@@ -465,7 +467,8 @@ class ROIIntensityPlotWidget(QWidget):
                 else:
                     interval_text = ""
                 self.hover_label.setText(
-                    f"Selected: {m_type.title()} #{m_order} at Time {m_time:.2f} min, Value: {m_value:.3f}{interval_text}"
+                    f"Selected: {m_type.title()} #{m_order} at Time {m_time:.2f} min, "
+                    f"Value: {m_value:.3f}{interval_text}"
                 )
                 break
 
