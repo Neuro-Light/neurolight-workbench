@@ -60,9 +60,7 @@ class AlignmentDialog(QDialog):
                 "Bilinear",
             ]
         )
-        self.transform_combo.setToolTip(
-            "Rigid body alignment is recommended for most standard experiments."
-        )
+        self.transform_combo.setToolTip("Rigid body alignment is recommended for most standard experiments.")
         self.transform_combo.setCurrentIndex(0)  # Default to Rigid Body
         self.transform_combo.currentIndexChanged.connect(self._on_transform_changed)
 
