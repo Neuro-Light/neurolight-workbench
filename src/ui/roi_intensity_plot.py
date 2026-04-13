@@ -440,7 +440,10 @@ class ROIIntensityPlotWidget(QWidget):
         for m_frame, m_value, m_type, m_order in all_markers:
             if abs(xdata - m_frame) < 0.5 and abs(ydata - m_value) < 0.001:
                 prev_frame = self._get_previous_marker_frame(m_frame, m_type)
-                interval_text = f" | Interval from previous: {m_frame - prev_frame} frames" if prev_frame is not None else ""
+                if prev_frame is not None:
+                    interval_text = f" | Interval from previous: {m_frame - prev_frame} frames"
+                else:
+                    interval_text = ""
                 self.hover_label.setText(
                     f"Selected: {m_type.title()} #{m_order} at Frame {m_frame}, Value: {m_value:.3f}{interval_text}"
                 )
