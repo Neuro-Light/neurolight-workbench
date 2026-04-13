@@ -6,14 +6,11 @@ from typing import Dict, List, Optional, Set
 
 from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtWidgets import (
-    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QPushButton,
     QSizePolicy,
-    QStyle,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -311,7 +308,6 @@ class WorkflowStepper(QFrame):
     # Signals for step-specific actions that the main window can wire up
     requestAlignImages = Signal()
     requestSkipAlignment = Signal()
-    requestLoadFolder = Signal(str)
 
     def __init__(self, manager: WorkflowManager, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -366,20 +362,6 @@ class WorkflowStepper(QFrame):
         self._description_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         bottom_row.addWidget(self._description_label, stretch=1)
 
-        # Folder browser (shown only on LOAD_IMAGES step)
-        self._folder_path_edit = QLineEdit()
-        self._folder_path_edit.setPlaceholderText("Select image stack folder\u2026")
-        self._folder_path_edit.setReadOnly(True)
-        self._folder_path_edit.setMinimumWidth(200)
-        bottom_row.addWidget(self._folder_path_edit, stretch=0)
-
-        self._browse_folder_btn = QPushButton("Browse\u2026")
-        self._browse_folder_btn.setProperty("class", "primary")
-        folder_icon = self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon)
-        self._browse_folder_btn.setIcon(folder_icon)
-        self._browse_folder_btn.clicked.connect(self._on_browse_folder)
-        bottom_row.addWidget(self._browse_folder_btn, stretch=0)
-
         # Align Images button (shown only on ALIGN_IMAGES step)
         self._align_button = QPushButton("Align Images")
         self._align_button.setProperty("class", "primary")
@@ -429,16 +411,6 @@ class WorkflowStepper(QFrame):
     def _on_next_clicked(self) -> None:
         self._manager.complete_current_step()
 
-    def _on_browse_folder(self) -> None:
-        directory = QFileDialog.getExistingDirectory(
-            self,
-            "Select Image Stack Folder",
-            self._folder_path_edit.text() or "",
-        )
-        if directory:
-            self._folder_path_edit.setText(directory)
-            self.requestLoadFolder.emit(directory)
-
     def _on_skip_alignment_clicked(self) -> None:
         """
         Allow users to skip the alignment step explicitly when their stack
@@ -447,14 +419,6 @@ class WorkflowStepper(QFrame):
         if self._manager.current_step == WorkflowStep.ALIGN_IMAGES:
             self._manager.mark_step_ready(WorkflowStep.ALIGN_IMAGES)
             self._manager.complete_current_step()
-
-    # ------------------------------------------------------------------
-    # Public helpers
-    # ------------------------------------------------------------------
-
-    def set_folder_path(self, path: str) -> None:
-        """Populate the folder path field (e.g. after a stack is loaded externally)."""
-        self._folder_path_edit.setText(path)
 
     # ------------------------------------------------------------------
     # UI refresh helpers
@@ -494,11 +458,6 @@ class WorkflowStepper(QFrame):
         # Next button only enabled when the active step is marked ready (and not the final step)
         can_advance = current != WorkflowStep.ANALYZE_GRAPHS and self._manager.is_step_ready(current)
         self._next_button.setEnabled(can_advance)
-
-        # Show folder browser only on the load-images step
-        is_load_step = current == WorkflowStep.LOAD_IMAGES
-        self._folder_path_edit.setVisible(is_load_step)
-        self._browse_folder_btn.setVisible(is_load_step)
 
         # Show Align/Skip controls only on the alignment step
         is_align_step = current == WorkflowStep.ALIGN_IMAGES

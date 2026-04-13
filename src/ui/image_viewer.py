@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
     QLabel,
+    QMenu,
     QMessageBox,
     QPushButton,
     QSlider,
@@ -75,12 +76,16 @@ class ImageViewer(QWidget):
         self.image_label.setAlignment(Qt.AlignCenter)
         self.image_label.setMinimumSize(320, 240)
 
-        # Upload button (visible when no images loaded)
+        # Upload button with menu for files or folder (visible when no images loaded)
         self.upload_btn = QPushButton("Open Images")
         self.upload_btn.setProperty("class", "primary")
         icon = self.style().standardIcon(QStyle.StandardPixmap.SP_DirOpenIcon)
         self.upload_btn.setIcon(icon)
-        self.upload_btn.clicked.connect(self._open_upload_dialog)
+
+        upload_menu = QMenu(self.upload_btn)
+        upload_menu.addAction("Open Image Files\u2026", self._open_upload_dialog)
+        upload_menu.addAction("Open Image Folder\u2026", self._open_folder_dialog)
+        self.upload_btn.setMenu(upload_menu)
 
         # Container for image label with upload button overlay
         self.image_container = QWidget()
@@ -520,6 +525,19 @@ class ImageViewer(QWidget):
 
         if files:
             self.set_stack(files)
+
+    def _open_folder_dialog(self) -> None:
+        """Open folder dialog to select an image stack directory."""
+        from PySide6.QtWidgets import QFileDialog
+
+        directory = QFileDialog.getExistingDirectory(
+            self,
+            "Select Image Stack Folder",
+            "",
+        )
+
+        if directory:
+            self.set_stack(directory)
 
     def prev_image(self) -> None:
         if self.index > 0:
