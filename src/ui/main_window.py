@@ -178,19 +178,26 @@ class MainWindow(QMainWindow):
                 if panel is not None:
                     panel.setVisible(show_edit)
 
-            # Step 3: Align Images
+            # Step 3: Cull Frames — show/hide cull controls panel
+            show_cull = current == WorkflowStep.CULL_FRAMES
+            if hasattr(self, "viewer"):
+                panel = getattr(self.viewer, "cull_controls_panel", None)
+                if panel is not None:
+                    panel.setVisible(show_cull)
+
+            # Step 4: Align Images
             enable_align = current == WorkflowStep.ALIGN_IMAGES
             if self._action_align_images is not None:
                 self._action_align_images.setEnabled(enable_align)
 
-            # Step 4: Select ROI — show/hide entire ROI controls panel
+            # Step 5: Select ROI — show/hide entire ROI controls panel
             show_roi = current == WorkflowStep.SELECT_ROI
             if hasattr(self, "viewer"):
                 panel = getattr(self.viewer, "roi_controls_panel", None)
                 if panel is not None:
                     panel.setVisible(show_roi)
 
-            # Step 5: Detect Neurons
+            # Step 6: Detect Neurons
             enable_detect = current == WorkflowStep.DETECT_NEURONS
             if hasattr(self, "analysis"):
                 try:
@@ -465,6 +472,9 @@ class MainWindow(QMainWindow):
         # Connect display settings changes to debounced saving
         self.viewer.displaySettingsChanged.connect(self._on_display_settings_changed)
 
+        # Connect frame culling changes
+        self.viewer.frameCullingChanged.connect(self._on_frame_culling_changed)
+
         # Create data analyzer
         self.data_analyzer = DataAnalyzer(self.experiment)
 
@@ -583,6 +593,9 @@ class MainWindow(QMainWindow):
                             QApplication.processEvents()
                             self.viewer.set_stack(p)
 
+                        # Restore culling state
+                        self._restore_culling_state()
+
                         # Load both ROIs from experiment.rois
                         has_any_roi = any(self.experiment.rois.get(k) for k in ("roi_1", "roi_2"))
                         if has_any_roi:
@@ -699,6 +712,9 @@ class MainWindow(QMainWindow):
 
         # Mark first workflow step complete once a stack is available
         self.workflow_manager.complete_step_if_current(WorkflowStep.LOAD_IMAGES)
+
+        # Cull step is always ready (zero exclusions is a valid choice)
+        self.workflow_manager.mark_step_ready(WorkflowStep.CULL_FRAMES)
 
     def _ensure_detection_data_saved(self) -> None:
         """
@@ -1013,6 +1029,43 @@ class MainWindow(QMainWindow):
         self._display_settings_timer.start(500)
         if self.workflow_manager.current_step == WorkflowStep.EDIT_IMAGES:
             self.workflow_manager.mark_step_ready(WorkflowStep.EDIT_IMAGES)
+
+    def _on_frame_culling_changed(self, excluded: set) -> None:
+        """Persist excluded frames to experiment and sync to the stack handler."""
+        if "culling" not in self.experiment.settings:
+            self.experiment.settings["culling"] = {}
+        self.experiment.settings["culling"]["excluded_frames"] = sorted(excluded)
+        self.stack_handler.set_excluded_frames(excluded)
+
+        total = self.stack_handler.get_total_frame_count()
+        all_excluded = total > 0 and len(excluded) >= total
+
+        if all_excluded:
+            # Cannot advance with zero included frames — remove readiness
+            self.workflow_manager._ready_steps.discard(WorkflowStep.CULL_FRAMES)
+            self.workflow_manager.state_changed.emit()
+        else:
+            self.workflow_manager.mark_step_ready(WorkflowStep.CULL_FRAMES)
+
+        # If culling changed after downstream steps completed, invalidate them
+        if WorkflowStep.CULL_FRAMES in self.workflow_manager.completed_steps:
+            self.workflow_manager.reset_from_step(WorkflowStep.CULL_FRAMES)
+            if not all_excluded:
+                self.workflow_manager.mark_step_ready(WorkflowStep.CULL_FRAMES)
+
+        if self.current_experiment_path:
+            try:
+                self.manager.save_experiment(self.experiment, self.current_experiment_path)
+            except Exception:
+                pass
+
+    def _restore_culling_state(self) -> None:
+        """Restore excluded frames from experiment settings into viewer and handler."""
+        culling = self.experiment.settings.get("culling") or {}
+        excluded_list = culling.get("excluded_frames", [])
+        excluded = set(int(i) for i in excluded_list)
+        self.stack_handler.set_excluded_frames(excluded)
+        self.viewer.set_excluded_frames(excluded)
 
     def _flush_pending_display_settings(self) -> None:
         """

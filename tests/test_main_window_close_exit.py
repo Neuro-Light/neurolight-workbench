@@ -63,6 +63,8 @@ def main_window(app, sample_experiment):
     mock_viewer.roiDeleted.connect = Mock()
     mock_viewer.displaySettingsChanged = Mock()
     mock_viewer.displaySettingsChanged.connect = Mock()
+    mock_viewer.frameCullingChanged = Mock()
+    mock_viewer.frameCullingChanged.connect = Mock()
 
     mock_analysis = QWidget()
     mock_roi_plot_widget = Mock()
