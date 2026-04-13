@@ -639,7 +639,7 @@ class MainWindow(QMainWindow):
                 try:
                     rayleigh_widget.set_experiment_start_time_minutes(start_minutes)
                 except Exception:
-                    pass
+                    logger.exception("Failed to apply experiment start time to Rayleigh widget.")
 
         # Frame interval and start time for trajectory and Lomb-Scargle plots
         frame_interval = acquisition.get("frame_interval_minutes")
@@ -651,7 +651,7 @@ class MainWindow(QMainWindow):
                 start_time=start_time,
             )
         except Exception:
-            pass
+            logger.exception("Failed to configure neuron trajectory time settings.")
 
         try:
             ls_getter = getattr(self.analysis, "get_lomb_scargle_widget", None)
@@ -659,7 +659,7 @@ class MainWindow(QMainWindow):
             if ls_widget is not None and frame_interval is not None:
                 ls_widget.set_frame_interval_minutes(float(frame_interval))
         except Exception:
-            pass
+            logger.exception("Failed to apply frame interval to Lomb-Scargle widget.")
 
         try:
             roi_widget = self.analysis.get_roi_plot_widget()

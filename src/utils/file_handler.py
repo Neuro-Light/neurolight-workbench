@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import List, Optional
 
@@ -7,6 +8,29 @@ import numpy as np
 from PIL import Image
 
 from core.experiment_manager import Experiment
+
+_TIME_RE = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$")
+
+
+def _extract_valid_time(raw: object) -> Optional[str]:
+    """
+    Normalize metadata time values and return only valid HH:MM or HH:MM:SS strings.
+    """
+    if raw is None:
+        return None
+    if isinstance(raw, bytes):
+        try:
+            raw = raw.decode("utf-8", errors="ignore")
+        except Exception:
+            return None
+    text = str(raw).strip()
+    if not text:
+        return None
+    # EXIF commonly stores "YYYY:MM:DD HH:MM:SS" - use the time token.
+    candidate = text.split()[-1] if " " in text else text
+    if _TIME_RE.fullmatch(candidate):
+        return candidate
+    return None
 
 
 def _get_exif_timestamp(file_path: str) -> Optional[str]:
@@ -22,13 +46,11 @@ def _get_exif_timestamp(file_path: str) -> Optional[str]:
                 # EXIF tag 36867 = DateTimeOriginal, 306 = DateTime
                 for tag_id in (36867, 306):
                     raw = exif_data.get(tag_id)
-                    if raw:
-                        # Standard EXIF format: "YYYY:MM:DD HH:MM:SS"
-                        parts = str(raw).strip().split()
-                        if len(parts) >= 2:
-                            return parts[1]  # Return "HH:MM:SS" portion
-                        return str(raw).strip()
+                    parsed = _extract_valid_time(raw)
+                    if parsed is not None:
+                        return parsed
     except Exception:
+        # Best-effort EXIF read failed; continue to tifffile-based fallback below.
         pass
     # Fallback: check TIFF ImageDescription or DateTime tag via tifffile
     try:
@@ -37,12 +59,11 @@ def _get_exif_timestamp(file_path: str) -> Optional[str]:
         with tifffile.TiffFile(file_path) as tif:
             for tag in tif.pages[0].tags.values():
                 if tag.name in ("DateTime", "DateTimeOriginal"):
-                    raw = str(tag.value).strip()
-                    parts = raw.split()
-                    if len(parts) >= 2:
-                        return parts[1]
-                    return raw
+                    parsed = _extract_valid_time(tag.value)
+                    if parsed is not None:
+                        return parsed
     except Exception:
+        # Best-effort TIFF metadata extraction failed; treat timestamp as unavailable.
         pass
     return None
 
@@ -152,6 +173,11 @@ class ImageStackHandler:
             # Try to extract EXIF timestamp from the first image; store only if found
             start_time = _get_exif_timestamp(self.files[0])
             if start_time is not None:
-                if "acquisition" not in experiment.settings:
+                if "acquisition" not in experiment.settings or not isinstance(
+                    experiment.settings.get("acquisition"), dict
+                ):
                     experiment.settings["acquisition"] = {}
-                experiment.settings["acquisition"]["experiment_start_time"] = start_time
+                acquisition = experiment.settings["acquisition"]
+                existing_start = acquisition.get("experiment_start_time")
+                if existing_start is None or (isinstance(existing_start, str) and not existing_start.strip()):
+                    acquisition["experiment_start_time"] = start_time
