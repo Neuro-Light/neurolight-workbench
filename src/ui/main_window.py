@@ -1154,12 +1154,12 @@ class MainWindow(QMainWindow):
             from PIL import Image
 
             output_path = Path(output_dir)
-            original_files = self.stack_handler.files
+            included_files = self.stack_handler.get_included_files()
 
             for i, cropped_frame in enumerate(cropped_stack):
-                # Generate output filename
-                if i < len(original_files):
-                    original_name = Path(original_files[i]).stem
+                # Generate output filename from the matching source file
+                if i < len(included_files):
+                    original_name = Path(included_files[i]).stem
                     output_file = output_path / f"{original_name}_cropped.tif"
                 else:
                     output_file = output_path / f"frame_{i:04d}_cropped.tif"
@@ -1452,10 +1452,11 @@ class MainWindow(QMainWindow):
 
         # Save aligned images (raw, without exposure/contrast adjustments)
         # Users can adjust exposure/contrast in the viewer after loading
+        included_files = self.stack_handler.get_included_files()
         for i, aligned_frame in enumerate(aligned_stack_uint16):
-            # Generate output filename
-            if i < len(self.stack_handler.files):
-                original_name = Path(self.stack_handler.files[i]).stem
+            # Generate output filename from the matching source file
+            if i < len(included_files):
+                original_name = Path(included_files[i]).stem
                 output_file = output_path / f"{original_name}_aligned.tif"
             else:
                 output_file = output_path / f"frame_{i:04d}_aligned.tif"

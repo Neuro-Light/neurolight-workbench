@@ -25,6 +25,12 @@ class ImageStackHandler:
         """Return total number of files regardless of exclusions."""
         return len(self.files)
 
+    def get_included_files(self) -> List[str]:
+        """Return the file list with excluded frames removed, in original order."""
+        if not self._excluded_frames:
+            return list(self.files)
+        return [p for i, p in enumerate(self.files) if i not in self._excluded_frames]
+
     def load_image_stack(self, directory_or_files) -> List[str]:
         paths: List[str] = []
         if isinstance(directory_or_files, (list, tuple)):
