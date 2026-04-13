@@ -334,7 +334,9 @@ class TestROIIntensityPlotWidgetTimeSettingsAndExport:
     def test_export_png_reports_failure(self, app):
         w = ROIIntensityPlotWidget()
         with (
-            patch("ui.roi_intensity_plot.QFileDialog.getSaveFileName", return_value=("/tmp/out.png", "PNG Files (*.png)")),
+            patch(
+                "ui.roi_intensity_plot.QFileDialog.getSaveFileName", return_value=("/tmp/out.png", "PNG Files (*.png)")
+            ),
             patch.object(w.figure, "savefig", side_effect=RuntimeError("boom")),
             patch("ui.roi_intensity_plot.QMessageBox.critical") as critical,
         ):
@@ -344,7 +346,9 @@ class TestROIIntensityPlotWidgetTimeSettingsAndExport:
     def test_export_csv_warns_when_no_data(self, app):
         w = ROIIntensityPlotWidget()
         with (
-            patch("ui.roi_intensity_plot.QFileDialog.getSaveFileName", return_value=("/tmp/out.csv", "CSV Files (*.csv)")),
+            patch(
+                "ui.roi_intensity_plot.QFileDialog.getSaveFileName", return_value=("/tmp/out.csv", "CSV Files (*.csv)")
+            ),
             patch("ui.roi_intensity_plot.QMessageBox.warning") as warning,
         ):
             w._export_to_csv()

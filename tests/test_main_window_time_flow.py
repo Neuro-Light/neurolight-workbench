@@ -128,4 +128,3 @@ def test_confirm_start_time_from_loaded_stack_cancel_keeps_existing(main_window)
         main_window._confirm_start_time_from_loaded_stack()
 
     assert main_window.experiment.settings["acquisition"]["experiment_start_time"] == "08:00:00"
-
