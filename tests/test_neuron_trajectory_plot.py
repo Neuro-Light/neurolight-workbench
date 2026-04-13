@@ -275,3 +275,24 @@ class TestNeuronTrajectoryPlotWidgetGetPreviousMarkerFrame:
         w._trough_data = [(5, 0.5, "trough", 1), (15, 0.3, "trough", 2)]
         result = w._get_previous_marker_frame(15, "trough")
         assert result == 5
+
+
+class TestNeuronTrajectoryPlotWidgetTimeSettings:
+    """Tests for time-axis settings behavior."""
+
+    def test_set_time_settings_updates_interval_and_start_time(self, app):
+        w = NeuronTrajectoryPlotWidget()
+
+        w.set_time_settings(7.5, "09:15:00")
+
+        assert w._frame_interval_minutes == pytest.approx(7.5)
+        assert w._experiment_start_time == "09:15:00"
+
+    def test_set_time_settings_replots_when_data_available(self, app):
+        w = NeuronTrajectoryPlotWidget()
+        w.neuron_trajectories = np.random.rand(2, 5)
+        w._update_plot = Mock()
+
+        w.set_time_settings(5.0, "08:00:00")
+
+        w._update_plot.assert_called_once()
