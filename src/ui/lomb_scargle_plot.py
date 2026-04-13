@@ -11,8 +11,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFileDialog,
-    QFormLayout,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -55,44 +53,50 @@ class LombScarglePlotWidget(QWidget):
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
 
-        # ROI selection + analysis options
-        controls_group = QGroupBox("Lomb–Scargle Settings")
-        controls_layout = QFormLayout()
+        # Compact single-row controls strip
+        controls_row = QHBoxLayout()
+        controls_row.setContentsMargins(4, 2, 4, 2)
+        controls_row.setSpacing(8)
 
-        # ROI visibility / analysis checkboxes
-        roi_row = QHBoxLayout()
+        # ROI checkboxes
+        controls_row.addWidget(QLabel("ROIs:"))
         self._roi_checkboxes: Dict[str, QCheckBox] = {}
         for key in ROI_KEYS:
             cb = QCheckBox(ROI_DISPLAY_NAMES[key])
             cb.setChecked(True)
             cb.toggled.connect(self._update_plot)
             self._roi_checkboxes[key] = cb
-            roi_row.addWidget(cb)
-        roi_row.addStretch()
-        controls_layout.addRow("Analyze ROIs:", roi_row)
+            controls_row.addWidget(cb)
 
-        # Sampling interval in minutes per frame
+        controls_row.addSpacing(12)
+
+        # Sampling interval
+        controls_row.addWidget(QLabel("Interval (min):"))
         self.sampling_interval_spin = DraggableDoubleSpinBox()
         self.sampling_interval_spin.setRange(0.0001, 10_000.0)
         self.sampling_interval_spin.setDecimals(4)
         self.sampling_interval_spin.setSingleStep(0.5)
         self.sampling_interval_spin.setValue(DEFAULT_FRAME_INTERVAL_MINUTES)
+        self.sampling_interval_spin.setMinimumWidth(90)
         self.sampling_interval_spin.setToolTip(
             "Time between successive frames in minutes.\n"
             "Set this to match the experiment's acquisition interval."
         )
         self.sampling_interval_spin.valueChanged.connect(self._update_plot)
-        controls_layout.addRow("Time Between Frames (minutes):", self.sampling_interval_spin)
+        controls_row.addWidget(self.sampling_interval_spin)
 
-        # X-axis mode: frequency vs period
+        controls_row.addSpacing(12)
+
+        # X-axis mode
+        controls_row.addWidget(QLabel("X-axis:"))
         self.axis_mode_combo = QComboBox()
         self.axis_mode_combo.addItem("Frequency", self.AXIS_FREQ)
         self.axis_mode_combo.addItem("Period", self.AXIS_PERIOD)
         self.axis_mode_combo.currentIndexChanged.connect(self._update_plot)
-        controls_layout.addRow("X-axis:", self.axis_mode_combo)
+        controls_row.addWidget(self.axis_mode_combo)
 
-        controls_group.setLayout(controls_layout)
-        layout.addWidget(controls_group)
+        controls_row.addStretch()
+        layout.addLayout(controls_row)
 
         # Matplotlib figure and canvas
         self.figure = Figure(figsize=(8, 6))

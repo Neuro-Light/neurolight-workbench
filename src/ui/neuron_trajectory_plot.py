@@ -15,8 +15,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFileDialog,
-    QFormLayout,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -69,81 +67,91 @@ class NeuronTrajectoryPlotWidget(QWidget):
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
 
-        # ROI view selector: Both / ROI 1 only / ROI 2 only
-        roi_view_row = QHBoxLayout()
-        roi_view_row.addWidget(QLabel("Show trajectories:"))
+        # Compact single-row controls strip
+        controls_row = QHBoxLayout()
+        controls_row.setContentsMargins(4, 2, 4, 2)
+        controls_row.setSpacing(8)
+
+        # ROI filter
+        controls_row.addWidget(QLabel("ROI:"))
         self.roi_view_combo = QComboBox()
-        self.roi_view_combo.addItem("Both (ROI 1 & 2)", self.VIEW_BOTH)
-        self.roi_view_combo.addItem("ROI 1 only", self.VIEW_ROI1)
-        self.roi_view_combo.addItem("ROI 2 only", self.VIEW_ROI2)
+        self.roi_view_combo.addItem("Both", self.VIEW_BOTH)
+        self.roi_view_combo.addItem("ROI 1", self.VIEW_ROI1)
+        self.roi_view_combo.addItem("ROI 2", self.VIEW_ROI2)
         self.roi_view_combo.setToolTip("Filter trajectories by ROI when detection was run on both ROIs.")
         self.roi_view_combo.currentIndexChanged.connect(self._update_plot)
-        roi_view_row.addWidget(self.roi_view_combo)
-        roi_view_row.addStretch()
-        layout.addLayout(roi_view_row)
+        controls_row.addWidget(self.roi_view_combo)
 
-        # Display options group
-        options_group = QGroupBox("Display Options")
-        options_layout = QFormLayout()
+        controls_row.addSpacing(12)
 
-        # Show good neurons checkbox
-        self.show_good_checkbox = QCheckBox()
+        # Show checkboxes
+        controls_row.addWidget(QLabel("Show:"))
+        self.show_good_checkbox = QCheckBox("Good")
         self.show_good_checkbox.setChecked(True)
         self.show_good_checkbox.stateChanged.connect(self._update_plot)
-        options_layout.addRow("Show Good Neurons:", self.show_good_checkbox)
+        controls_row.addWidget(self.show_good_checkbox)
 
-        # Show bad neurons checkbox
-        self.show_bad_checkbox = QCheckBox()
+        self.show_bad_checkbox = QCheckBox("Bad")
         self.show_bad_checkbox.setChecked(False)
         self.show_bad_checkbox.stateChanged.connect(self._update_plot)
-        options_layout.addRow("Show Bad Neurons:", self.show_bad_checkbox)
+        controls_row.addWidget(self.show_bad_checkbox)
 
-        # Max neurons to display
+        self.show_average_checkbox = QCheckBox("Avg")
+        self.show_average_checkbox.setChecked(True)
+        self.show_average_checkbox.stateChanged.connect(self._update_plot)
+        controls_row.addWidget(self.show_average_checkbox)
+
+        controls_row.addSpacing(12)
+
+        # Max neurons spinbox
+        controls_row.addWidget(QLabel("Max:"))
         self.max_neurons_spin = DraggableSpinBox()
         self.max_neurons_spin.setRange(1, 1000)
         self.max_neurons_spin.setValue(50)
+        self.max_neurons_spin.setMinimumWidth(60)
         self.max_neurons_spin.setToolTip("Maximum number of neurons to display (for performance)")
         self.max_neurons_spin.valueChanged.connect(self._update_plot)
-        options_layout.addRow("Max Neurons to Display:", self.max_neurons_spin)
+        controls_row.addWidget(self.max_neurons_spin)
 
-        # Show average checkbox
-        self.show_average_checkbox = QCheckBox()
-        self.show_average_checkbox.setChecked(True)
-        self.show_average_checkbox.stateChanged.connect(self._update_plot)
-        options_layout.addRow("Show Average:", self.show_average_checkbox)
+        controls_row.addSpacing(12)
 
-        # Smoothing (display only; 0 = none)
+        # Smoothing spinbox
+        controls_row.addWidget(QLabel("Smooth:"))
         self.smoothing_spin = DraggableSpinBox()
         self.smoothing_spin.setRange(0, 51)
         self.smoothing_spin.setValue(0)
         self.smoothing_spin.setSpecialValueText("None")
+        self.smoothing_spin.setMinimumWidth(60)
         self.smoothing_spin.setToolTip(
             "Moving average window in frames for display only (0 = no smoothing). Export uses raw data."
         )
         self.smoothing_spin.valueChanged.connect(self._update_plot)
-        options_layout.addRow("Smoothing (frames):", self.smoothing_spin)
+        controls_row.addWidget(self.smoothing_spin)
 
-        # Show peaks/troughs on average line
-        self.show_peaks_checkbox = QCheckBox()
+        controls_row.addSpacing(12)
+
+        # Peaks/troughs toggle
+        self.show_peaks_checkbox = QCheckBox("Peaks/Troughs")
         self.show_peaks_checkbox.setChecked(False)
         self.show_peaks_checkbox.setToolTip(
             "Overlay peak (maxima) and trough (minima) markers on the average trajectory"
         )
         self.show_peaks_checkbox.stateChanged.connect(self._on_show_peaks_toggled)
-        options_layout.addRow("Show Peaks/Troughs:", self.show_peaks_checkbox)
+        controls_row.addWidget(self.show_peaks_checkbox)
 
-        # Number peaks/troughs (hidden until Show Peaks/Troughs is enabled)
+        # Number markers (shown only when peaks are enabled)
+        self._number_peaks_row_label = QLabel("Numbers:")
+        self._number_peaks_row_label.setVisible(False)
+        controls_row.addWidget(self._number_peaks_row_label)
         self.number_peaks_checkbox = QCheckBox()
         self.number_peaks_checkbox.setChecked(False)
         self.number_peaks_checkbox.setToolTip("Show order numbers (1, 2, 3...) on peak and trough markers")
         self.number_peaks_checkbox.stateChanged.connect(self._update_plot)
-        self._number_peaks_row_label = QLabel("Number Markers:")
-        self._number_peaks_row_label.setVisible(False)
         self.number_peaks_checkbox.setVisible(False)
-        options_layout.addRow(self._number_peaks_row_label, self.number_peaks_checkbox)
+        controls_row.addWidget(self.number_peaks_checkbox)
 
-        options_group.setLayout(options_layout)
-        layout.addWidget(options_group)
+        controls_row.addStretch()
+        layout.addLayout(controls_row)
 
         # Matplotlib figure and canvas (theme applied in _update_plot)
         self.figure = Figure(figsize=(10, 8))
