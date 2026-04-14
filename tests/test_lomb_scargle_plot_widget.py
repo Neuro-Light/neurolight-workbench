@@ -135,3 +135,20 @@ def test_clear_all_resets_state(app):
     assert w._last_frequency is None
     assert w.export_png_btn.isEnabled() is False
     assert w.export_csv_btn.isEnabled() is False
+
+
+def test_set_frame_interval_minutes_updates_spinbox(app):
+    w = LombScarglePlotWidget()
+
+    w.set_frame_interval_minutes(12.5)
+
+    assert w.sampling_interval_spin.value() == pytest.approx(12.5)
+
+
+def test_set_frame_interval_minutes_ignores_non_positive_value(app):
+    w = LombScarglePlotWidget()
+    original = w.sampling_interval_spin.value()
+
+    w.set_frame_interval_minutes(0)
+
+    assert w.sampling_interval_spin.value() == pytest.approx(original)

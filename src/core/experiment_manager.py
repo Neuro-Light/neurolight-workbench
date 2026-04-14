@@ -300,6 +300,12 @@ class ExperimentManager:
             if "processing" not in experiment.settings:
                 experiment.settings["processing"] = {}
             experiment.settings["processing"]["analysis_type"] = analysis_type
+        # Store acquisition settings (frame interval, start time)
+        frame_interval = metadata.get("frame_interval_minutes")
+        if frame_interval is not None:
+            if "acquisition" not in experiment.settings:
+                experiment.settings["acquisition"] = {}
+            experiment.settings["acquisition"]["frame_interval_minutes"] = float(frame_interval)
         return experiment
 
     def load_experiment(self, file_path: str) -> Experiment:
