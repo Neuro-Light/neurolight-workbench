@@ -26,9 +26,7 @@ def _make_worker(processor_result=None, processor_error=None):
         locations = np.array([[10, 20], [30, 40]])
         trajectories = np.random.rand(2, 5).astype(np.float32)
         quality = np.array([True, False])
-        mock_processor.detect_neurons_in_roi.return_value = (
-            processor_result or (locations, trajectories, quality)
-        )
+        mock_processor.detect_neurons_in_roi.return_value = processor_result or (locations, trajectories, quality)
 
     frame_data = np.random.randint(0, 255, (5, 64, 64), dtype=np.uint8)
     roi_mask = np.ones((64, 64), dtype=np.uint8)

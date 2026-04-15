@@ -56,9 +56,7 @@ class TestDraggableSpinBox:
         sb.setSingleStep(1)
         sb.setValue(50)
 
-        press = _make_mouse_event(
-            QMouseEvent.Type.MouseButtonPress, Qt.MouseButton.LeftButton, 100, 10
-        )
+        press = _make_mouse_event(QMouseEvent.Type.MouseButtonPress, Qt.MouseButton.LeftButton, 100, 10)
         sb.mousePressEvent(press)
 
         move = _make_mouse_event(
@@ -77,9 +75,7 @@ class TestDraggableSpinBox:
         sb.setSingleStep(1)
         sb.setValue(8)
 
-        press = _make_mouse_event(
-            QMouseEvent.Type.MouseButtonPress, Qt.MouseButton.LeftButton, 100, 10
-        )
+        press = _make_mouse_event(QMouseEvent.Type.MouseButtonPress, Qt.MouseButton.LeftButton, 100, 10)
         sb.mousePressEvent(press)
 
         move = _make_mouse_event(
@@ -97,15 +93,11 @@ class TestDraggableSpinBox:
         sb.setRange(0, 100)
         sb.setValue(50)
 
-        press = _make_mouse_event(
-            QMouseEvent.Type.MouseButtonPress, Qt.MouseButton.LeftButton, 100, 10
-        )
+        press = _make_mouse_event(QMouseEvent.Type.MouseButtonPress, Qt.MouseButton.LeftButton, 100, 10)
         sb.mousePressEvent(press)
         assert sb._drag_start_x is not None
 
-        release = _make_mouse_event(
-            QMouseEvent.Type.MouseButtonRelease, Qt.MouseButton.LeftButton, 100, 10
-        )
+        release = _make_mouse_event(QMouseEvent.Type.MouseButtonRelease, Qt.MouseButton.LeftButton, 100, 10)
         sb.mouseReleaseEvent(release)
         assert sb._drag_start_x is None
         assert sb._drag_start_value is None
@@ -131,9 +123,7 @@ class TestDraggableDoubleSpinBox:
         sb.setDecimals(2)
         sb.setValue(50.0)
 
-        press = _make_mouse_event(
-            QMouseEvent.Type.MouseButtonPress, Qt.MouseButton.LeftButton, 100, 10
-        )
+        press = _make_mouse_event(QMouseEvent.Type.MouseButtonPress, Qt.MouseButton.LeftButton, 100, 10)
         sb.mousePressEvent(press)
 
         move = _make_mouse_event(
@@ -152,9 +142,7 @@ class TestDraggableDoubleSpinBox:
         sb.setSingleStep(1.0)
         sb.setValue(2.0)
 
-        press = _make_mouse_event(
-            QMouseEvent.Type.MouseButtonPress, Qt.MouseButton.LeftButton, 100, 10
-        )
+        press = _make_mouse_event(QMouseEvent.Type.MouseButtonPress, Qt.MouseButton.LeftButton, 100, 10)
         sb.mousePressEvent(press)
 
         move = _make_mouse_event(
@@ -172,14 +160,10 @@ class TestDraggableDoubleSpinBox:
         sb.setRange(0.0, 100.0)
         sb.setValue(50.0)
 
-        press = _make_mouse_event(
-            QMouseEvent.Type.MouseButtonPress, Qt.MouseButton.LeftButton, 100, 10
-        )
+        press = _make_mouse_event(QMouseEvent.Type.MouseButtonPress, Qt.MouseButton.LeftButton, 100, 10)
         sb.mousePressEvent(press)
 
-        release = _make_mouse_event(
-            QMouseEvent.Type.MouseButtonRelease, Qt.MouseButton.LeftButton, 100, 10
-        )
+        release = _make_mouse_event(QMouseEvent.Type.MouseButtonRelease, Qt.MouseButton.LeftButton, 100, 10)
         sb.mouseReleaseEvent(release)
         assert sb._drag_start_x is None
         assert sb._drag_start_value is None
