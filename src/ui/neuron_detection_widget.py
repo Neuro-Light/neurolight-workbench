@@ -57,6 +57,7 @@ class NeuronDetectionWidget(QWidget):
         self._detection_progress_dialog: Optional[DetectionProgressDialog] = None
         self._detection_worker: Optional[DetectionWorker] = None
         self._loaded_roi_origin: Optional[np.ndarray] = None
+        self._max_absent_frames_default = 0
 
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -104,6 +105,15 @@ class NeuronDetectionWidget(QWidget):
         self.correlation_threshold_spin.setDecimals(2)
         self.correlation_threshold_spin.setToolTip("Threshold for filtering neurons by correlation quality")
         params_layout.addRow("Correlation Threshold:", self.correlation_threshold_spin)
+
+        self.max_absent_frames_spin = DraggableSpinBox()
+        self.max_absent_frames_spin.setRange(0, 0)
+        self.max_absent_frames_spin.setValue(0)
+        self.max_absent_frames_spin.setToolTip(
+            "Maximum number of frames where a neuron's extracted intensity can be zero before it is marked bad. "
+            "Defaults to the total frame count, which preserves current behavior."
+        )
+        params_layout.addRow("Max Absent Frames:", self.max_absent_frames_spin)
 
         self.threshold_rel_spin = DraggableDoubleSpinBox()
         self.threshold_rel_spin.setRange(0.0, 1.0)
@@ -195,6 +205,7 @@ class NeuronDetectionWidget(QWidget):
     def set_frame_data(self, frame_data: Optional[np.ndarray]) -> None:
         """Set the frame data (3D array: frames, height, width)."""
         self.frame_data = frame_data
+        self._sync_max_absent_frames_with_stack(reset_to_default=True)
         self._update_ui_state()
 
     def set_roi_mask(self, roi_key: str, roi_mask: Optional[np.ndarray]) -> None:
@@ -301,10 +312,14 @@ class NeuronDetectionWidget(QWidget):
             self._display_frame = None
 
         # Restore detection parameters if available
+        self._sync_max_absent_frames_with_stack(reset_to_default=False)
         if detection_params:
             self.cell_size_spin.setValue(detection_params.get("cell_size", 8))
             self.num_peaks_spin.setValue(detection_params.get("num_peaks", 800))
             self.correlation_threshold_spin.setValue(detection_params.get("correlation_threshold", 0.5))
+            self.max_absent_frames_spin.setValue(
+                detection_params.get("max_absent_frames", self._max_absent_frames_default)
+            )
             self.threshold_rel_spin.setValue(detection_params.get("threshold_rel", 0.06))
             self.detrending_checkbox.setChecked(detection_params.get("apply_detrending", True))
 
@@ -354,6 +369,17 @@ class NeuronDetectionWidget(QWidget):
             return m1 | m2
         return m1 if m1 is not None else m2
 
+    def _sync_max_absent_frames_with_stack(self, reset_to_default: bool) -> None:
+        """Keep absent-frame limits aligned to the loaded stack size."""
+        num_frames = int(self.frame_data.shape[0]) if self.frame_data is not None else 0
+        previous_default = self._max_absent_frames_default
+        self._max_absent_frames_default = num_frames
+        self.max_absent_frames_spin.setRange(0, num_frames)
+        if reset_to_default or self.max_absent_frames_spin.value() == previous_default:
+            self.max_absent_frames_spin.setValue(num_frames)
+        else:
+            self.max_absent_frames_spin.setValue(min(self.max_absent_frames_spin.value(), num_frames))
+
     def _update_ui_state(self) -> None:
         """Update UI state based on available data and selected mode."""
         mask = self._effective_mask()
@@ -392,6 +418,7 @@ class NeuronDetectionWidget(QWidget):
             "cell_size": self.cell_size_spin.value(),
             "num_peaks": self.num_peaks_spin.value(),
             "correlation_threshold": self.correlation_threshold_spin.value(),
+            "max_absent_frames": self.max_absent_frames_spin.value(),
             "threshold_rel": self.threshold_rel_spin.value(),
             "apply_detrending": self.detrending_checkbox.isChecked(),
             "use_max_projection": self.max_projection_checkbox.isChecked(),
@@ -482,6 +509,7 @@ class NeuronDetectionWidget(QWidget):
                 "cell_size": self.cell_size_spin.value(),
                 "num_peaks": self.num_peaks_spin.value(),
                 "correlation_threshold": self.correlation_threshold_spin.value(),
+                "max_absent_frames": self.max_absent_frames_spin.value(),
                 "threshold_rel": self.threshold_rel_spin.value(),
                 "apply_detrending": self.detrending_checkbox.isChecked(),
             }

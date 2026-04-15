@@ -904,6 +904,7 @@ class MainWindow(QMainWindow):
                         "cell_size": detection_widget.cell_size_spin.value(),
                         "num_peaks": detection_widget.num_peaks_spin.value(),
                         "correlation_threshold": (detection_widget.correlation_threshold_spin.value()),
+                        "max_absent_frames": detection_widget.max_absent_frames_spin.value(),
                         "threshold_rel": detection_widget.threshold_rel_spin.value(),
                         "apply_detrending": detection_widget.detrending_checkbox.isChecked(),
                     }
