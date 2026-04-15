@@ -131,9 +131,7 @@ class TestRestoreCullingState:
         main_window.viewer.set_excluded_frames.assert_called_with({1, 3, 7})
 
     def test_skips_malformed_entries(self, main_window) -> None:
-        main_window.experiment.settings["culling"] = {
-            "excluded_frames": [0, "bad", None, 4, "also_bad"]
-        }
+        main_window.experiment.settings["culling"] = {"excluded_frames": [0, "bad", None, 4, "also_bad"]}
         main_window._restore_culling_state()
         main_window.stack_handler.set_excluded_frames.assert_called_with({0, 4})
 
@@ -148,8 +146,6 @@ class TestRestoreCullingState:
         main_window.stack_handler.set_excluded_frames.assert_called_with(set())
 
     def test_coerces_string_ints(self, main_window) -> None:
-        main_window.experiment.settings["culling"] = {
-            "excluded_frames": ["2", "5"]
-        }
+        main_window.experiment.settings["culling"] = {"excluded_frames": ["2", "5"]}
         main_window._restore_culling_state()
         main_window.stack_handler.set_excluded_frames.assert_called_with({2, 5})

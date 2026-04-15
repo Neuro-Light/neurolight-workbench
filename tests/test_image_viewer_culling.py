@@ -10,8 +10,8 @@ import pytest
 import tifffile
 from PySide6.QtWidgets import QApplication
 
-from utils.file_handler import ImageStackHandler
 from ui.image_viewer import ImageViewer
+from utils.file_handler import ImageStackHandler
 
 
 @pytest.fixture
