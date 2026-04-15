@@ -37,9 +37,6 @@ from ui.app_settings import (
 )
 from ui.settings_dialog import SettingsDialog
 
-EXPERIMENTS_DIR = Path(__file__).resolve().parents[2] / "experiments"
-EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
-
 # Options button label for recent-experiment rows (text only, no icon)
 OPTIONS_LABEL = "..."
 
@@ -92,11 +89,12 @@ class RecentExperimentRow(QWidget):
 
 
 class NewExperimentDialog(QDialog):
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, experiments_dir: Path, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Neurolight - New Experiment")
         self.setModal(True)
         self.setMinimumWidth(500)
+        self._experiments_dir = experiments_dir
 
         self.name_edit = QLineEdit()
         self.pi_edit = QLineEdit()
@@ -109,7 +107,7 @@ class NewExperimentDialog(QDialog):
         # Make sure the combo box is wide enough to show full labels
         self.analysis_combo.setMinimumWidth(180)
 
-        self.path_edit = QLineEdit(str(EXPERIMENTS_DIR))
+        self.path_edit = QLineEdit(str(self._experiments_dir))
         browse_btn = QPushButton("Browse…")
         browse_btn.clicked.connect(self._browse)
 
@@ -155,7 +153,7 @@ class NewExperimentDialog(QDialog):
         if not name:
             self.name_edit.setFocus()
             return
-        base_dir = Path(self.path_edit.text().strip() or str(EXPERIMENTS_DIR))
+        base_dir = Path(self.path_edit.text().strip() or str(self._experiments_dir))
         base_dir.mkdir(parents=True, exist_ok=True)
         file_path = base_dir / f"{name}.nexp"
         if file_path.exists():
@@ -173,15 +171,17 @@ class NewExperimentDialog(QDialog):
 
 
 class StartupDialog(QDialog):
-    def __init__(self) -> None:
+    def __init__(self, experiments_dir: Path) -> None:
         super().__init__()
         self.setObjectName("experimentManagerDialog")
         self.setWindowTitle("Neurolight - Experiment Manager")
         self.setModal(True)
         self.setMinimumWidth(520)
+        self.experiments_dir = experiments_dir
         self.experiment: Optional[Experiment] = None
         self.experiment_path: Optional[str] = None
-        self.manager = ExperimentManager()
+        # Store recent experiments per user (in the user's folder, not globally in ~/.neurolight).
+        self.manager = ExperimentManager(self.experiments_dir.parent / "recent_experiments.json")
 
         title = QLabel("Neurolight - Experiment Manager")
         title.setAlignment(Qt.AlignCenter)
@@ -237,8 +237,15 @@ class StartupDialog(QDialog):
 
     def _refresh_recent(self) -> None:
         self.recent_list.clear()
+        base_dir = self.experiments_dir.resolve()
         for rec in self.manager.get_recent_experiments():
             path = rec.get("path") or ""
+            if path:
+                try:
+                    if base_dir not in Path(path).resolve().parents and Path(path).resolve() != base_dir:
+                        continue
+                except Exception:
+                    continue
             name = rec.get("name") or Path(path).stem if path else ""
             list_item = QListWidgetItem()
             list_item.setData(Qt.UserRole, path)
@@ -313,7 +320,7 @@ class StartupDialog(QDialog):
         QDesktopServices.openUrl(QUrl.fromLocalFile(parent_dir))
 
     def _start_new(self) -> None:
-        dlg = NewExperimentDialog(self)
+        dlg = NewExperimentDialog(self.experiments_dir, self)
         if dlg.exec() == QDialog.Accepted and dlg.output_path:
             exp = self.manager.create_new_experiment(dlg.metadata)
             try:
@@ -330,7 +337,7 @@ class StartupDialog(QDialog):
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "Open Experiment",
-            str(EXPERIMENTS_DIR),
+            str(self.experiments_dir),
             "Neurolight Experiment (*.nexp)",
         )
         if not file_path:
@@ -444,7 +451,7 @@ class StartupDialog(QDialog):
             file_path, _ = QFileDialog.getSaveFileName(
                 self,
                 "Export Experiment",
-                default_name,
+                str(self.experiments_dir / default_name),
                 "Neurolight Experiment (*.nexp);;All Files (*)",
             )
 

@@ -274,11 +274,13 @@ class Experiment:
 
 
 class ExperimentManager:
-    def __init__(self) -> None:
+    def __init__(self, recent_file: Optional[Path] = None) -> None:
+        self.recent_file = recent_file or RECENT_FILE
         try:
-            RECENT_FILE.touch(exist_ok=True)
-            if RECENT_FILE.stat().st_size == 0:
-                RECENT_FILE.write_text(json.dumps({"recent": []}, indent=2))
+            self.recent_file.parent.mkdir(parents=True, exist_ok=True)
+            self.recent_file.touch(exist_ok=True)
+            if self.recent_file.stat().st_size == 0:
+                self.recent_file.write_text(json.dumps({"recent": []}, indent=2))
         except OSError:
             # Recent experiments list is best-effort; ignore filesystem restrictions.
             pass
@@ -339,7 +341,7 @@ class ExperimentManager:
 
     def get_recent_experiments(self) -> List[Dict[str, Any]]:
         try:
-            with open(RECENT_FILE, "r", encoding="utf-8") as f:
+            with open(self.recent_file, "r", encoding="utf-8") as f:
                 data = json.load(f) or {"recent": []}
             items = data.get("recent", [])
 
@@ -357,7 +359,7 @@ class ExperimentManager:
             if invalid_paths:
                 data["recent"] = valid_items
                 try:
-                    with open(RECENT_FILE, "w", encoding="utf-8") as f:
+                    with open(self.recent_file, "w", encoding="utf-8") as f:
                         json.dump(data, f, indent=2)
                 except OSError:
                     pass
@@ -376,7 +378,7 @@ class ExperimentManager:
             "last_opened": datetime.utcnow().isoformat(timespec="seconds"),
         }
         try:
-            with open(RECENT_FILE, "r", encoding="utf-8") as f:
+            with open(self.recent_file, "r", encoding="utf-8") as f:
                 data = json.load(f) or {"recent": []}
         except Exception:
             data = {"recent": []}
@@ -385,7 +387,7 @@ class ExperimentManager:
         data["recent"].insert(0, entry)
         data["recent"] = data["recent"][:20]
         try:
-            with open(RECENT_FILE, "w", encoding="utf-8") as f:
+            with open(self.recent_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
         except OSError:
             pass
@@ -394,14 +396,14 @@ class ExperimentManager:
         """Remove an experiment from the recent experiments list."""
         file_path = str(Path(file_path).resolve())
         try:
-            with open(RECENT_FILE, "r", encoding="utf-8") as f:
+            with open(self.recent_file, "r", encoding="utf-8") as f:
                 data = json.load(f) or {"recent": []}
         except Exception:
             data = {"recent": []}
         # Remove the entry
         data["recent"] = [e for e in data.get("recent", []) if e.get("path") != file_path]
         try:
-            with open(RECENT_FILE, "w", encoding="utf-8") as f:
+            with open(self.recent_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
         except OSError:
             pass

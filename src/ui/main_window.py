@@ -115,11 +115,14 @@ class _ExperimentSettingsDialog(QDialog):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, experiment: Experiment) -> None:
+    def __init__(self, experiment: Experiment, recent_file: Optional[Path] = None) -> None:
         super().__init__()
         self.experiment = experiment
-        self.manager = ExperimentManager()
+        self.manager = ExperimentManager(recent_file)
         self.current_experiment_path: Optional[str] = None
+        # Set by the launcher (main.py). Used when returning to the experiment manager.
+        self.user_experiments_dir: Optional[Path] = None
+        self.user_recent_file: Optional[Path] = recent_file
         self.image_processor = ImageProcessor(experiment)
         self._alignment_worker: Optional[AlignmentWorker] = None
 
@@ -763,7 +766,18 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Error", str(e))
 
     def _save_as(self) -> None:
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save Experiment As", "", "Neurolight Experiment (*.nexp)")
+        default_dir = ""
+        if self.current_experiment_path:
+            try:
+                default_dir = str(Path(self.current_experiment_path).resolve().parent)
+            except Exception:
+                default_dir = ""
+        elif self.user_experiments_dir is not None:
+            default_dir = str(self.user_experiments_dir)
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Experiment As", default_dir, "Neurolight Experiment (*.nexp)"
+        )
         if not file_path:
             return
         if not file_path.endswith(".nexp"):
@@ -808,8 +822,13 @@ class MainWindow(QMainWindow):
         # Hide the main window
         self.hide()
 
-        # Show startup dialog
-        startup = StartupDialog()
+        # Show startup dialog rooted at the active user's experiments directory (if known)
+        if self.user_experiments_dir is None:
+            # User selection is required before reaching the workbench; this should never happen.
+            QMessageBox.critical(self, "User Required", "No user is selected. Please restart the application.")
+            return
+
+        startup = StartupDialog(self.user_experiments_dir)
         result = startup.exec()
 
         if result == QDialog.Accepted and startup.experiment is not None:
