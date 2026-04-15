@@ -1216,6 +1216,17 @@ class MainWindow(QMainWindow):
         self.experiment.settings["culling"]["excluded_frames"] = sorted(excluded)
         self.stack_handler.set_excluded_frames(excluded)
 
+        # Keep neuron detection input in sync with the included-only stack.
+        # Detection operates on the frame_data provided to the widget; if culling
+        # changes after load, we must refresh it.
+        try:
+            if hasattr(self, "analysis"):
+                detection_widget = self.analysis.get_neuron_detection_widget()
+                detection_widget.set_frame_data(self.stack_handler.get_all_frames_as_array())
+        except Exception:
+            # Some tests use lightweight/mocked panels; ignore refresh failures.
+            pass
+
         total = self.stack_handler.get_total_frame_count()
         all_excluded = total > 0 and len(excluded) >= total
 
@@ -1253,6 +1264,14 @@ class MainWindow(QMainWindow):
             logger.warning("Skipped %d malformed excluded-frame entries", skipped)
         self.stack_handler.set_excluded_frames(excluded)
         self.viewer.set_excluded_frames(excluded)
+
+        # Ensure detection uses the included-only stack after restoring culling.
+        try:
+            if hasattr(self, "analysis"):
+                detection_widget = self.analysis.get_neuron_detection_widget()
+                detection_widget.set_frame_data(self.stack_handler.get_all_frames_as_array())
+        except Exception:
+            pass
 
     def _flush_pending_display_settings(self) -> None:
         """
