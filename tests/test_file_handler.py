@@ -77,7 +77,7 @@ def test_associate_with_experiment_updates_metadata() -> None:
     exp = Experiment(name="E")
     h.associate_with_experiment(exp)
     assert exp.image_count == 1
-    assert exp.image_stack_path == "/data/stack"
+    assert exp.image_stack_path == str(Path("/data/stack"))
     assert exp.image_stack_files == ["/data/stack/frame.tif"]
 
 
