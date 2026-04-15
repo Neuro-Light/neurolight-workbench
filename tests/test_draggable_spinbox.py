@@ -86,7 +86,7 @@ class TestDraggableSpinBox:
             buttons=Qt.MouseButton.LeftButton,
         )
         sb.mouseMoveEvent(move)
-        assert sb.value() <= 10
+        assert sb.value() == 10
 
     def test_release_clears_drag_state(self, app) -> None:
         sb = DraggableSpinBox()
@@ -153,7 +153,7 @@ class TestDraggableDoubleSpinBox:
             buttons=Qt.MouseButton.LeftButton,
         )
         sb.mouseMoveEvent(move)
-        assert sb.value() >= 0.0
+        assert sb.value() == 0.0
 
     def test_release_clears_drag_state(self, app) -> None:
         sb = DraggableDoubleSpinBox()

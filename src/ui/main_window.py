@@ -283,7 +283,9 @@ class MainWindow(QMainWindow):
                     panel.setVisible(show_cull)
                 # After the cull step, hide excluded frames from navigation
                 cull_index = STEP_DEFINITIONS[WorkflowStep.CULL_FRAMES].index
-                self.viewer.set_filter_excluded(current_index > cull_index)
+                _set_filter = getattr(self.viewer, "set_filter_excluded", None)
+                if callable(_set_filter):
+                    _set_filter(current_index > cull_index)
 
             # Step 4: Align Images
             enable_align = current == WorkflowStep.ALIGN_IMAGES
@@ -578,7 +580,9 @@ class MainWindow(QMainWindow):
         self.viewer.displaySettingsChanged.connect(self._on_display_settings_changed)
 
         # Connect frame culling changes
-        self.viewer.frameCullingChanged.connect(self._on_frame_culling_changed)
+        _culling_signal = getattr(self.viewer, "frameCullingChanged", None)
+        if _culling_signal is not None:
+            _culling_signal.connect(self._on_frame_culling_changed)
 
         # Create data analyzer
         self.data_analyzer = DataAnalyzer(self.experiment)
@@ -1238,7 +1242,15 @@ class MainWindow(QMainWindow):
         """Restore excluded frames from experiment settings into viewer and handler."""
         culling = self.experiment.settings.get("culling") or {}
         excluded_list = culling.get("excluded_frames", [])
-        excluded = set(int(i) for i in excluded_list)
+        excluded: set[int] = set()
+        skipped = 0
+        for item in excluded_list:
+            try:
+                excluded.add(int(item))
+            except (ValueError, TypeError):
+                skipped += 1
+        if skipped:
+            logger.warning("Skipped %d malformed excluded-frame entries", skipped)
         self.stack_handler.set_excluded_frames(excluded)
         self.viewer.set_excluded_frames(excluded)
 

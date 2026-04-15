@@ -284,7 +284,7 @@ def test_infer_all_complete_sets_analyze_graphs(app) -> None:
     )
     exp.set_neuron_detection_data(neuron_locations=__import__("numpy").array([[0, 0]]))
     wm = WorkflowManager(exp)
-    assert wm.current_step == WorkflowStep.ALIGN_IMAGES or wm.current_step == WorkflowStep.ANALYZE_GRAPHS
+    assert wm.current_step == WorkflowStep.ALIGN_IMAGES
 
 
 # ── _get_next_step ───────────────────────────────────────────────────────

@@ -63,8 +63,9 @@ class TestNewExperimentDialog:
         assert dlg.isModal() is True
 
     def test_default_date_is_today(self, app) -> None:
+        expected = datetime.utcnow().strftime("%Y-%m-%d")
         dlg = NewExperimentDialog()
-        assert datetime.utcnow().strftime("%Y-%m-%d") in dlg.date_edit.text()
+        assert expected in dlg.date_edit.text()
 
     def test_default_frame_interval(self, app) -> None:
         dlg = NewExperimentDialog()
