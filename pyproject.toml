@@ -49,4 +49,25 @@ select = ["F", "E", "I"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 env = ["MPLBACKEND=Agg"]
+addopts = "--cov=src --cov-branch --cov-report=term-missing:skip-covered --cov-report=xml"
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+omit = [
+    "src/__init__.py",
+    "src/main.py",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if __name__ == .__main__.",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "@overload",
+]
+show_missing = true
+skip_covered = true
+fail_under = 0
 

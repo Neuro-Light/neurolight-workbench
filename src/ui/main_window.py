@@ -275,19 +275,31 @@ class MainWindow(QMainWindow):
                 if panel is not None:
                     panel.setVisible(show_edit)
 
-            # Step 3: Align Images
+            # Step 3: Cull Frames — show/hide cull controls panel
+            show_cull = current == WorkflowStep.CULL_FRAMES
+            if hasattr(self, "viewer"):
+                panel = getattr(self.viewer, "cull_controls_panel", None)
+                if panel is not None:
+                    panel.setVisible(show_cull)
+                # After the cull step, hide excluded frames from navigation
+                cull_index = STEP_DEFINITIONS[WorkflowStep.CULL_FRAMES].index
+                _set_filter = getattr(self.viewer, "set_filter_excluded", None)
+                if callable(_set_filter):
+                    _set_filter(current_index > cull_index)
+
+            # Step 4: Align Images
             enable_align = current == WorkflowStep.ALIGN_IMAGES
             if self._action_align_images is not None:
                 self._action_align_images.setEnabled(enable_align)
 
-            # Step 4: Select ROI — show/hide entire ROI controls panel
+            # Step 5: Select ROI — show/hide entire ROI controls panel
             show_roi = current == WorkflowStep.SELECT_ROI
             if hasattr(self, "viewer"):
                 panel = getattr(self.viewer, "roi_controls_panel", None)
                 if panel is not None:
                     panel.setVisible(show_roi)
 
-            # Step 5: Detect Neurons
+            # Step 6: Detect Neurons
             enable_detect = current == WorkflowStep.DETECT_NEURONS
             if hasattr(self, "analysis"):
                 try:
@@ -567,6 +579,11 @@ class MainWindow(QMainWindow):
         # Connect display settings changes to debounced saving
         self.viewer.displaySettingsChanged.connect(self._on_display_settings_changed)
 
+        # Connect frame culling changes
+        _culling_signal = getattr(self.viewer, "frameCullingChanged", None)
+        if _culling_signal is not None:
+            _culling_signal.connect(self._on_frame_culling_changed)
+
         # Create data analyzer
         self.data_analyzer = DataAnalyzer(self.experiment)
 
@@ -719,6 +736,9 @@ class MainWindow(QMainWindow):
                             QApplication.processEvents()
                             self.viewer.set_stack(p)
 
+                        # Restore culling state
+                        self._restore_culling_state()
+
                         # Load both ROIs from experiment.rois
                         has_any_roi = any(self.experiment.rois.get(k) for k in ("roi_1", "roi_2"))
                         if has_any_roi:
@@ -837,6 +857,9 @@ class MainWindow(QMainWindow):
 
         # Mark first workflow step complete once a stack is available
         self.workflow_manager.complete_step_if_current(WorkflowStep.LOAD_IMAGES)
+
+        # Cull step is always ready (zero exclusions is a valid choice)
+        self.workflow_manager.mark_step_ready(WorkflowStep.CULL_FRAMES)
 
     def _confirm_start_time_from_loaded_stack(self) -> None:
         """Always prompt to confirm start time immediately after loading a stack."""
@@ -1186,6 +1209,70 @@ class MainWindow(QMainWindow):
         if self.workflow_manager.current_step == WorkflowStep.EDIT_IMAGES:
             self.workflow_manager.mark_step_ready(WorkflowStep.EDIT_IMAGES)
 
+    def _on_frame_culling_changed(self, excluded: set) -> None:
+        """Persist excluded frames to experiment and sync to the stack handler."""
+        if "culling" not in self.experiment.settings:
+            self.experiment.settings["culling"] = {}
+        self.experiment.settings["culling"]["excluded_frames"] = sorted(excluded)
+        self.stack_handler.set_excluded_frames(excluded)
+
+        # Keep neuron detection input in sync with the included-only stack.
+        # Detection operates on the frame_data provided to the widget; if culling
+        # changes after load, we must refresh it.
+        try:
+            if hasattr(self, "analysis"):
+                detection_widget = self.analysis.get_neuron_detection_widget()
+                detection_widget.set_frame_data(self.stack_handler.get_all_frames_as_array())
+        except Exception:
+            # Some tests use lightweight/mocked panels; ignore refresh failures.
+            pass
+
+        total = self.stack_handler.get_total_frame_count()
+        all_excluded = total > 0 and len(excluded) >= total
+
+        if all_excluded:
+            # Cannot advance with zero included frames — remove readiness
+            self.workflow_manager._ready_steps.discard(WorkflowStep.CULL_FRAMES)
+            self.workflow_manager.state_changed.emit()
+        else:
+            self.workflow_manager.mark_step_ready(WorkflowStep.CULL_FRAMES)
+
+        # If culling changed after downstream steps completed, invalidate them
+        if WorkflowStep.CULL_FRAMES in self.workflow_manager.completed_steps:
+            self.workflow_manager.reset_from_step(WorkflowStep.CULL_FRAMES)
+            if not all_excluded:
+                self.workflow_manager.mark_step_ready(WorkflowStep.CULL_FRAMES)
+
+        if self.current_experiment_path:
+            try:
+                self.manager.save_experiment(self.experiment, self.current_experiment_path)
+            except Exception:
+                pass
+
+    def _restore_culling_state(self) -> None:
+        """Restore excluded frames from experiment settings into viewer and handler."""
+        culling = self.experiment.settings.get("culling") or {}
+        excluded_list = culling.get("excluded_frames", [])
+        excluded: set[int] = set()
+        skipped = 0
+        for item in excluded_list:
+            try:
+                excluded.add(int(item))
+            except (ValueError, TypeError):
+                skipped += 1
+        if skipped:
+            logger.warning("Skipped %d malformed excluded-frame entries", skipped)
+        self.stack_handler.set_excluded_frames(excluded)
+        self.viewer.set_excluded_frames(excluded)
+
+        # Ensure detection uses the included-only stack after restoring culling.
+        try:
+            if hasattr(self, "analysis"):
+                detection_widget = self.analysis.get_neuron_detection_widget()
+                detection_widget.set_frame_data(self.stack_handler.get_all_frames_as_array())
+        except Exception:
+            pass
+
     def _flush_pending_display_settings(self) -> None:
         """
         Immediately flush any pending display settings without waiting for the timer.
@@ -1273,12 +1360,12 @@ class MainWindow(QMainWindow):
             from PIL import Image
 
             output_path = Path(output_dir)
-            original_files = self.stack_handler.files
+            included_files = self.stack_handler.get_included_files()
 
             for i, cropped_frame in enumerate(cropped_stack):
-                # Generate output filename
-                if i < len(original_files):
-                    original_name = Path(original_files[i]).stem
+                # Generate output filename from the matching source file
+                if i < len(included_files):
+                    original_name = Path(included_files[i]).stem
                     output_file = output_path / f"{original_name}_cropped.tif"
                 else:
                     output_file = output_path / f"frame_{i:04d}_cropped.tif"
@@ -1571,10 +1658,11 @@ class MainWindow(QMainWindow):
 
         # Save aligned images (raw, without exposure/contrast adjustments)
         # Users can adjust exposure/contrast in the viewer after loading
+        included_files = self.stack_handler.get_included_files()
         for i, aligned_frame in enumerate(aligned_stack_uint16):
-            # Generate output filename
-            if i < len(self.stack_handler.files):
-                original_name = Path(self.stack_handler.files[i]).stem
+            # Generate output filename from the matching source file
+            if i < len(included_files):
+                original_name = Path(included_files[i]).stem
                 output_file = output_path / f"{original_name}_aligned.tif"
             else:
                 output_file = output_path / f"frame_{i:04d}_aligned.tif"

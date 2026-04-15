@@ -77,8 +77,80 @@ def test_associate_with_experiment_updates_metadata() -> None:
     exp = Experiment(name="E")
     h.associate_with_experiment(exp)
     assert exp.image_count == 1
-    assert exp.image_stack_path == "/data/stack"
+    assert exp.image_stack_path == str(Path("/data/stack"))
     assert exp.image_stack_files == ["/data/stack/frame.tif"]
+
+
+# ── Excluded-frames API ───────────────────────────────────────────────────
+
+
+def test_set_and_get_excluded_frames() -> None:
+    h = ImageStackHandler()
+    h.files = ["/a.tif", "/b.tif", "/c.tif"]
+    h.set_excluded_frames({1})
+    assert h.get_excluded_frames() == {1}
+
+
+def test_get_excluded_frames_returns_copy() -> None:
+    h = ImageStackHandler()
+    h.set_excluded_frames({0, 2})
+    result = h.get_excluded_frames()
+    result.add(99)
+    assert 99 not in h.get_excluded_frames()
+
+
+def test_get_total_frame_count() -> None:
+    h = ImageStackHandler()
+    h.files = ["/a.tif", "/b.tif", "/c.tif"]
+    h.set_excluded_frames({1})
+    assert h.get_total_frame_count() == 3
+
+
+def test_get_included_files_no_exclusions() -> None:
+    h = ImageStackHandler()
+    h.files = ["/a.tif", "/b.tif"]
+    assert h.get_included_files() == ["/a.tif", "/b.tif"]
+
+
+def test_get_included_files_with_exclusions() -> None:
+    h = ImageStackHandler()
+    h.files = ["/a.tif", "/b.tif", "/c.tif"]
+    h.set_excluded_frames({0, 2})
+    assert h.get_included_files() == ["/b.tif"]
+
+
+def test_load_stack_resets_excluded_frames(tmp_path: Path) -> None:
+    (tmp_path / "f.tif").write_bytes(b"")
+    h = ImageStackHandler()
+    h.set_excluded_frames({0, 1})
+    h.load_image_stack(str(tmp_path))
+    assert h.get_excluded_frames() == set()
+
+
+def test_get_all_frames_as_array_excludes_frames(tmp_path: Path) -> None:
+    p0 = tmp_path / "0.tif"
+    p1 = tmp_path / "1.tif"
+    p2 = tmp_path / "2.tif"
+    tifffile.imwrite(p0, np.zeros((2, 2), dtype=np.uint8))
+    tifffile.imwrite(p1, np.ones((2, 2), dtype=np.uint8) * 100)
+    tifffile.imwrite(p2, np.ones((2, 2), dtype=np.uint8) * 200)
+    h = ImageStackHandler()
+    h.load_image_stack([str(p0), str(p1), str(p2)])
+    h.set_excluded_frames({1})
+    stack = h.get_all_frames_as_array()
+    assert stack is not None
+    assert stack.shape == (2, 2, 2)
+    np.testing.assert_array_equal(stack[0], np.zeros((2, 2), dtype=np.uint8))
+    np.testing.assert_array_equal(stack[1], np.ones((2, 2), dtype=np.uint8) * 200)
+
+
+def test_get_all_frames_as_array_all_excluded(tmp_path: Path) -> None:
+    p = tmp_path / "only.tif"
+    tifffile.imwrite(p, np.zeros((2, 2), dtype=np.uint8))
+    h = ImageStackHandler()
+    h.load_image_stack([str(p)])
+    h.set_excluded_frames({0})
+    assert h.get_all_frames_as_array() is None
 
 
 @pytest.mark.parametrize(
