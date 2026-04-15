@@ -44,6 +44,7 @@ class DetectionWorker(QThread):
                 cell_size=self._params.get("cell_size", 6),
                 num_peaks=self._params.get("num_peaks", 800),
                 correlation_threshold=self._params.get("correlation_threshold", 0.4),
+                max_absent_frames=self._params.get("max_absent_frames"),
                 threshold_rel=self._params.get("threshold_rel", 0.03),
                 apply_detrending=self._params.get("apply_detrending", True),
                 use_max_projection=self._params.get("use_max_projection", True),

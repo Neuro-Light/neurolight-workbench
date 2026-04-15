@@ -443,6 +443,7 @@ class ImageProcessor:
         cell_size: int = 6,
         num_peaks: int = 800,
         correlation_threshold: float = 0.4,
+        max_absent_frames: Optional[int] = None,
         threshold_rel: float = 0.03,
         apply_detrending: bool = True,
         use_max_projection: bool = True,
@@ -471,6 +472,10 @@ class ImageProcessor:
             Maximum number of neurons to detect (default: 400)
         correlation_threshold : float
             Threshold for filtering neurons by correlation (default: 0.4)
+        max_absent_frames : Optional[int]
+            Maximum number of frames where a neuron's extracted intensity can be
+            zero before it is marked bad. ``None`` preserves the current
+            behavior by allowing absence in all frames.
         threshold_rel : float
             Relative threshold for peak detection (0.0-1.0, default: 0.03).
             Lower values find dimmer neurons but may increase false positives.
@@ -653,6 +658,10 @@ class ImageProcessor:
         # Step 4: Quality Filtering (Correlation-based)
         # ============================================================
         _progress(3, "Computing quality (correlation with other neurons)...")
+        allowed_absent_frames = num_frames if max_absent_frames is None else int(max_absent_frames)
+        allowed_absent_frames = max(0, min(allowed_absent_frames, num_frames))
+        absent_frame_mask = np.count_nonzero(neuron_trajectories <= 0.0, axis=1) <= allowed_absent_frames
+
         if num_neurons > 1:
             # Compute pairwise correlations
             correlation_matrix = np.corrcoef(neuron_trajectories)
@@ -666,10 +675,10 @@ class ImageProcessor:
                 mean_correlations[i] = np.mean(other_correlations)
 
             # Filter neurons based on correlation threshold
-            quality_mask = mean_correlations > correlation_threshold
+            quality_mask = (mean_correlations > correlation_threshold) & absent_frame_mask
         else:
             # Single neuron: can't compute correlation, mark as good
-            quality_mask = np.array([True])
+            quality_mask = absent_frame_mask.astype(bool, copy=False)
 
         # ============================================================
         # Step 5: Detrending (Optional)
