@@ -36,7 +36,7 @@ from ui.app_settings import (
     set_enable_alignment_multiprocessing,
 )
 from ui.settings_dialog import SettingsDialog
-from ui.user_selection_dialog import UserSelectionDialog, UserAccountActionsDialog, current_user_button_text
+from ui.user_selection_dialog import UserAccountActionsDialog, UserSelectionDialog, current_user_button_text
 
 # Options button label for recent-experiment rows (text only, no icon)
 OPTIONS_LABEL = "..."
