@@ -108,13 +108,9 @@ class NewExperimentDialog(QDialog):
         # Make sure the combo box is wide enough to show full labels
         self.analysis_combo.setMinimumWidth(180)
 
-        self.path_edit = QLineEdit(str(self._experiments_dir))
-        browse_btn = QPushButton("Browse…")
-        browse_btn.clicked.connect(self._browse)
-
-        path_row = QHBoxLayout()
-        path_row.addWidget(self.path_edit)
-        path_row.addWidget(browse_btn)
+        self._path_display = QLineEdit(str(self._experiments_dir.resolve()))
+        self._path_display.setReadOnly(True)
+        self._path_display.setToolTip(self._path_display.text())
 
         form = QFormLayout()
         form.addRow("Experiment Name*", self.name_edit)
@@ -128,7 +124,7 @@ class NewExperimentDialog(QDialog):
 
         path_container = QVBoxLayout()
         path_container.addWidget(QLabel("Save Location"))
-        path_container.addLayout(path_row)
+        path_container.addWidget(self._path_display)
         container.addLayout(path_container)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Cancel | QDialogButtonBox.Ok)
@@ -144,17 +140,12 @@ class NewExperimentDialog(QDialog):
         self.output_path: Optional[str] = None
         self.metadata: dict = {}
 
-    def _browse(self) -> None:
-        directory = QFileDialog.getExistingDirectory(self, "Select Save Location", self.path_edit.text())
-        if directory:
-            self.path_edit.setText(directory)
-
     def _accept(self) -> None:
         name = self.name_edit.text().strip()
         if not name:
             self.name_edit.setFocus()
             return
-        base_dir = Path(self.path_edit.text().strip() or str(self._experiments_dir))
+        base_dir = self._experiments_dir
         base_dir.mkdir(parents=True, exist_ok=True)
         file_path = base_dir / f"{name}.nexp"
         if file_path.exists():
