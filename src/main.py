@@ -53,13 +53,13 @@ def main() -> int:
 
     # Create main window with experiment context
     recent_file = user_dialog.selected_user_experiments_dir.parent / "recent_experiments.json"
-    main_window = MainWindow(startup.experiment, recent_file=recent_file)
+    main_window = MainWindow(
+        startup.experiment,
+        recent_file=recent_file,
+        user_experiments_dir=user_dialog.selected_user_experiments_dir,
+    )
     # Keep track of the active user's experiments directory so "Close Experiment"
     # can return to the right experiment manager root.
-    try:
-        main_window.user_experiments_dir = user_dialog.selected_user_experiments_dir
-    except Exception:
-        pass
     # Carry over the .nexp path so autosaves and path updates persist
     try:
         main_window.set_current_experiment_path(startup.experiment_path)  # type: ignore[attr-defined]

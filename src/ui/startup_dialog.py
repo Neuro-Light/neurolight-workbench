@@ -36,6 +36,7 @@ from ui.app_settings import (
     set_enable_alignment_multiprocessing,
 )
 from ui.settings_dialog import SettingsDialog
+from ui.user_selection_dialog import UserSelectionDialog, UserAccountActionsDialog, current_user_button_text
 
 # Options button label for recent-experiment rows (text only, no icon)
 OPTIONS_LABEL = "..."
@@ -178,10 +179,18 @@ class StartupDialog(QDialog):
         self.setModal(True)
         self.setMinimumWidth(520)
         self.experiments_dir = experiments_dir
+        self._current_user_name = experiments_dir.parent.name
         self.experiment: Optional[Experiment] = None
         self.experiment_path: Optional[str] = None
         # Store recent experiments per user (in the user's folder, not globally in ~/.neurolight).
         self.manager = ExperimentManager(self.experiments_dir.parent / "recent_experiments.json")
+
+        top_row = QHBoxLayout()
+        self._current_user_btn = QPushButton(current_user_button_text(self._current_user_name))
+        self._current_user_btn.setProperty("class", "tab-action")
+        self._current_user_btn.clicked.connect(self._open_user_account_popup)
+        top_row.addWidget(self._current_user_btn, 0, Qt.AlignLeft)
+        top_row.addStretch()
 
         title = QLabel("Neurolight - Experiment Manager")
         title.setAlignment(Qt.AlignCenter)
@@ -216,6 +225,7 @@ class StartupDialog(QDialog):
         buttons_layout.addWidget(self.settings_btn)
 
         layout = QVBoxLayout()
+        layout.addLayout(top_row)
         layout.addWidget(title)
         layout.addWidget(new_btn)
         layout.addWidget(load_btn)
@@ -234,6 +244,19 @@ class StartupDialog(QDialog):
         layout.addWidget(self.recent_list)
         layout.addLayout(buttons_layout)
         self.setLayout(layout)
+
+    def _open_user_account_popup(self) -> None:
+        popup = UserAccountActionsDialog(self._current_user_name, self)
+        if popup.exec() != QDialog.Accepted or not popup.switch_user_requested:
+            return
+        picker = UserSelectionDialog()
+        if picker.exec() != QDialog.Accepted or not picker.selected_user_experiments_dir:
+            return
+        self.experiments_dir = picker.selected_user_experiments_dir
+        self._current_user_name = picker.selected_user
+        self._current_user_btn.setText(current_user_button_text(self._current_user_name))
+        self.manager = ExperimentManager(self.experiments_dir.parent / "recent_experiments.json")
+        self._refresh_recent()
 
     def _refresh_recent(self) -> None:
         self.recent_list.clear()

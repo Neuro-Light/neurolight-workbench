@@ -7,23 +7,23 @@ out of scope.
 
 **Intended behavior (this module)**
 
-1. **When it appears**  
+1. **When it appears**
    Shown on every application start, before the experiment manager / workbench.
    Other code will orchestrate timing; this file owns the screen and its
    interactions.
 
-2. **Primary surface**  
+2. **Primary surface**
    Present existing users as a clear, scannable list of names. The user picks
    one row to enter that workspace.
 
-3. **"Load Existing User"**  
+3. **"Load Existing User"**
    Reveal or focus the list of persisted profiles (read from local storage;
    path/format will live elsewhere). Selecting an entry confirms that user for
    this session. The dialog should finish in an *accepted* state only when a
    valid user has been chosen, and expose that choice (e.g. user id / profile
    key) for callers.
 
-4. **"Create New User"**  
+4. **"Create New User"**
    Start a short flow: prompt for a case-sensitive name. When confirmed, create
    a corresponding folder structure at:
 
@@ -32,11 +32,11 @@ out of scope.
    After creation, either select the new user automatically or return to the
    list with the new entry visible.
 
-5. **Optional product behavior** (may be implemented here or via settings)  
+5. **Optional product behavior** (may be implemented here or via settings)
    Remember the last selected user for faster re-entry, while still showing
    this screen on launch so identity is explicit.
 
-6. **What this dialog does *not* do**  
+6. **What this dialog does *not* do**
    It does not open the experiment manager, load `.nexp` files, or enforce
    access control. It only establishes *which local workspace user* is active;
    downstream code uses that to resolve per-user experiment directories and
@@ -61,6 +61,38 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+
+def current_user_button_text(user_name: str) -> str:
+    return f"Current User: {user_name}"
+
+
+class UserAccountActionsDialog(QDialog):
+    """Small modal: Switch User (opens full user selection) or Cancel."""
+
+    def __init__(self, user_name: str, parent: Optional[QWidget] = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle(current_user_button_text(user_name))
+        self.setModal(True)
+        self.switch_user_requested = False
+
+        switch_btn = QPushButton("Switch User")
+        cancel_btn = QPushButton("Cancel")
+        switch_btn.clicked.connect(self._on_switch)
+        cancel_btn.clicked.connect(self.reject)
+
+        row = QHBoxLayout()
+        row.addStretch()
+        row.addWidget(cancel_btn)
+        row.addWidget(switch_btn)
+
+        layout = QVBoxLayout()
+        layout.addLayout(row)
+        self.setLayout(layout)
+
+    def _on_switch(self) -> None:
+        self.switch_user_requested = True
+        self.accept()
 
 
 def _repo_root() -> Path:
