@@ -662,23 +662,22 @@ class ImageProcessor:
         allowed_absent_frames = max(0, min(allowed_absent_frames, num_frames))
         absent_frame_mask = np.count_nonzero(neuron_trajectories <= 0.0, axis=1) <= allowed_absent_frames
 
-        if num_neurons > 1:
-            # Compute pairwise correlations
-            correlation_matrix = np.corrcoef(neuron_trajectories)
+        quality_mask = np.zeros(num_neurons, dtype=bool)
+        present_indices = np.flatnonzero(absent_frame_mask)
 
-            # For each neuron, compute mean correlation with all other neurons
-            # (excluding self-correlation which is always 1.0)
-            mean_correlations = np.zeros(num_neurons)
-            for i in range(num_neurons):
-                # Get correlations with all other neurons (exclude self)
+        if len(present_indices) > 1:
+            correlation_matrix = np.corrcoef(neuron_trajectories[present_indices])
+
+            mean_correlations = np.zeros(len(present_indices), dtype=np.float32)
+            for i in range(len(present_indices)):
                 other_correlations = np.delete(correlation_matrix[i], i)
                 mean_correlations[i] = np.mean(other_correlations)
 
-            # Filter neurons based on correlation threshold
-            quality_mask = (mean_correlations > correlation_threshold) & absent_frame_mask
-        else:
-            # Single neuron: can't compute correlation, mark as good
-            quality_mask = absent_frame_mask.astype(bool, copy=False)
+            quality_mask[present_indices] = mean_correlations > correlation_threshold
+        elif len(present_indices) == 1:
+            quality_mask[present_indices[0]] = True
+
+        quality_mask &= absent_frame_mask
 
         # ============================================================
         # Step 5: Detrending (Optional)
