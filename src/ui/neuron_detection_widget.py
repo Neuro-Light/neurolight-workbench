@@ -314,14 +314,22 @@ class NeuronDetectionWidget(QWidget):
             self._display_frame = None
 
         # Restore detection parameters if available
-        self._sync_max_absent_frames_with_stack(reset_to_default=False)
+        saved_max_absent_frames = self._max_absent_frames_default
+        if detection_params is not None:
+            saved_max_absent_frames = int(
+                detection_params.get("max_absent_frames", self._max_absent_frames_default)
+            )
+
+        if self.frame_data is not None:
+            self._sync_max_absent_frames_with_stack(reset_to_default=False)
+        else:
+            self.max_absent_frames_spin.setRange(0, max(saved_max_absent_frames, 0))
+
         if detection_params:
             self.cell_size_spin.setValue(detection_params.get("cell_size", 8))
             self.num_peaks_spin.setValue(detection_params.get("num_peaks", 800))
             self.correlation_threshold_spin.setValue(detection_params.get("correlation_threshold", 0.5))
-            self.max_absent_frames_spin.setValue(
-                detection_params.get("max_absent_frames", self._max_absent_frames_default)
-            )
+            self.max_absent_frames_spin.setValue(saved_max_absent_frames)
             self.threshold_rel_spin.setValue(detection_params.get("threshold_rel", 0.06))
             self.detrending_checkbox.setChecked(detection_params.get("apply_detrending", True))
 
@@ -356,6 +364,7 @@ class NeuronDetectionWidget(QWidget):
                 roi_origin=roi_origin,
             )
         self._loaded_roi_origin = None  # Clear so next run uses computed
+
 
     def _effective_mask(self) -> Optional[np.ndarray]:
         """Return the combined boolean mask for the currently selected detection mode."""
