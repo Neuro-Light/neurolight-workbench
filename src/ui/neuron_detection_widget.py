@@ -204,8 +204,12 @@ class NeuronDetectionWidget(QWidget):
 
     def set_frame_data(self, frame_data: Optional[np.ndarray]) -> None:
         """Set the frame data (3D array: frames, height, width)."""
+        previous_default = self._max_absent_frames_default
+        current_value = self.max_absent_frames_spin.value()
         self.frame_data = frame_data
-        self._sync_max_absent_frames_with_stack(reset_to_default=True)
+        self._sync_max_absent_frames_with_stack(
+            reset_to_default=current_value == previous_default
+        )
         self._update_ui_state()
 
     def set_roi_mask(self, roi_key: str, roi_mask: Optional[np.ndarray]) -> None:
