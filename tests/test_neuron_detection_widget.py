@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 import sys
 import types
 
@@ -33,7 +34,7 @@ sys.modules.setdefault("matplotlib.backends", backends_module)
 sys.modules.setdefault("matplotlib.backends.backend_qtagg", backend_qtagg_module)
 sys.modules.setdefault("matplotlib.figure", figure_module)
 
-from ui.neuron_detection_widget import NeuronDetectionWidget
+NeuronDetectionWidget = importlib.import_module("ui.neuron_detection_widget").NeuronDetectionWidget
 
 
 @pytest.fixture
