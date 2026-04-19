@@ -316,9 +316,7 @@ class NeuronDetectionWidget(QWidget):
         # Restore detection parameters if available
         saved_max_absent_frames = self._max_absent_frames_default
         if detection_params is not None:
-            saved_max_absent_frames = int(
-                detection_params.get("max_absent_frames", self._max_absent_frames_default)
-            )
+            saved_max_absent_frames = int(detection_params.get("max_absent_frames", self._max_absent_frames_default))
 
         if self.frame_data is not None:
             self._sync_max_absent_frames_with_stack(reset_to_default=False)
@@ -364,7 +362,6 @@ class NeuronDetectionWidget(QWidget):
                 roi_origin=roi_origin,
             )
         self._loaded_roi_origin = None  # Clear so next run uses computed
-
 
     def _effective_mask(self) -> Optional[np.ndarray]:
         """Return the combined boolean mask for the currently selected detection mode."""
