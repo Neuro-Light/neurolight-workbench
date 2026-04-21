@@ -147,7 +147,9 @@ class NewExperimentDialog(QDialog):
             return
         base_dir = self._experiments_dir
         base_dir.mkdir(parents=True, exist_ok=True)
-        file_path = base_dir / f"{name}.nexp"
+        exp_dir = base_dir / name
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        file_path = exp_dir / f"{name}.nexp"
         if file_path.exists():
             self.name_edit.setFocus()
             return
@@ -462,10 +464,14 @@ class StartupDialog(QDialog):
 
             # Get export location
             default_name = f"{experiment.name}_export.nexp"
+            try:
+                default_dir = str(Path(path).resolve().parent / default_name)
+            except Exception:
+                default_dir = str(self.experiments_dir / default_name)
             file_path, _ = QFileDialog.getSaveFileName(
                 self,
                 "Export Experiment",
-                str(self.experiments_dir / default_name),
+                default_dir,
                 "Neurolight Experiment (*.nexp);;All Files (*)",
             )
 
