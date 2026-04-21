@@ -133,39 +133,9 @@ jobs:
           name: windows-zip
           path: release-asset/
 
-  build-macos-dmg:
-    needs: [ci-check]
-    runs-on: macos-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref }}
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-        with:
-          version: "latest"
-
-      - name: Set up Python
-        run: uv python install 3.10
-
-      - name: Build macOS app bundle
-        run: ./build-macos-app.sh
-
-      - name: Create macOS DMG
-        run: ./build-macos-dmg.sh
-
-      - name: Upload macOS DMG artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: macos-dmg
-          path: dist/Neurolight.dmg
-
   release:
     runs-on: ubuntu-latest
-    needs: [build-python, build-exe, build-macos-dmg]
+    needs: [build-python, build-exe]
     permissions:
       contents: write
     steps:
@@ -177,7 +147,7 @@ jobs:
       - name: Validate artifacts exist
         run: |
           missing=0
-          for dir in python-dist windows-zip macos-dmg; do
+          for dir in python-dist windows-zip; do
             path="release-package/$dir"
             if [ ! -d "$path" ] || [ -z "$(ls -A "$path")" ]; then
               echo "::error::Missing or empty artifact directory: $path"
@@ -196,7 +166,6 @@ jobs:
           mkdir -p release-package/upload
           cp release-package/python-dist/* release-package/upload/
           cp release-package/windows-zip/* release-package/upload/
-          cp release-package/macos-dmg/* release-package/upload/
 
       # GitHub release assets must be <= 2 GB per file (2147483648 bytes)
       - name: Drop assets over 2 GB and list sizes
