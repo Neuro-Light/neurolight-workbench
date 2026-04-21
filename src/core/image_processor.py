@@ -443,6 +443,7 @@ class ImageProcessor:
         cell_size: int = 6,
         num_peaks: int = 800,
         correlation_threshold: float = 0.4,
+        max_absent_frames: Optional[int] = None,
         threshold_rel: float = 0.03,
         apply_detrending: bool = True,
         use_max_projection: bool = True,
@@ -471,6 +472,10 @@ class ImageProcessor:
             Maximum number of neurons to detect (default: 400)
         correlation_threshold : float
             Threshold for filtering neurons by correlation (default: 0.4)
+        max_absent_frames : Optional[int]
+            Maximum number of frames where a neuron's extracted intensity can be
+            zero before it is marked bad. ``None`` preserves the current
+            behavior by allowing absence in all frames.
         threshold_rel : float
             Relative threshold for peak detection (0.0-1.0, default: 0.03).
             Lower values find dimmer neurons but may increase false positives.
@@ -653,23 +658,26 @@ class ImageProcessor:
         # Step 4: Quality Filtering (Correlation-based)
         # ============================================================
         _progress(3, "Computing quality (correlation with other neurons)...")
-        if num_neurons > 1:
-            # Compute pairwise correlations
-            correlation_matrix = np.corrcoef(neuron_trajectories)
+        allowed_absent_frames = num_frames if max_absent_frames is None else int(max_absent_frames)
+        allowed_absent_frames = max(0, min(allowed_absent_frames, num_frames))
+        absent_frame_mask = np.count_nonzero(neuron_trajectories <= 0.0, axis=1) <= allowed_absent_frames
 
-            # For each neuron, compute mean correlation with all other neurons
-            # (excluding self-correlation which is always 1.0)
-            mean_correlations = np.zeros(num_neurons)
-            for i in range(num_neurons):
-                # Get correlations with all other neurons (exclude self)
+        quality_mask = np.zeros(num_neurons, dtype=bool)
+        present_indices = np.flatnonzero(absent_frame_mask)
+
+        if len(present_indices) > 1:
+            correlation_matrix = np.corrcoef(neuron_trajectories[present_indices])
+
+            mean_correlations = np.zeros(len(present_indices), dtype=np.float32)
+            for i in range(len(present_indices)):
                 other_correlations = np.delete(correlation_matrix[i], i)
                 mean_correlations[i] = np.mean(other_correlations)
 
-            # Filter neurons based on correlation threshold
-            quality_mask = mean_correlations > correlation_threshold
-        else:
-            # Single neuron: can't compute correlation, mark as good
-            quality_mask = np.array([True])
+            quality_mask[present_indices] = mean_correlations > correlation_threshold
+        elif len(present_indices) == 1:
+            quality_mask[present_indices[0]] = True
+
+        quality_mask &= absent_frame_mask
 
         # ============================================================
         # Step 5: Detrending (Optional)

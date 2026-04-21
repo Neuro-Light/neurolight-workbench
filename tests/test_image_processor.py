@@ -1,3 +1,6 @@
+import sys
+import types
+
 import cv2
 import numpy as np
 import pytest
@@ -465,6 +468,92 @@ def test_detect_neurons_in_roi_with_detrending():
         apply_detrending=True,
     )
     assert isinstance(trajs, np.ndarray)
+
+
+def test_detect_neurons_in_roi_applies_max_absent_frames_culling():
+    processor = _make_processor()
+    stack = np.zeros((5, 30, 30), dtype=np.uint16)
+
+    stable_levels = [300, 450, 600, 750, 900]
+    transient_levels = [900, 700, 0, 0, 0]
+
+    for frame_idx, level in enumerate(stable_levels):
+        stack[frame_idx, 6, 6] = level
+        stack[frame_idx, 6, 7] = max(level // 2, 1)
+        stack[frame_idx, 7, 6] = max(level // 2, 1)
+
+    for frame_idx, level in enumerate(transient_levels):
+        if level > 0:
+            stack[frame_idx, 22, 22] = level
+            stack[frame_idx, 22, 23] = max(level // 2, 1)
+            stack[frame_idx, 23, 22] = max(level // 2, 1)
+
+    roi_mask = np.ones((30, 30), dtype=bool)
+
+    scipy_module = types.ModuleType("scipy")
+    ndimage_module = types.ModuleType("scipy.ndimage")
+    signal_module = types.ModuleType("scipy.signal")
+    skimage_module = types.ModuleType("skimage")
+    feature_module = types.ModuleType("skimage.feature")
+    morphology_module = types.ModuleType("skimage.morphology")
+
+    ndimage_module.gaussian_filter = lambda array, sigma, mode, cval: array
+    signal_module.savgol_filter = lambda trajectory, window_length, polyorder: trajectory
+    feature_module.peak_local_max = lambda *args, **kwargs: np.array([[6, 6], [22, 22]], dtype=np.int32)
+    morphology_module.disk = lambda radius: np.ones((radius * 2 + 1, radius * 2 + 1), dtype=bool)
+
+    original_modules = {
+        name: sys.modules.get(name)
+        for name in (
+            "scipy",
+            "scipy.ndimage",
+            "scipy.signal",
+            "skimage",
+            "skimage.feature",
+            "skimage.morphology",
+        )
+    }
+    sys.modules["scipy"] = scipy_module
+    sys.modules["scipy.ndimage"] = ndimage_module
+    sys.modules["scipy.signal"] = signal_module
+    sys.modules["skimage"] = skimage_module
+    sys.modules["skimage.feature"] = feature_module
+    sys.modules["skimage.morphology"] = morphology_module
+
+    try:
+        locs_default, _, quality_default = processor.detect_neurons_in_roi(
+            stack,
+            roi_mask,
+            cell_size=3,
+            num_peaks=10,
+            correlation_threshold=-1.1,
+            threshold_rel=0.1,
+            apply_detrending=False,
+        )
+        locs_limited, _, quality_limited = processor.detect_neurons_in_roi(
+            stack,
+            roi_mask,
+            cell_size=3,
+            num_peaks=10,
+            correlation_threshold=-1.1,
+            max_absent_frames=2,
+            threshold_rel=0.1,
+            apply_detrending=False,
+        )
+    finally:
+        for name, module in original_modules.items():
+            if module is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = module
+
+    default_by_location = {tuple(loc): bool(is_good) for loc, is_good in zip(locs_default, quality_default)}
+    limited_by_location = {tuple(loc): bool(is_good) for loc, is_good in zip(locs_limited, quality_limited)}
+
+    assert default_by_location[(6, 6)] is True
+    assert default_by_location[(22, 22)] is True
+    assert limited_by_location[(6, 6)] is True
+    assert limited_by_location[(22, 22)] is False
 
 
 def test_detect_neurons_in_roi_raises_for_2d_frame_data():
