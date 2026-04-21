@@ -22,6 +22,7 @@ from core.experiment_manager import Experiment
 class WorkflowStep(Enum):
     LOAD_IMAGES = auto()
     EDIT_IMAGES = auto()
+    CULL_FRAMES = auto()
     ALIGN_IMAGES = auto()
     SELECT_ROI = auto()
     DETECT_NEURONS = auto()
@@ -63,14 +64,24 @@ STEP_DEFINITIONS: Dict[WorkflowStep, StepMeta] = {
             "Display settings do not affect the underlying data, only how it is visualized in the viewer."
         ),
     ),
-    WorkflowStep.ALIGN_IMAGES: StepMeta(
+    WorkflowStep.CULL_FRAMES: StepMeta(
         index=3,
+        short_label="Cull Frames",
+        tooltip="Browse frames and exclude any that should be skipped in downstream analysis.",
+        description=(
+            "Step through the image stack and mark individual frames for exclusion. "
+            "Excluded frames will be skipped during alignment, detection, and analysis. "
+            "You may proceed without excluding any frames."
+        ),
+    ),
+    WorkflowStep.ALIGN_IMAGES: StepMeta(
+        index=4,
         short_label="Align Images",
         tooltip="Align frames in the stack using PyStackReg to correct motion.",
         description=("Run image alignment from the Tools → Align Images menu to correct for motion across the stack."),
     ),
     WorkflowStep.SELECT_ROI: StepMeta(
-        index=4,
+        index=5,
         short_label="Select ROI",
         tooltip="Define the Region of Interest (ROI) where neurons will be detected.",
         description=(
@@ -80,14 +91,14 @@ STEP_DEFINITIONS: Dict[WorkflowStep, StepMeta] = {
         ),
     ),
     WorkflowStep.DETECT_NEURONS: StepMeta(
-        index=5,
+        index=6,
         short_label="Detect Neurons",
         tooltip="Run automated neuron detection inside the ROI.",
         description="Configure detection parameters, then run automated neuron detection. "
         "Results will be overlaid on the image and used for downstream analysis.",
     ),
     WorkflowStep.ANALYZE_GRAPHS: StepMeta(
-        index=6,
+        index=7,
         short_label="Analysis",
         tooltip="Inspect ROI intensity and neuron trajectory graphs.",
         description="Review ROI intensity traces and neuron trajectories in the analysis tabs. "
@@ -262,6 +273,7 @@ class WorkflowManager(QObject):
         if has_stack:
             self.completed_steps.add(WorkflowStep.LOAD_IMAGES)
             self.completed_steps.add(WorkflowStep.EDIT_IMAGES)
+            self.completed_steps.add(WorkflowStep.CULL_FRAMES)
 
         if has_roi:
             self.completed_steps.add(WorkflowStep.SELECT_ROI)

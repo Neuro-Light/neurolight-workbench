@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Set
 
 import numpy as np
 from PIL import Image
@@ -72,6 +72,23 @@ class ImageStackHandler:
     def __init__(self) -> None:
         self.files: List[str] = []
         self._experiment: Optional[Experiment] = None
+        self._excluded_frames: Set[int] = set()
+
+    def set_excluded_frames(self, indices: Set[int]) -> None:
+        self._excluded_frames = set(indices)
+
+    def get_excluded_frames(self) -> Set[int]:
+        return set(self._excluded_frames)
+
+    def get_total_frame_count(self) -> int:
+        """Return total number of files regardless of exclusions."""
+        return len(self.files)
+
+    def get_included_files(self) -> List[str]:
+        """Return the file list with excluded frames removed, in original order."""
+        if not self._excluded_frames:
+            return list(self.files)
+        return [p for i, p in enumerate(self.files) if i not in self._excluded_frames]
 
     def load_image_stack(self, directory_or_files) -> List[str]:
         paths: List[str] = []
@@ -87,6 +104,7 @@ class ImageStackHandler:
                     if p.is_file() and p.suffix.lower() in (".tif", ".tiff"):
                         paths.append(str(p))
         self.files = paths
+        self._excluded_frames = set()
         return self.files
 
     def validate_tif_files(self, file_paths: List[str]) -> bool:
@@ -116,15 +134,17 @@ class ImageStackHandler:
             return np.asarray(img)
 
     def get_all_frames_as_array(self) -> Optional[np.ndarray]:
-        """Load all frames as a 3D numpy array (frames, height, width).
-        Reuses approach from Jupyter notebook.
+        """Load all non-excluded frames as a 3D numpy array (frames, height, width).
         Preserves original image dtype to avoid precision loss (consistent with get_image_at_index).
         """
         if not self.files:
             return None
 
+        included_files = [p for i, p in enumerate(self.files) if i not in self._excluded_frames]
+        if not included_files:
+            return None
+
         def _load_one(file_path: str) -> np.ndarray:
-            # NOTE: We avoid calling get_image_at_index (index lookup) inside threads.
             suffix = Path(file_path).suffix.lower()
             if suffix in (".tif", ".tiff"):
                 try:
@@ -142,23 +162,20 @@ class ImageStackHandler:
             if pixels.ndim == 2:
                 return pixels
             if pixels.ndim == 3:
-                # Convert RGB/RGBA to grayscale quickly
                 return pixels.mean(axis=2)
             return pixels
 
-        # Threaded IO improves total-load time for folder stacks.
-        # (This is usually IO-bound + native decoding that releases the GIL.)
         try:
             from concurrent.futures import ThreadPoolExecutor
 
-            max_workers = min(8, len(self.files))
+            max_workers = min(8, len(included_files))
             if max_workers <= 1:
-                frames = [_load_one(p) for p in self.files]
+                frames = [_load_one(p) for p in included_files]
             else:
                 with ThreadPoolExecutor(max_workers=max_workers) as ex:
-                    frames = list(ex.map(_load_one, self.files))
+                    frames = list(ex.map(_load_one, included_files))
         except Exception:
-            frames = [_load_one(p) for p in self.files]
+            frames = [_load_one(p) for p in included_files]
 
         return np.asarray(frames)
 

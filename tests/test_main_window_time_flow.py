@@ -40,6 +40,9 @@ def main_window(app):
     mock_viewer.roiDeleted.connect = Mock()
     mock_viewer.displaySettingsChanged = Mock()
     mock_viewer.displaySettingsChanged.connect = Mock()
+    mock_viewer.frameCullingChanged = Mock()
+    mock_viewer.frameCullingChanged.connect = Mock()
+    mock_viewer.set_filter_excluded = Mock()
 
     mock_analysis = QWidget()
     mock_analysis.get_rayleigh_plot_widget = Mock(return_value=Mock())
