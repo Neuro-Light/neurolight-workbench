@@ -91,17 +91,7 @@ jobs:
   # Linux/Ubuntu exe build temporarily disabled (packaging issues).
   build-exe:
     needs: [ci-check]
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: windows-latest
-            exe_name: neurolight-${{ github.ref_name }}-windows-amd64.exe
-            artifact_name: exe-windows
-          - runner: macos-latest
-            exe_name: neurolight-${{ github.ref_name }}-macos-universal
-            artifact_name: exe-macos
-    runs-on: ${{ matrix.runner }}
+    runs-on: windows-latest
     permissions:
       contents: read
     steps:
@@ -126,29 +116,56 @@ jobs:
           # Prevent PyInstaller from embedding a random runpath
           PYINSTALLER_CONFIG_DIR: ${{ github.workspace }}/.pyinstaller
 
-      - name: Prepare release asset (Windows)
-        if: matrix.runner == 'windows-latest'
+      - name: Package Windows executable as zip
         shell: bash
         run: |
+          EXE_NAME="neurolight-${{ github.ref_name }}-windows-amd64.exe"
+          ZIP_NAME="neurolight-${{ github.ref_name }}-windows-amd64.zip"
           mkdir -p release-asset
-          cp dist/neurolight.exe "release-asset/${{ matrix.exe_name }}"
+          cp dist/neurolight.exe "release-asset/$EXE_NAME"
+          cd release-asset
+          zip "$ZIP_NAME" "$EXE_NAME"
+          rm "$EXE_NAME"
 
-      - name: Prepare release asset (macOS)
-        if: matrix.runner == 'macos-latest'
-        shell: bash
-        run: |
-          mkdir -p release-asset
-          cp dist/neurolight "release-asset/${{ matrix.exe_name }}"
-
-      - name: Upload executable artifact
+      - name: Upload Windows zip artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
+          name: windows-zip
           path: release-asset/
+
+  build-macos-dmg:
+    needs: [ci-check]
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.10
+
+      - name: Build macOS app bundle
+        run: ./build-macos-app.sh
+
+      - name: Create macOS DMG
+        run: ./build-macos-dmg.sh
+
+      - name: Upload macOS DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-dmg
+          path: dist/Neurolight.dmg
 
   release:
     runs-on: ubuntu-latest
-    needs: [build-python, build-exe]
+    needs: [build-python, build-exe, build-macos-dmg]
     permissions:
       contents: write
     steps:
@@ -160,7 +177,7 @@ jobs:
       - name: Validate artifacts exist
         run: |
           missing=0
-          for dir in python-dist exe-windows exe-macos; do
+          for dir in python-dist windows-zip macos-dmg; do
             path="release-package/$dir"
             if [ ! -d "$path" ] || [ -z "$(ls -A "$path")" ]; then
               echo "::error::Missing or empty artifact directory: $path"
@@ -178,8 +195,8 @@ jobs:
         run: |
           mkdir -p release-package/upload
           cp release-package/python-dist/* release-package/upload/
-          cp release-package/exe-windows/* release-package/upload/
-          cp release-package/exe-macos/* release-package/upload/
+          cp release-package/windows-zip/* release-package/upload/
+          cp release-package/macos-dmg/* release-package/upload/
 
       # GitHub release assets must be <= 2 GB per file (2147483648 bytes)
       - name: Drop assets over 2 GB and list sizes
