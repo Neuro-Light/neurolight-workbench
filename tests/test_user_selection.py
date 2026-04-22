@@ -284,8 +284,8 @@ def test_list_existing_users_sorted(users_root):
 
 def test_create_new_user_creates_experiments_dir(users_root, app):
     dlg = UserSelectionDialog()
-    with patch("ui.user_selection_dialog.QInputDialog.getText", return_value=("Alice", True)):
-        dlg._create_new_user()
+    dlg._name_input.setText("Alice")
+    dlg._confirm_new_user()
 
     assert dlg.result() == QDialog.Accepted
     assert dlg.selected_user == "Alice"
@@ -295,13 +295,10 @@ def test_create_new_user_creates_experiments_dir(users_root, app):
 
 def test_create_new_user_rejects_empty_name(users_root, app):
     dlg = UserSelectionDialog()
-    with (
-        patch("ui.user_selection_dialog.QInputDialog.getText", return_value=("", True)),
-        patch.object(QMessageBox, "warning") as mock_warning,
-    ):
-        dlg._create_new_user()
+    dlg._name_input.setText("")
+    dlg._confirm_new_user()
 
-    mock_warning.assert_called_once()
+    # Empty name: dialog stays open, no user selected
     assert dlg.selected_user is None
     assert dlg.selected_user_experiments_dir is None
     assert dlg.result() != QDialog.Accepted
@@ -309,11 +306,9 @@ def test_create_new_user_rejects_empty_name(users_root, app):
 
 def test_create_new_user_rejects_invalid_chars(users_root, app):
     dlg = UserSelectionDialog()
-    with (
-        patch("ui.user_selection_dialog.QInputDialog.getText", return_value=("Bad|Name", True)),
-        patch.object(QMessageBox, "warning") as mock_warning,
-    ):
-        dlg._create_new_user()
+    dlg._name_input.setText("Bad|Name")
+    with patch.object(QMessageBox, "warning") as mock_warning:
+        dlg._confirm_new_user()
 
     mock_warning.assert_called_once()
     assert dlg.selected_user is None
@@ -324,13 +319,7 @@ def test_create_new_user_rejects_invalid_chars(users_root, app):
 def test_load_existing_user_accepts_selection(users_root, app):
     (users_root / "test" / "experiments").mkdir(parents=True)
     dlg = UserSelectionDialog()
-
-    picker = Mock()
-    picker.exec.return_value = QDialog.Accepted
-    picker.selected_user = "test"
-
-    with patch("ui.user_selection_dialog._UserPickerDialog", return_value=picker):
-        dlg._load_existing_user()
+    dlg._on_user_selected("test")
 
     assert dlg.result() == QDialog.Accepted
     assert dlg.selected_user == "test"
