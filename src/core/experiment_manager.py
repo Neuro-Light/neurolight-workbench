@@ -4,7 +4,7 @@ import base64
 import json
 import os
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -25,8 +25,8 @@ class Experiment:
     name: str
     description: str = ""
     principal_investigator: str = ""
-    created_date: datetime = field(default_factory=datetime.utcnow)
-    modified_date: datetime = field(default_factory=datetime.utcnow)
+    created_date: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    modified_date: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     image_stack_path: Optional[str] = None
     image_count: int = 0
     image_stack_files: List[str] = field(default_factory=list)  # List of selected file paths
@@ -90,8 +90,8 @@ class Experiment:
         exp = data.get("experiment", {})
         created = exp.get("created_date")
         modified = exp.get("modified_date")
-        created_dt = datetime.fromisoformat(created) if created else datetime.utcnow()
-        modified_dt = datetime.fromisoformat(modified) if modified else datetime.utcnow()
+        created_dt = datetime.fromisoformat(created) if created else datetime.now(timezone.utc)
+        modified_dt = datetime.fromisoformat(modified) if modified else datetime.now(timezone.utc)
         image_stack = exp.get("image_stack", {})
         # Load dual ROIs: prefer new "rois" key, fall back to legacy "roi" → roi_1
         rois_raw = exp.get("rois")
@@ -125,7 +125,7 @@ class Experiment:
         return experiment
 
     def update_modified_date(self) -> None:
-        self.modified_date = datetime.utcnow()
+        self.modified_date = datetime.now(timezone.utc)
 
     def _serialize_neuron_detection(self) -> Optional[Dict[str, Any]]:
         """Serialize neuron detection data to JSON-serializable format."""
@@ -293,8 +293,8 @@ class ExperimentManager:
             name=name,
             description=metadata.get("description", ""),
             principal_investigator=metadata.get("principal_investigator", ""),
-            created_date=metadata.get("created_date", datetime.utcnow()),
-            modified_date=datetime.utcnow(),
+            created_date=metadata.get("created_date", datetime.now(timezone.utc)),
+            modified_date=datetime.now(timezone.utc),
         )
         # Apply optional analysis type (e.g., "SCN") for future pipeline branching
         analysis_type = metadata.get("analysis_type")
@@ -375,7 +375,7 @@ class ExperimentManager:
         entry = {
             "path": file_path,
             "name": name or Path(file_path).stem,
-            "last_opened": datetime.utcnow().isoformat(timespec="seconds"),
+            "last_opened": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         }
         try:
             with open(self.recent_file, "r", encoding="utf-8") as f:

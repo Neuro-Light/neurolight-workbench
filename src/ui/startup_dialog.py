@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -100,7 +100,7 @@ class NewExperimentDialog(QDialog):
         self.name_edit = QLineEdit()
         self.pi_edit = QLineEdit()
         self.desc_edit = QPlainTextEdit()
-        self.date_edit = QLineEdit(datetime.utcnow().strftime("%Y-%m-%d"))
+        self.date_edit = QLineEdit(datetime.now(timezone.utc).strftime("%Y-%m-%d"))
 
         # Analysis type selection (future-proof for multiple analysis pipelines)
         self.analysis_combo = QComboBox()
@@ -158,7 +158,7 @@ class NewExperimentDialog(QDialog):
             "name": name,
             "description": self.desc_edit.toPlainText().strip(),
             "principal_investigator": self.pi_edit.text().strip(),
-            "created_date": datetime.utcnow(),
+            "created_date": datetime.now(timezone.utc),
             "analysis_type": self.analysis_combo.currentData(),
         }
         self.accept()

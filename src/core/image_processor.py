@@ -655,7 +655,13 @@ class ImageProcessor:
         _progress(3, "Computing quality (correlation with other neurons)...")
         if num_neurons > 1:
             # Compute pairwise correlations
-            correlation_matrix = np.corrcoef(neuron_trajectories)
+            # Trajectories can be constant (all zeros) for some neurons; numpy warns when
+            # standard deviation is zero during correlation computation. Treat those as
+            # low-correlation rather than surfacing RuntimeWarnings.
+            with np.errstate(divide="ignore", invalid="ignore"):
+                correlation_matrix = np.corrcoef(neuron_trajectories)
+            if isinstance(correlation_matrix, np.ndarray):
+                correlation_matrix = np.nan_to_num(correlation_matrix, nan=0.0, posinf=0.0, neginf=0.0)
 
             # For each neuron, compute mean correlation with all other neurons
             # (excluding self-correlation which is always 1.0)
