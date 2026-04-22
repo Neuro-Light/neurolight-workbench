@@ -198,3 +198,59 @@ class TestStartupDialog:
         with patch("ui.startup_dialog.set_enable_alignment_multiprocessing") as mock_set:
             dlg._on_alignment_mp_toggled(True)
         mock_set.assert_called_once_with(True)
+
+    def test_open_user_account_popup_switches_workspace(self, app, experiments_dir, tmp_path) -> None:
+        dlg = StartupDialog(experiments_dir)
+        next_experiments_dir = tmp_path / "other-user" / "experiments"
+        next_experiments_dir.mkdir(parents=True)
+
+        popup = Mock()
+        popup.exec.return_value = QDialog.Accepted
+        popup.switch_user_requested = True
+
+        picker = Mock()
+        picker.exec.return_value = QDialog.Accepted
+        picker.selected_user_experiments_dir = next_experiments_dir
+        picker.selected_user = "other-user"
+
+        with (
+            patch("ui.startup_dialog.UserAccountActionsDialog", return_value=popup),
+            patch("ui.startup_dialog.UserSelectionDialog", return_value=picker),
+            patch.object(dlg, "_refresh_recent") as mock_refresh,
+        ):
+            dlg._open_user_account_popup()
+
+        assert dlg.experiments_dir == next_experiments_dir
+        assert dlg._current_user_name == "other-user"
+        assert dlg._current_user_btn.text() == "Current User: other-user"
+        mock_refresh.assert_called_once()
+
+    def test_open_user_account_popup_no_switch_when_picker_cancelled(self, app, experiments_dir) -> None:
+        dlg = StartupDialog(experiments_dir)
+        popup = Mock()
+        popup.exec.return_value = QDialog.Accepted
+        popup.switch_user_requested = True
+        picker = Mock()
+        picker.exec.return_value = QDialog.Rejected
+        picker.selected_user_experiments_dir = None
+
+        with (
+            patch("ui.startup_dialog.UserAccountActionsDialog", return_value=popup),
+            patch("ui.startup_dialog.UserSelectionDialog", return_value=picker),
+            patch.object(dlg, "_refresh_recent") as mock_refresh,
+        ):
+            dlg._open_user_account_popup()
+
+        assert dlg.experiments_dir == experiments_dir
+        mock_refresh.assert_not_called()
+
+    def test_show_file_location_opens_parent_directory(self, app, experiments_dir, tmp_path) -> None:
+        dlg = StartupDialog(experiments_dir)
+        exp_file = tmp_path / "folder" / "exp.nexp"
+        exp_file.parent.mkdir(parents=True)
+        exp_file.write_text("{}", encoding="utf-8")
+
+        with patch("ui.startup_dialog.QDesktopServices.openUrl") as mock_open:
+            dlg._show_file_location(str(exp_file))
+
+        mock_open.assert_called_once()

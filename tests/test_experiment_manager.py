@@ -87,6 +87,12 @@ def test_create_new_experiment_sets_analysis_type(recent_file: Path) -> None:
     assert exp.settings["processing"]["analysis_type"] == "SCN"
 
 
+def test_create_new_experiment_sets_frame_interval(recent_file: Path) -> None:
+    mgr = ExperimentManager()
+    exp = mgr.create_new_experiment({"name": "X", "frame_interval_minutes": "12.5"})
+    assert exp.settings["acquisition"]["frame_interval_minutes"] == pytest.approx(12.5)
+
+
 def test_validate_experiment_file(tmp_path: Path, recent_file: Path) -> None:
     mgr = ExperimentManager()
     bad = tmp_path / "bad.json"
@@ -110,6 +116,12 @@ def test_save_and_load_experiment(tmp_path: Path, recent_file: Path) -> None:
     assert loaded.name == "FileExp"
 
 
+def test_save_experiment_requires_file_path(recent_file: Path) -> None:
+    mgr = ExperimentManager()
+    with pytest.raises(ValueError, match="file_path is required"):
+        mgr.save_experiment(Experiment(name="NoPath"), None)
+
+
 def test_recent_list_filters_missing_files(tmp_path: Path, recent_file: Path) -> None:
     mgr = ExperimentManager()
     missing = str(tmp_path / "gone.nexp")
@@ -125,3 +137,15 @@ def test_recent_list_filters_missing_files(tmp_path: Path, recent_file: Path) ->
         encoding="utf-8",
     )
     assert mgr.get_recent_experiments() == []
+
+
+def test_remove_from_recent_removes_entry(tmp_path: Path, recent_file: Path) -> None:
+    mgr = ExperimentManager()
+    path = str((tmp_path / "exp.nexp").resolve())
+    recent_file.write_text(
+        json.dumps({"recent": [{"path": path, "name": "exp", "last_opened": "2026-01-01T00:00:00"}]}, indent=2),
+        encoding="utf-8",
+    )
+    mgr.remove_from_recent(path)
+    payload = json.loads(recent_file.read_text(encoding="utf-8"))
+    assert payload["recent"] == []

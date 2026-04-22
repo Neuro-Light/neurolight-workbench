@@ -494,3 +494,83 @@ def test_main_window_switch_user_then_switch_back_updates_button_correctly(app, 
         # not the intermediate ("Marcus").
         assert window.user_experiments_dir == test_dir
         assert window._current_user_btn.text() == "Current User: test"
+
+
+def test_user_selection_delete_user_success_refreshes_cards(users_root, app):
+    (users_root / "Alice" / "experiments").mkdir(parents=True)
+    dlg = UserSelectionDialog()
+    confirm = Mock()
+    confirm.exec.return_value = QDialog.Accepted
+    with (
+        patch("ui.user_selection_dialog._DeleteConfirmDialog", return_value=confirm),
+        patch.object(dlg, "_refresh_cards") as mock_refresh,
+    ):
+        dlg._on_delete_user("Alice")
+    assert not (users_root / "Alice").exists()
+    mock_refresh.assert_called_once()
+
+
+def test_user_selection_delete_user_failure_shows_error(users_root, app):
+    dlg = UserSelectionDialog()
+    confirm = Mock()
+    confirm.exec.return_value = QDialog.Accepted
+    with (
+        patch("ui.user_selection_dialog._DeleteConfirmDialog", return_value=confirm),
+        patch("ui.user_selection_dialog.shutil.rmtree", side_effect=OSError("boom")),
+        patch.object(QMessageBox, "critical") as mock_critical,
+    ):
+        dlg._on_delete_user("Alice")
+    mock_critical.assert_called_once()
+
+
+def test_main_window_open_user_account_popup_reloads_after_switch(main_window, users_root):
+    next_dir = users_root / "next" / "experiments"
+    next_dir.mkdir(parents=True)
+    main_window.current_experiment_path = "/tmp/current.nexp"
+
+    account_popup = Mock()
+    account_popup.exec.return_value = QDialog.Accepted
+    account_popup.switch_user_requested = True
+
+    user_picker = Mock()
+    user_picker.exec.return_value = QDialog.Accepted
+    user_picker.selected_user_experiments_dir = next_dir
+
+    startup = Mock(spec=StartupDialog)
+    startup.exec.return_value = QDialog.Accepted
+    startup.experiment = Experiment(name="Reloaded", description="", principal_investigator="")
+    startup.experiment_path = str(next_dir / "Reloaded" / "Reloaded.nexp")
+    startup.experiments_dir = next_dir
+
+    with (
+        patch("ui.main_window.UserAccountActionsDialog", return_value=account_popup),
+        patch("ui.main_window.UserSelectionDialog", return_value=user_picker),
+        patch("ui.main_window.StartupDialog", return_value=startup),
+        patch.object(main_window, "_reload_workbench_after_startup_choice") as mock_reload,
+        patch.object(main_window.manager, "save_experiment"),
+        patch.object(main_window, "hide") as mock_hide,
+    ):
+        main_window._open_user_account_popup()
+
+    mock_hide.assert_called_once()
+    mock_reload.assert_called_once_with(startup)
+
+
+def test_main_window_open_user_account_popup_cancelled_selection_restores_window(main_window):
+    account_popup = Mock()
+    account_popup.exec.return_value = QDialog.Accepted
+    account_popup.switch_user_requested = True
+
+    user_picker = Mock()
+    user_picker.exec.return_value = QDialog.Rejected
+    user_picker.selected_user_experiments_dir = None
+
+    with (
+        patch("ui.main_window.UserAccountActionsDialog", return_value=account_popup),
+        patch("ui.main_window.UserSelectionDialog", return_value=user_picker),
+        patch.object(main_window, "show") as mock_show,
+        patch.object(main_window, "hide"),
+    ):
+        main_window._open_user_account_popup()
+
+    mock_show.assert_called_once()
