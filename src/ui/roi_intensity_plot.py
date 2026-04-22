@@ -124,6 +124,12 @@ class ROIIntensityPlotWidget(QWidget):
         self.export_btn.setEnabled(False)
         button_layout.addWidget(self.export_btn)
 
+        self.export_peaks_btn = QPushButton("Export Peaks/Troughs (CSV)")
+        self.export_peaks_btn.clicked.connect(self._export_peaks_troughs_csv)
+        self.export_peaks_btn.setEnabled(False)
+        self.export_peaks_btn.setToolTip("Export per-ROI peak and trough data to CSV.")
+        button_layout.addWidget(self.export_peaks_btn)
+
         layout.addLayout(button_layout)
 
     # ------------------------------------------------------------------
@@ -165,6 +171,7 @@ class ROIIntensityPlotWidget(QWidget):
         self.hover_label.setText("Hover over plot for time and intensity.")
         self.export_btn.setEnabled(False)
         self.export_png_btn.setEnabled(False)
+        self.export_peaks_btn.setEnabled(False)
 
     def refresh_theme(self) -> None:
         """Redraw the plot with the current app theme / ROI colours."""
@@ -199,6 +206,7 @@ class ROIIntensityPlotWidget(QWidget):
             self.canvas.draw_idle()
             self.export_btn.setEnabled(False)
             self.export_png_btn.setEnabled(False)
+            self.export_peaks_btn.setEnabled(False)
             return
 
         theme = get_mpl_theme(get_theme())
@@ -341,6 +349,7 @@ class ROIIntensityPlotWidget(QWidget):
 
         self.export_btn.setEnabled(True)
         self.export_png_btn.setEnabled(True)
+        self.export_peaks_btn.setEnabled(True)
 
         # Create annotation for marker tooltips (hidden initially)
         self._marker_annotation = ax.annotate(
@@ -560,5 +569,58 @@ class ROIIntensityPlotWidget(QWidget):
                 fmt=fmt,
             )
             QMessageBox.information(self, "Export Successful", f"Intensity data exported to:\n{file_path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Export Failed", f"Failed to export data:\n{e}")
+
+    def _export_peaks_troughs_csv(self) -> None:
+        """Export per-ROI peak and trough data to a CSV file."""
+        available = {key: data for key, data in self._intensity.items() if data is not None}
+        if not available:
+            QMessageBox.warning(self, "No Data", "No intensity data to export.")
+            return
+
+        experiment_name = self.experiment.name if self.experiment else "Experiment"
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Peak/Trough Data",
+            f"{experiment_name}_roi_peaks_troughs.csv",
+            "CSV Files (*.csv)",
+        )
+        if not file_path:
+            return
+
+        try:
+            import csv
+
+            rows: list[list] = []
+            for key in ROI_KEYS:
+                data = self._intensity.get(key)
+                if data is None:
+                    continue
+                display_name = ROI_DISPLAY_NAMES[key]
+                peaks, troughs = self._find_peaks_and_troughs(data)
+
+                for frame_idx in peaks:
+                    time_min = frame_idx * self._frame_interval_minutes
+                    rows.append([display_name, "Peak", int(frame_idx), time_min, float(data[frame_idx])])
+
+                for frame_idx in troughs:
+                    time_min = frame_idx * self._frame_interval_minutes
+                    rows.append([display_name, "Trough", int(frame_idx), time_min, float(data[frame_idx])])
+
+            if not rows:
+                QMessageBox.information(self, "No Peaks", "No peaks or troughs were detected in any ROI trace.")
+                return
+
+            rows.sort(key=lambda r: (r[0], r[2]))
+
+            with open(file_path, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(["ROI", "Type", "Frame", "Time_Minutes", "Intensity"])
+                writer.writerows(rows)
+
+            QMessageBox.information(
+                self, "Export Successful", f"Peak/trough data exported to:\n{file_path}"
+            )
         except Exception as e:
             QMessageBox.critical(self, "Export Failed", f"Failed to export data:\n{e}")

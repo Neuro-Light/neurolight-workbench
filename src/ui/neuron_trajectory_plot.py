@@ -184,6 +184,12 @@ class NeuronTrajectoryPlotWidget(QWidget):
         self.export_btn.setEnabled(False)
         buttons_layout.addWidget(self.export_btn)
 
+        self.export_peaks_btn = QPushButton("Export Peaks/Troughs (CSV)")
+        self.export_peaks_btn.clicked.connect(self._export_peaks_troughs_csv)
+        self.export_peaks_btn.setEnabled(False)
+        self.export_peaks_btn.setToolTip("Export per-neuron peak and trough data to CSV.")
+        buttons_layout.addWidget(self.export_peaks_btn)
+
         layout.addLayout(buttons_layout)
 
     def _on_show_peaks_toggled(self, state: int) -> None:
@@ -219,6 +225,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
         if neuron_trajectories is None or len(neuron_trajectories) == 0:
             self.status_label.setText("No neuron trajectories to display.")
             self.export_btn.setEnabled(False)
+            self.export_peaks_btn.setEnabled(False)
             return
 
         num_neurons, num_frames = neuron_trajectories.shape
@@ -237,6 +244,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
         # Enable export buttons
         self.export_btn.setEnabled(True)
         self.export_png_btn.setEnabled(True)
+        self.export_peaks_btn.setEnabled(True)
 
         # Update plot
         self._update_plot()
@@ -878,9 +886,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
         try:
             num_neurons, num_frames = self.neuron_trajectories.shape
 
-            # Create CSV with frame numbers and all neuron trajectories
-            # Format: Frame, Neuron_0, Neuron_1, ..., Neuron_N
-            header_parts = ["Frame"]
+            header_parts = ["Frame", "Time_Minutes"]
             if self.quality_mask is not None:
                 for i in range(num_neurons):
                     quality = "Good" if self.quality_mask[i] else "Bad"
@@ -890,21 +896,85 @@ class NeuronTrajectoryPlotWidget(QWidget):
 
             header = ",".join(header_parts)
 
-            # Create data array
             data = []
             for frame_idx in range(num_frames):
-                row = [frame_idx]
+                time_min = frame_idx * self._frame_interval_minutes
+                row = [frame_idx, time_min]
                 row.extend(self.neuron_trajectories[:, frame_idx])
                 data.append(row)
 
-            # Format string
-            fmt_parts = ["%d"]  # Frame number
-            fmt_parts.extend(["%.6f"] * num_neurons)  # Trajectory values
+            fmt_parts = ["%d", "%.6f"]
+            fmt_parts.extend(["%.6f"] * num_neurons)
             fmt = ",".join(fmt_parts)
 
             np.savetxt(file_path, data, delimiter=",", header=header, comments="", fmt=fmt)
 
             QMessageBox.information(self, "Export Successful", f"Trajectory data exported to:\n{file_path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Export Failed", f"Failed to export data:\n{str(e)}")
+
+    def _export_peaks_troughs_csv(self) -> None:
+        """Export per-neuron peak and trough data to a CSV file."""
+        if self.neuron_trajectories is None or len(self.neuron_trajectories) == 0:
+            QMessageBox.warning(self, "No Data", "No trajectory data to export.")
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Peak/Trough Data", "neuron_peaks_troughs.csv", "CSV Files (*.csv)"
+        )
+        if not file_path:
+            return
+
+        try:
+            num_neurons, num_frames = self.neuron_trajectories.shape
+            has_quality = self.quality_mask is not None
+
+            rows: list[list] = []
+            for neuron_idx in range(num_neurons):
+                trace = self.neuron_trajectories[neuron_idx]
+                peaks, troughs = self._find_peaks_and_troughs(trace)
+
+                quality = ""
+                if has_quality:
+                    quality = "Good" if self.quality_mask[neuron_idx] else "Bad"
+
+                for frame_idx in peaks:
+                    time_min = frame_idx * self._frame_interval_minutes
+                    row = [neuron_idx]
+                    if has_quality:
+                        row.append(quality)
+                    row.extend(["Peak", int(frame_idx), time_min, float(trace[frame_idx])])
+                    rows.append(row)
+
+                for frame_idx in troughs:
+                    time_min = frame_idx * self._frame_interval_minutes
+                    row = [neuron_idx]
+                    if has_quality:
+                        row.append(quality)
+                    row.extend(["Trough", int(frame_idx), time_min, float(trace[frame_idx])])
+                    rows.append(row)
+
+            if not rows:
+                QMessageBox.information(self, "No Peaks", "No peaks or troughs were detected in any neuron trace.")
+                return
+
+            rows.sort(key=lambda r: (r[0], r[-3]))
+
+            header_parts = ["Neuron"]
+            if has_quality:
+                header_parts.append("Quality")
+            header_parts.extend(["Type", "Frame", "Time_Minutes", "Intensity"])
+
+            import csv
+
+            with open(file_path, "w", newline="") as f:
+                writer = csv.writer(f)
+                writer.writerow(header_parts)
+                writer.writerows(rows)
+
+            QMessageBox.information(
+                self, "Export Successful", f"Peak/trough data exported to:\n{file_path}"
+            )
         except Exception as e:
             QMessageBox.critical(self, "Export Failed", f"Failed to export data:\n{str(e)}")
 
@@ -931,3 +1001,4 @@ class NeuronTrajectoryPlotWidget(QWidget):
         self.hover_label.setText("Hover over plot for frame and intensity.")
         self.export_btn.setEnabled(False)
         self.export_png_btn.setEnabled(False)
+        self.export_peaks_btn.setEnabled(False)
