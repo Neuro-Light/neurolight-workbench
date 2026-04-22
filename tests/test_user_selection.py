@@ -1,8 +1,7 @@
-"""
-User selection + user switching tests (scaffold).
+"""User selection + user switching tests.
 
-NOTE: Per request, this file contains ONLY commented-out outlines describing
-how the tests will be written. No executable tests yet.
+This file keeps the original commented outline for reference, and contains
+executable tests that validate the current user selection and switching flows.
 """
 
 # The outlines above are intentionally kept. The tests below implement those

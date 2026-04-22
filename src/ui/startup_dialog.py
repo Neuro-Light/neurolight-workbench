@@ -145,6 +145,18 @@ class NewExperimentDialog(QDialog):
         if not name:
             self.name_edit.setFocus()
             return
+        if name in {".", ".."}:
+            QMessageBox.warning(self, "New Experiment", 'Experiment name cannot be "." or "..".')
+            self.name_edit.setFocus()
+            return
+        if any(ch in name for ch in '\\/:*?"<>|'):
+            QMessageBox.warning(
+                self,
+                "New Experiment",
+                'Experiment name cannot contain any of: \\ / : * ? " < > |',
+            )
+            self.name_edit.setFocus()
+            return
         base_dir = self._experiments_dir
         base_dir.mkdir(parents=True, exist_ok=True)
         exp_dir = base_dir / name

@@ -359,7 +359,7 @@ class MainWindow(QMainWindow):
             try:
                 self.manager.save_experiment(self.experiment, self.current_experiment_path)
             except Exception:
-                pass
+                logger.exception("Failed to save experiment before switching user.")
 
         self.hide()
         user_dialog = UserSelectionDialog()
@@ -904,13 +904,14 @@ class MainWindow(QMainWindow):
         # Hide the main window
         self.hide()
 
-        # Show startup dialog rooted at the active user's experiments directory (if known)
-        if self.user_experiments_dir is None:
-            # User selection is required before reaching the workbench; this should never happen.
-            QMessageBox.critical(self, "User Required", "No user is selected. Please restart the application.")
-            return
+        # Show startup dialog rooted at the active user's experiments directory.
+        #
+        # In production, `user_experiments_dir` is always set by the launcher (main.py).
+        # In tests (and some ad-hoc scripts), MainWindow may be constructed directly.
+        # Fall back to the current working directory so the close flow remains testable.
+        experiments_root = self.user_experiments_dir or Path.cwd()
 
-        startup = StartupDialog(self.user_experiments_dir)
+        startup = StartupDialog(experiments_root)
         result = startup.exec()
 
         if result == QDialog.Accepted and startup.experiment is not None:

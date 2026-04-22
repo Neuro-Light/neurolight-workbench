@@ -207,6 +207,9 @@ class UserSelectionDialog(QDialog):
         if not name:
             QMessageBox.warning(self, "Create New User", "Name cannot be empty.")
             return
+        if name in {".", ".."}:
+            QMessageBox.warning(self, "Create New User", 'Name cannot be "." or "..".')
+            return
         if any(ch in name for ch in '\\/:*?"<>|'):
             QMessageBox.warning(
                 self,

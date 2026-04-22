@@ -92,6 +92,11 @@ class Experiment:
         modified = exp.get("modified_date")
         created_dt = datetime.fromisoformat(created) if created else datetime.now(timezone.utc)
         modified_dt = datetime.fromisoformat(modified) if modified else datetime.now(timezone.utc)
+        # Legacy files may have naive timestamps; treat them as UTC.
+        if isinstance(created_dt, datetime) and created_dt.tzinfo is None:
+            created_dt = created_dt.replace(tzinfo=timezone.utc)
+        if isinstance(modified_dt, datetime) and modified_dt.tzinfo is None:
+            modified_dt = modified_dt.replace(tzinfo=timezone.utc)
         image_stack = exp.get("image_stack", {})
         # Load dual ROIs: prefer new "rois" key, fall back to legacy "roi" → roi_1
         rois_raw = exp.get("rois")
