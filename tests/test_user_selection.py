@@ -124,12 +124,16 @@ from ui.user_selection_dialog import UserSelectionDialog, _list_existing_users  
 # Integration-ish tests for `ui.main_window` current user button + switching
 # -----------------------------------------------------------------------------
 #
-# def test_main_window_corner_current_user_button_matches_user_experiments_dir(app, sample_experiment, tmp_path, monkeypatch):
+# def test_main_window_corner_current_user_button_matches_user_experiments_dir(
+#     app, sample_experiment, tmp_path, monkeypatch
+# ):
 #     # Create fake users_root and pass user_experiments_dir into MainWindow(...).
 #     # Assert the menubar corner widget exists and its text matches the folder name.
 #     ...
 #
-# def test_main_window_switch_user_then_switch_back_updates_button_correctly(app, sample_experiment, users_root, monkeypatch):
+# def test_main_window_switch_user_then_switch_back_updates_button_correctly(
+#     app, sample_experiment, users_root, monkeypatch
+# ):
 #     # Reproduce the reported bug:
 #     # - Start as "test", switch to "Marcus" (no experiments), then switch back to "test"
 #     # - Ensure the final button text is "Current User: test"
