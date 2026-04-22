@@ -98,9 +98,6 @@ jobs:
           - runner: windows-latest
             exe_name: neurolight-${{ github.ref_name }}-windows-amd64.exe
             artifact_name: exe-windows
-          - runner: macos-latest
-            exe_name: neurolight-${{ github.ref_name }}-macos-universal
-            artifact_name: exe-macos
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -131,14 +128,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p release-asset
-          cp dist/neurolight.exe "release-asset/${{ matrix.exe_name }}"
-
-      - name: Prepare release asset (macOS)
-        if: matrix.runner == 'macos-latest'
-        shell: bash
-        run: |
-          mkdir -p release-asset
-          cp dist/neurolight "release-asset/${{ matrix.exe_name }}"
+          cp dist/Neurolight/Neurolight.exe "release-asset/${{ matrix.exe_name }}"
 
       - name: Upload executable artifact
         uses: actions/upload-artifact@v4
@@ -146,9 +136,86 @@ jobs:
           name: ${{ matrix.artifact_name }}
           path: release-asset/
 
+  macos-release-assets:
+    name: Build macOS DMG and attach to release
+    runs-on: macos-latest
+    needs: [ci-check]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@e4db8464a088ece1b920f60402e813ea4de65b8f # v4
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Build macOS app and DMG
+        run: |
+          chmod +x build-macos-app.sh build-macos-dmg.sh
+          ./build-macos-app.sh
+          ./build-macos-dmg.sh
+
+      - name: Import Developer ID certificate
+        env:
+          DEVELOPER_ID_CERT: ${{ secrets.DEVELOPER_ID_CERT }}
+          CERT_PASSWORD: ${{ secrets.CERT_PASSWORD }}
+        run: |
+          KEYCHAIN_PASS=$(uuidgen)
+          security create-keychain -p "$KEYCHAIN_PASS" build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASS" build.keychain
+          echo "$DEVELOPER_ID_CERT" | base64 --decode > /tmp/certificate.p12
+          security import /tmp/certificate.p12 -k build.keychain \
+            -P "$CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s \
+            -k "$KEYCHAIN_PASS" build.keychain
+          security list-keychains -d user -s build.keychain \
+            $(security list-keychains -d user | sed 's/"//g')
+          rm /tmp/certificate.p12
+
+      - name: Sign macOS app
+        run: |
+          SIGN_IDENTITY=$(security find-identity -v -p codesigning build.keychain \
+            | grep "Developer ID Application" | head -1 | awk '{print $2}')
+          codesign --deep --force --options runtime \
+            --sign "$SIGN_IDENTITY" \
+            dist/Neurolight.app
+
+      - name: Clean up keychain
+        if: always()
+        run: security delete-keychain build.keychain || true
+
+      - name: Re-package signed app into DMG
+        run: ./build-macos-dmg.sh
+
+      - name: Notarize DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          TEAM_ID: ${{ secrets.TEAM_ID }}
+          APP_SPECIFIC_PASSWORD: ${{ secrets.APP_SPECIFIC_PASSWORD }}
+        run: |
+          xcrun notarytool submit dist/Neurolight.dmg \
+            --apple-id "$APPLE_ID" \
+            --team-id "$TEAM_ID" \
+            --password "$APP_SPECIFIC_PASSWORD" \
+            --wait
+
+      - name: Staple notarization
+        run: xcrun stapler staple dist/Neurolight.dmg
+
+      - name: Upload DMG to GitHub Release
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2
+        with:
+          files: |
+            dist/Neurolight.dmg
+
   release:
     runs-on: ubuntu-latest
-    needs: [build-python, build-exe]
+    needs: [build-python, build-exe, macos-release-assets]
     permissions:
       contents: write
     steps:
@@ -160,7 +227,7 @@ jobs:
       - name: Validate artifacts exist
         run: |
           missing=0
-          for dir in python-dist exe-windows exe-macos; do
+          for dir in python-dist exe-windows; do
             path="release-package/$dir"
             if [ ! -d "$path" ] || [ -z "$(ls -A "$path")" ]; then
               echo "::error::Missing or empty artifact directory: $path"
@@ -179,7 +246,6 @@ jobs:
           mkdir -p release-package/upload
           cp release-package/python-dist/* release-package/upload/
           cp release-package/exe-windows/* release-package/upload/
-          cp release-package/exe-macos/* release-package/upload/
 
       # GitHub release assets must be <= 2 GB per file (2147483648 bytes)
       - name: Drop assets over 2 GB and list sizes
