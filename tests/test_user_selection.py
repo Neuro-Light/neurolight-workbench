@@ -27,9 +27,9 @@ from ui.user_selection_dialog import (  # pyright: ignore[reportMissingImports]
     UserAccountActionsDialog,
     UserSelectionDialog,
     _DeleteConfirmDialog,
+    _list_existing_users,
     _UserCard,
     current_user_button_text,
-    _list_existing_users,
 )
 
 # -----------------------------------------------------------------------------
