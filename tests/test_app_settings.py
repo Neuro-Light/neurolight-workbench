@@ -99,3 +99,17 @@ def test_alignment_mp_get_set(isolated_settings: Path) -> None:
     assert app_settings.get_enable_alignment_multiprocessing() is False
     app_settings.set_enable_alignment_multiprocessing(True)
     assert app_settings.get_enable_alignment_multiprocessing() is True
+
+
+def test_peak_marker_color_roundtrip(isolated_settings: Path) -> None:
+    default = app_settings.get_peak_marker_color()
+    assert default == app_settings.DEFAULTS["peak_marker_color"]
+    app_settings.set_peak_marker_color("#ff00ff")
+    assert app_settings.get_peak_marker_color() == "#ff00ff"
+
+
+def test_trough_marker_color_roundtrip(isolated_settings: Path) -> None:
+    default = app_settings.get_trough_marker_color()
+    assert default == app_settings.DEFAULTS["trough_marker_color"]
+    app_settings.set_trough_marker_color("#00ffff")
+    assert app_settings.get_trough_marker_color() == "#00ffff"

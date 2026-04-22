@@ -11,8 +11,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFileDialog,
-    QFormLayout,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -24,7 +22,7 @@ from PySide6.QtWidgets import (
 from core.lomb_scargle import compute_lomb_scargle
 from ui.app_settings import get_theme
 from ui.constants import DEFAULT_FRAME_INTERVAL_MINUTES, ROI_DISPLAY_NAMES, ROI_KEYS
-from ui.draggable_spinbox import DraggableSpinBox
+from ui.draggable_spinbox import DraggableDoubleSpinBox
 from ui.styles import get_mpl_theme
 
 
@@ -55,42 +53,52 @@ class LombScarglePlotWidget(QWidget):
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
 
-        # ROI selection + analysis options
-        controls_group = QGroupBox("Lomb–Scargle Settings")
-        controls_layout = QFormLayout()
+        # Compact single-row controls strip
+        controls_row = QHBoxLayout()
+        controls_row.setContentsMargins(4, 2, 4, 2)
+        controls_row.setSpacing(8)
 
-        # ROI visibility / analysis checkboxes
-        roi_row = QHBoxLayout()
+        # ROI checkboxes
+        controls_row.addWidget(QLabel("ROIs:"))
+        controls_row.addSpacing(4)
         self._roi_checkboxes: Dict[str, QCheckBox] = {}
-        for key in ROI_KEYS:
+        for idx, key in enumerate(ROI_KEYS):
             cb = QCheckBox(ROI_DISPLAY_NAMES[key])
             cb.setChecked(True)
             cb.toggled.connect(self._update_plot)
             self._roi_checkboxes[key] = cb
-            roi_row.addWidget(cb)
-        roi_row.addStretch()
-        controls_layout.addRow("Analyze ROIs:", roi_row)
+            controls_row.addWidget(cb)
+            if idx < len(ROI_KEYS) - 1:
+                controls_row.addSpacing(8)
 
-        # Sampling interval (in arbitrary time units per frame)
-        self.sampling_interval_spin = DraggableSpinBox()
-        self.sampling_interval_spin.setRange(1, 10_000)
+        controls_row.addSpacing(12)
+
+        # Sampling interval
+        controls_row.addWidget(QLabel("Interval (min):"))
+        self.sampling_interval_spin = DraggableDoubleSpinBox()
+        self.sampling_interval_spin.setRange(0.0001, 10_000.0)
+        self.sampling_interval_spin.setDecimals(4)
+        self.sampling_interval_spin.setSingleStep(0.5)
         self.sampling_interval_spin.setValue(DEFAULT_FRAME_INTERVAL_MINUTES)
+        self.sampling_interval_spin.setMinimumWidth(90)
         self.sampling_interval_spin.setToolTip(
-            "Time between successive frames in arbitrary units.\n"
-            "If actual acquisition interval is known (e.g. minutes), enter it here."
+            "Time between successive frames in minutes.\nSet this to match the experiment's acquisition interval."
         )
         self.sampling_interval_spin.valueChanged.connect(self._update_plot)
-        controls_layout.addRow("Time Between Frames:", self.sampling_interval_spin)
+        controls_row.addWidget(self.sampling_interval_spin)
 
-        # X-axis mode: frequency vs period
+        controls_row.addSpacing(12)
+
+        # X-axis mode
+        controls_row.addWidget(QLabel("X-axis:"))
         self.axis_mode_combo = QComboBox()
         self.axis_mode_combo.addItem("Frequency", self.AXIS_FREQ)
         self.axis_mode_combo.addItem("Period", self.AXIS_PERIOD)
         self.axis_mode_combo.currentIndexChanged.connect(self._update_plot)
-        controls_layout.addRow("X-axis:", self.axis_mode_combo)
+        controls_row.addWidget(self.axis_mode_combo)
 
-        controls_group.setLayout(controls_layout)
-        layout.addWidget(controls_group)
+        controls_row.addStretch()
+        layout.addLayout(controls_row)
 
         # Matplotlib figure and canvas
         self.figure = Figure(figsize=(8, 6))
@@ -180,6 +188,11 @@ class LombScarglePlotWidget(QWidget):
     def get_all_peaks(self) -> Dict[str, Dict[str, float]]:
         """Return peak results for all ROIs that have been analyzed."""
         return {k: self.get_peak_for_roi(k) for k in ROI_KEYS if self.get_peak_for_roi(k) is not None}
+
+    def set_frame_interval_minutes(self, minutes: float) -> None:
+        """Set the time-between-frames spinbox to the given value in minutes."""
+        if minutes > 0:
+            self.sampling_interval_spin.setValue(minutes)
 
     def refresh_theme(self) -> None:
         """Redraw the plot with the current app theme (e.g. after theme change)."""
@@ -299,10 +312,10 @@ class LombScarglePlotWidget(QWidget):
                 with np.errstate(divide="ignore", invalid="ignore"):
                     period = np.where(freq > 0, 1.0 / freq, np.inf)
                 x_values = period
-                x_label = "Period (time units)"
+                x_label = "Period (minutes)"
             else:
                 x_values = freq
-                x_label = "Frequency (1 / time units)"
+                x_label = "Frequency (cycles / minute)"
 
             color = theme["roi_1_line_color"] if key == "roi_1" else theme["roi_2_line_color"]
             ax.plot(
@@ -346,7 +359,7 @@ class LombScarglePlotWidget(QWidget):
                 fontsize=10,
             )
 
-        ax.set_xlabel(x_label if "x_label" in locals() else "Frequency (1 / time units)", fontsize=12)
+        ax.set_xlabel(x_label if "x_label" in locals() else "Frequency (cycles / minute)", fontsize=12)
         ax.set_ylabel("Power", fontsize=12)
         ax.set_title("Lomb–Scargle Periodogram", fontsize=14)
         if len(visible) > 1:

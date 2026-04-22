@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Set
 
 import cv2
 import numpy as np
 from PySide6.QtCore import QPointF, Qt, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPen, QPixmap, QPolygonF
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPen, QPixmap, QPolygonF
 from PySide6.QtWidgets import (
     QComboBox,
     QGroupBox,
@@ -54,12 +54,17 @@ class ImageViewer(QWidget):
     roiChanged = Signal(str, object)  # Emits (roi_key, ROI object) when adjusted
     roiDeleted = Signal(str)  # Emits roi_key when an ROI is deleted
     displaySettingsChanged = Signal(int, int)  # Emits (exposure, contrast) when display settings change
+    frameCullingChanged = Signal(object)  # Emits set of excluded frame indices
 
     def __init__(self, handler: ImageStackHandler) -> None:
         super().__init__()
         self.handler = handler
         self.index = 0
         self.cache = _LRUCache(20)
+
+        # Frame culling state
+        self._excluded_frames: Set[int] = set()
+        self._filter_excluded: bool = False
 
         # Dual ROI state
         self.current_rois: Dict[str, Optional[ROI]] = {"roi_1": None, "roi_2": None}
@@ -194,6 +199,22 @@ class ImageViewer(QWidget):
 
         self.display_controls_panel.setVisible(False)
 
+        # Frame culling panel (shown only during Cull Frames workflow step)
+        self.cull_controls_panel = QWidget()
+        cull_panel_layout = QVBoxLayout(self.cull_controls_panel)
+        cull_panel_layout.setContentsMargins(0, 0, 0, 0)
+        cull_panel_layout.setSpacing(4)
+
+        self._cull_toggle_btn = QPushButton("Exclude Frame")
+        self._cull_toggle_btn.setCheckable(True)
+        self._cull_toggle_btn.clicked.connect(self._on_cull_toggle)
+        cull_panel_layout.addWidget(self._cull_toggle_btn)
+
+        self._cull_count_label = QLabel("0 frames excluded")
+        cull_panel_layout.addWidget(self._cull_count_label)
+
+        self.cull_controls_panel.setVisible(False)
+
         # Frame row: prev, slider, index, next — all on one line
         frame_row = QHBoxLayout()
         frame_row.addWidget(self.prev_btn)
@@ -206,6 +227,7 @@ class ImageViewer(QWidget):
         layout.addWidget(self.roi_controls_panel)
         layout.addLayout(frame_row)
         layout.addWidget(self.display_controls_panel)
+        layout.addWidget(self.cull_controls_panel)
         self.filename_label.setMaximumHeight(50)
         layout.addWidget(self.filename_label, 0)
         self._update_adjustment_labels()
@@ -248,14 +270,14 @@ class ImageViewer(QWidget):
 
     def set_stack(self, files) -> None:
         self.handler.load_image_stack(files)
-        count = self.handler.get_image_count()
-        self.slider.setRange(0, max(0, count - 1))
-        self.index = 0
-        self._update_frame_index_label(count)
+        vis = self._visible_indices
+        self.slider.setRange(0, max(0, len(vis) - 1))
+        self.index = vis[0] if vis else 0
+        self._update_frame_index_label(len(vis))
         self._show_current()
 
         # Hide upload button when images are loaded
-        if count > 0:
+        if len(vis) > 0:
             self.upload_btn.hide()
 
         # Determine directory path and emit
@@ -277,6 +299,8 @@ class ImageViewer(QWidget):
         self.handler.files = []
         self.index = 0
         self.cache = _LRUCache(20)
+        self._excluded_frames = set()
+        self._filter_excluded = False
         self.current_rois = {"roi_1": None, "roi_2": None}
         self.active_roi_key = "roi_1"
         self._populate_roi_selector()
@@ -285,6 +309,7 @@ class ImageViewer(QWidget):
         self.frame_index_label.setText("— / —")
         self.slider.setRange(0, 0)
         self._update_roi_button_text()
+        self._refresh_cull_button()
         self.prev_btn.setEnabled(True)
         self.next_btn.setEnabled(True)
         self.slider.setEnabled(True)
@@ -392,7 +417,8 @@ class ImageViewer(QWidget):
         return unit_8
 
     def _show_current(self) -> None:
-        count = self.handler.get_image_count()
+        vis = self._visible_indices
+        count = len(vis)
         if count == 0:
             self.image_label.clear()
             self.frame_index_label.setText("— / —")
@@ -474,10 +500,26 @@ class ImageViewer(QWidget):
                 painter.drawEllipse(x_scaled, y_scaled, w_scaled, h_scaled)
             painter.end()
 
+        # Draw "EXCLUDED" overlay when current frame is culled
+        if self.index in self._excluded_frames:
+            painter = QPainter(scaled_pix)
+            overlay_color = QColor(180, 40, 40, 100)
+            painter.fillRect(scaled_pix.rect(), overlay_color)
+            painter.setPen(QPen(QColor(255, 60, 60, 220)))
+            font = QFont()
+            font.setPixelSize(max(20, scaled_pix.height() // 8))
+            font.setBold(True)
+            painter.setFont(font)
+            painter.drawText(scaled_pix.rect(), Qt.AlignCenter, "EXCLUDED")
+            painter.end()
+
         self.image_label.setPixmap(scaled_pix)
         current_path = Path(self.handler.files[self.index])
+        display_pos = vis.index(self.index) + 1 if self.index in vis else self.index + 1
         self._update_frame_index_label(count)
-        self.filename_label.setText(f"{self.index + 1}/{count}: \n{current_path.name}")
+        self.filename_label.setText(f"{display_pos}/{count}: \n{current_path.name}")
+
+        self._refresh_cull_button()
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         # ROI FIX: Redraw on resize so ROI scale updates correctly
@@ -522,23 +564,35 @@ class ImageViewer(QWidget):
             self.set_stack(files)
 
     def prev_image(self) -> None:
-        if self.index > 0:
-            self.index -= 1
+        vis = self._visible_indices
+        if not vis:
+            return
+        pos = vis.index(self.index) if self.index in vis else 0
+        if pos > 0:
+            self.index = vis[pos - 1]
             self.slider.blockSignals(True)
-            self.slider.setValue(self.index)
+            self.slider.setValue(pos - 1)
             self.slider.blockSignals(False)
             self._show_current()
 
     def next_image(self) -> None:
-        if self.index < max(0, self.handler.get_image_count() - 1):
-            self.index += 1
+        vis = self._visible_indices
+        if not vis:
+            return
+        pos = vis.index(self.index) if self.index in vis else 0
+        if pos < len(vis) - 1:
+            self.index = vis[pos + 1]
             self.slider.blockSignals(True)
-            self.slider.setValue(self.index)
+            self.slider.setValue(pos + 1)
             self.slider.blockSignals(False)
             self._show_current()
 
     def _on_slider(self, value: int) -> None:
-        self.index = value
+        vis = self._visible_indices
+        if vis and 0 <= value < len(vis):
+            self.index = vis[value]
+        else:
+            self.index = value
         self._show_current()
 
     def _update_frame_index_label(self, count: int) -> None:
@@ -662,3 +716,60 @@ class ImageViewer(QWidget):
         self.current_rois[key] = roi
         self._update_roi_button_text()
         self._show_current()
+
+    # ------------------------------------------------------------------
+    # Frame culling helpers
+    # ------------------------------------------------------------------
+
+    @property
+    def _visible_indices(self) -> list:
+        """Raw file indices the viewer should navigate through."""
+        total = self.handler.get_image_count()
+        if not self._filter_excluded or not self._excluded_frames:
+            return list(range(total))
+        return [i for i in range(total) if i not in self._excluded_frames]
+
+    def set_filter_excluded(self, enabled: bool) -> None:
+        """Toggle whether excluded frames are hidden from navigation."""
+        if self._filter_excluded == enabled:
+            return
+        self._filter_excluded = enabled
+        vis = self._visible_indices
+        if not vis:
+            return
+        self.slider.blockSignals(True)
+        self.slider.setRange(0, max(0, len(vis) - 1))
+        # Snap current index to the nearest visible frame
+        if self.index not in vis:
+            self.index = vis[0]
+        self.slider.setValue(vis.index(self.index))
+        self.slider.blockSignals(False)
+        self._show_current()
+
+    def get_excluded_frames(self) -> Set[int]:
+        return set(self._excluded_frames)
+
+    def set_excluded_frames(self, indices: Set[int]) -> None:
+        """Restore excluded frames (e.g. from saved experiment), without emitting."""
+        self._excluded_frames = set(indices)
+        self._refresh_cull_button()
+        self._show_current()
+
+    def _on_cull_toggle(self) -> None:
+        if self.index in self._excluded_frames:
+            self._excluded_frames.discard(self.index)
+        else:
+            self._excluded_frames.add(self.index)
+        self._refresh_cull_button()
+        self._show_current()
+        self.frameCullingChanged.emit(set(self._excluded_frames))
+
+    def _refresh_cull_button(self) -> None:
+        is_excluded = self.index in self._excluded_frames
+        self._cull_toggle_btn.blockSignals(True)
+        self._cull_toggle_btn.setChecked(is_excluded)
+        self._cull_toggle_btn.blockSignals(False)
+        self._cull_toggle_btn.setText("Include Frame" if is_excluded else "Exclude Frame")
+
+        n = len(self._excluded_frames)
+        self._cull_count_label.setText(f"{n} frame{'s' if n != 1 else ''} excluded")

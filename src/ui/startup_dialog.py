@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
     QFrame,
@@ -108,6 +109,16 @@ class NewExperimentDialog(QDialog):
         # Make sure the combo box is wide enough to show full labels
         self.analysis_combo.setMinimumWidth(180)
 
+        # Frame interval: time between successive frames in minutes
+        self.frame_interval_spin = QDoubleSpinBox()
+        self.frame_interval_spin.setRange(0.0001, 10000.0)
+        self.frame_interval_spin.setDecimals(4)
+        self.frame_interval_spin.setSingleStep(0.5)
+        self.frame_interval_spin.setValue(30.0)
+        self.frame_interval_spin.setToolTip(
+            "Time between successive image frames (e.g. 0.5 for 30-second intervals, 30 for 30-minute intervals)."
+        )
+
         self._path_display = QLineEdit(str(self._experiments_dir.resolve()))
         self._path_display.setReadOnly(True)
         self._path_display.setToolTip(self._path_display.text())
@@ -118,6 +129,7 @@ class NewExperimentDialog(QDialog):
         form.addRow("Principal Investigator", self.pi_edit)
         form.addRow("Description", self.desc_edit)
         form.addRow("Date", self.date_edit)
+        form.addRow("Interval between frames (minutes)", self.frame_interval_spin)
 
         container = QVBoxLayout()
         container.addLayout(form)
@@ -172,6 +184,7 @@ class NewExperimentDialog(QDialog):
             "principal_investigator": self.pi_edit.text().strip(),
             "created_date": datetime.now(timezone.utc),
             "analysis_type": self.analysis_combo.currentData(),
+            "frame_interval_minutes": self.frame_interval_spin.value(),
         }
         self.accept()
 

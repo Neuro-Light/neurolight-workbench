@@ -16,6 +16,8 @@ DEFAULTS: Dict[str, Any] = {
     "avg_trajectory_color": "#e879f9",
     "avg_trajectory_roi_1_color": "#22aaff",  # Brighter blue for ROI 1 average
     "avg_trajectory_roi_2_color": "#ff9944",  # Brighter orange for ROI 2 average
+    "peak_marker_color": "#EE3377",  # Magenta/Pink - colorblind-friendly (Tol bright)
+    "trough_marker_color": "#009988",  # Teal - colorblind-friendly (Tol bright)
     "enable_alignment_multiprocessing": False,
 }
 
@@ -136,4 +138,30 @@ def set_enable_alignment_multiprocessing(enabled: bool) -> None:
     """Persist alignment multiprocessing preference."""
     settings = load_settings()
     settings["enable_alignment_multiprocessing"] = bool(enabled)
+    save_settings(settings)
+
+
+def get_peak_marker_color() -> str:
+    """Return the configured peak marker color."""
+    settings = load_settings()
+    return settings.get("peak_marker_color", DEFAULTS["peak_marker_color"])
+
+
+def set_peak_marker_color(hex_color: str) -> None:
+    """Persist the peak marker color."""
+    settings = load_settings()
+    settings["peak_marker_color"] = hex_color
+    save_settings(settings)
+
+
+def get_trough_marker_color() -> str:
+    """Return the configured trough marker color."""
+    settings = load_settings()
+    return settings.get("trough_marker_color", DEFAULTS["trough_marker_color"])
+
+
+def set_trough_marker_color(hex_color: str) -> None:
+    """Persist the trough marker color."""
+    settings = load_settings()
+    settings["trough_marker_color"] = hex_color
     save_settings(settings)

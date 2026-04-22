@@ -5,20 +5,23 @@ from pathlib import Path
 from typing import Optional
 
 import numpy as np
-from PySide6.QtCore import Qt, QTimer, QUrl
+from PySide6.QtCore import Qt, QTime, QTimer, QUrl
 from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
+    QLabel,
     QLineEdit,
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QSplitter,
+    QTimeEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -38,7 +41,7 @@ from ui.settings_dialog import SettingsDialog
 from ui.startup_dialog import StartupDialog
 from ui.user_selection_dialog import UserAccountActionsDialog, UserSelectionDialog, current_user_button_text
 from ui.workflow import STEP_DEFINITIONS, WorkflowManager, WorkflowStep, WorkflowStepper
-from utils.file_handler import ImageStackHandler
+from utils.file_handler import ImageStackHandler, _get_exif_timestamp
 
 # Set up logger for main window
 logger = logging.getLogger(__name__)
@@ -76,7 +79,7 @@ if not logger.handlers:
 
 
 class _ExperimentSettingsDialog(QDialog):
-    """Dialog to edit experiment name, principal investigator, and description."""
+    """Dialog to edit experiment metadata and acquisition time settings."""
 
     def __init__(self, experiment: Experiment, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
@@ -98,6 +101,28 @@ class _ExperimentSettingsDialog(QDialog):
         self.desc_edit.setPlaceholderText("Description")
         self.desc_edit.setMaximumHeight(120)
         form.addRow("Description", self.desc_edit)
+
+        acquisition = experiment.settings.get("acquisition") or {}
+        interval_value = acquisition.get("frame_interval_minutes")
+        if interval_value is None:
+            interval_value = 30.0
+        try:
+            interval_value = float(interval_value)
+        except (TypeError, ValueError):
+            interval_value = 30.0
+        self.frame_interval_spin = QDoubleSpinBox()
+        self.frame_interval_spin.setRange(0.0001, 10000.0)
+        self.frame_interval_spin.setDecimals(4)
+        self.frame_interval_spin.setSingleStep(0.5)
+        self.frame_interval_spin.setValue(interval_value)
+        self.frame_interval_spin.setToolTip("Time between successive frames in minutes.")
+        form.addRow("Interval between frames (minutes)", self.frame_interval_spin)
+
+        self.start_time_edit = QTimeEdit()
+        self.start_time_edit.setDisplayFormat("HH:mm:ss")
+        self.start_time_edit.setToolTip("Time of first frame (24-hour clock).")
+        self.start_time_edit.setTime(_parse_time_string(acquisition.get("experiment_start_time")) or QTime(0, 0, 0))
+        form.addRow("Experiment start time", self.start_time_edit)
         layout.addLayout(form)
         buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         buttons.accepted.connect(self._accept_dialog)
@@ -113,7 +138,79 @@ class _ExperimentSettingsDialog(QDialog):
         self.name = name
         self.principal_investigator = self.pi_edit.text().strip()
         self.description = self.desc_edit.toPlainText().strip()
+        self.frame_interval_minutes = float(self.frame_interval_spin.value())
+        self.experiment_start_time = self.start_time_edit.time().toString("HH:mm:ss")
         self.accept()
+
+
+class _ConfirmStartTimeDialog(QDialog):
+    """Dialog to confirm or correct metadata-derived experiment start time."""
+
+    def __init__(
+        self,
+        suggested_time: QTime,
+        metadata_source: str,
+        timestamp_uniformity_note: Optional[str],
+        parent: Optional[QWidget] = None,
+    ) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("Confirm Experiment Start Time")
+        self.setModal(True)
+        self.setMinimumWidth(460)
+
+        layout = QVBoxLayout(self)
+        info = QLabel(
+            "Start time was inferred from image metadata.\n"
+            f"Source: {metadata_source}\n"
+            "Confirm or adjust this before running time-based analyses."
+        )
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        if timestamp_uniformity_note:
+            warn = QLabel(timestamp_uniformity_note)
+            warn.setWordWrap(True)
+            warn.setStyleSheet("color: #f59e0b; font-weight: 600;")
+            layout.addWidget(warn)
+
+        form = QFormLayout()
+        self.start_time_edit = QTimeEdit()
+        self.start_time_edit.setDisplayFormat("HH:mm:ss")
+        self.start_time_edit.setTime(suggested_time)
+        form.addRow("Experiment start time", self.start_time_edit)
+        layout.addLayout(form)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def selected_start_time(self) -> str:
+        return self.start_time_edit.time().toString("HH:mm:ss")
+
+
+def _parse_time_string(value: object) -> Optional[QTime]:
+    """Parse time strings like HH:MM[:SS] into QTime."""
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    for fmt in ("HH:mm:ss", "HH:mm"):
+        t = QTime.fromString(text, fmt)
+        if t.isValid():
+            if fmt == "HH:mm":
+                return QTime(t.hour(), t.minute(), 0)
+            return t
+    return None
+
+
+def _time_string_to_minutes(value: object) -> Optional[int]:
+    """Convert HH:MM[:SS] time strings to minutes since midnight."""
+    qtime = _parse_time_string(value)
+    if qtime is None:
+        return None
+    return qtime.hour() * 60 + qtime.minute()
 
 
 class MainWindow(QMainWindow):
@@ -191,19 +288,31 @@ class MainWindow(QMainWindow):
                 if panel is not None:
                     panel.setVisible(show_edit)
 
-            # Step 3: Align Images
+            # Step 3: Cull Frames — show/hide cull controls panel
+            show_cull = current == WorkflowStep.CULL_FRAMES
+            if hasattr(self, "viewer"):
+                panel = getattr(self.viewer, "cull_controls_panel", None)
+                if panel is not None:
+                    panel.setVisible(show_cull)
+                # After the cull step, hide excluded frames from navigation
+                cull_index = STEP_DEFINITIONS[WorkflowStep.CULL_FRAMES].index
+                _set_filter = getattr(self.viewer, "set_filter_excluded", None)
+                if callable(_set_filter):
+                    _set_filter(current_index > cull_index)
+
+            # Step 4: Align Images
             enable_align = current == WorkflowStep.ALIGN_IMAGES
             if self._action_align_images is not None:
                 self._action_align_images.setEnabled(enable_align)
 
-            # Step 4: Select ROI — show/hide entire ROI controls panel
+            # Step 5: Select ROI — show/hide entire ROI controls panel
             show_roi = current == WorkflowStep.SELECT_ROI
             if hasattr(self, "viewer"):
                 panel = getattr(self.viewer, "roi_controls_panel", None)
                 if panel is not None:
                     panel.setVisible(show_roi)
 
-            # Step 5: Detect Neurons
+            # Step 6: Detect Neurons
             enable_detect = current == WorkflowStep.DETECT_NEURONS
             if hasattr(self, "analysis"):
                 try:
@@ -406,7 +515,7 @@ class MainWindow(QMainWindow):
             self.viewer._show_current()  # redraw ROI overlays with new colours
 
     def _open_experiment_settings(self) -> None:
-        # Open the Experiment Settings dialog to edit name, PI, and description.
+        # Open the Experiment Settings dialog to edit metadata and acquisition timing.
         if self.experiment is None or not self.current_experiment_path:
             QMessageBox.information(
                 self,
@@ -419,7 +528,12 @@ class MainWindow(QMainWindow):
             self.experiment.name = dlg.name
             self.experiment.description = dlg.description
             self.experiment.principal_investigator = dlg.principal_investigator
+            if "acquisition" not in self.experiment.settings:
+                self.experiment.settings["acquisition"] = {}
+            self.experiment.settings["acquisition"]["frame_interval_minutes"] = dlg.frame_interval_minutes
+            self.experiment.settings["acquisition"]["experiment_start_time"] = dlg.experiment_start_time
             self.experiment.update_modified_date()
+            self._apply_experiment_time_settings()
             try:
                 self.manager.save_experiment(self.experiment, self.current_experiment_path)
                 QMessageBox.information(self, "Saved", "Experiment settings saved.")
@@ -550,6 +664,11 @@ class MainWindow(QMainWindow):
         # Connect display settings changes to debounced saving
         self.viewer.displaySettingsChanged.connect(self._on_display_settings_changed)
 
+        # Connect frame culling changes
+        _culling_signal = getattr(self.viewer, "frameCullingChanged", None)
+        if _culling_signal is not None:
+            _culling_signal.connect(self._on_frame_culling_changed)
+
         # Create data analyzer
         self.data_analyzer = DataAnalyzer(self.experiment)
 
@@ -598,23 +717,57 @@ class MainWindow(QMainWindow):
         """
         if not hasattr(self, "analysis"):
             return
-        # Rayleigh plot start time
+        # Rayleigh plot start time (from acquisition metadata if available)
+        acquisition = self.experiment.settings.get("acquisition") or {}
+        start_time = acquisition.get("experiment_start_time")
+        start_minutes = _time_string_to_minutes(start_time)
+        if start_minutes is None:
+            # Backward compatibility for experiments that only have saved minutes.
+            time_settings = self.experiment.settings.get("time") or {}
+            legacy_minutes = time_settings.get("start_minutes")
+            if legacy_minutes is not None:
+                try:
+                    start_minutes = int(legacy_minutes)
+                except (TypeError, ValueError):
+                    start_minutes = None
+
         try:
             rayleigh_getter = getattr(self.analysis, "get_rayleigh_plot_widget", None)
             rayleigh_widget = rayleigh_getter() if callable(rayleigh_getter) else None
         except Exception:
             rayleigh_widget = None
-        if rayleigh_widget is None:
-            return
+        if rayleigh_widget is not None:
+            if start_minutes is not None:
+                try:
+                    rayleigh_widget.set_experiment_start_time_minutes(start_minutes)
+                except Exception:
+                    logger.exception("Failed to apply experiment start time to Rayleigh widget.")
 
-        time_settings = self.experiment.settings.get("time") or {}
-        start_minutes = time_settings.get("start_minutes")
-        if start_minutes is None:
-            return
+        # Frame interval and start time for trajectory and Lomb-Scargle plots
+        frame_interval = acquisition.get("frame_interval_minutes")
+
         try:
-            rayleigh_widget.set_experiment_start_time_minutes(int(start_minutes))
+            traj_widget = self.analysis.get_neuron_trajectory_plot_widget()
+            traj_widget.set_time_settings(
+                interval_minutes=float(frame_interval) if frame_interval is not None else 30.0,
+                start_time=start_time,
+            )
         except Exception:
-            # If anything goes wrong here, fall back to widget defaults
+            logger.exception("Failed to configure neuron trajectory time settings.")
+
+        try:
+            ls_getter = getattr(self.analysis, "get_lomb_scargle_widget", None)
+            ls_widget = ls_getter() if callable(ls_getter) else None
+            if ls_widget is not None and frame_interval is not None:
+                ls_widget.set_frame_interval_minutes(float(frame_interval))
+        except Exception:
+            logger.exception("Failed to apply frame interval to Lomb-Scargle widget.")
+
+        try:
+            roi_widget = self.analysis.get_roi_plot_widget()
+            if frame_interval is not None:
+                roi_widget.set_frame_interval_minutes(float(frame_interval))
+        except Exception:
             pass
 
     def _auto_load_experiment_data(self) -> None:
@@ -667,6 +820,9 @@ class MainWindow(QMainWindow):
                             loading_dialog.update_status("Loading image stack...", f"Loading images from: {p}")
                             QApplication.processEvents()
                             self.viewer.set_stack(p)
+
+                        # Restore culling state
+                        self._restore_culling_state()
 
                         # Load both ROIs from experiment.rois
                         has_any_roi = any(self.experiment.rois.get(k) for k in ("roi_1", "roi_2"))
@@ -769,6 +925,8 @@ class MainWindow(QMainWindow):
     def _on_stack_loaded(self, directory_path: str) -> None:
         # ImageStackHandler already updates experiment association for path/count
         self.stack_handler.associate_with_experiment(self.experiment)
+        self._confirm_start_time_from_loaded_stack()
+        self._apply_experiment_time_settings()
 
         # Update detection widget with frame data
         frame_data = self.stack_handler.get_all_frames_as_array()
@@ -784,6 +942,52 @@ class MainWindow(QMainWindow):
 
         # Mark first workflow step complete once a stack is available
         self.workflow_manager.complete_step_if_current(WorkflowStep.LOAD_IMAGES)
+
+        # Cull step is always ready (zero exclusions is a valid choice)
+        self.workflow_manager.mark_step_ready(WorkflowStep.CULL_FRAMES)
+
+    def _confirm_start_time_from_loaded_stack(self) -> None:
+        """Always prompt to confirm start time immediately after loading a stack."""
+        if not self.stack_handler.files:
+            return
+        first_file = self.stack_handler.files[0]
+        inferred = _get_exif_timestamp(first_file)
+        qtime = _parse_time_string(inferred)
+
+        if qtime is None:
+            # Fall back to currently saved acquisition time, then midnight.
+            acquisition = self.experiment.settings.get("acquisition") or {}
+            qtime = _parse_time_string(acquisition.get("experiment_start_time")) or QTime(0, 0, 0)
+
+        uniformity_note = None
+        if len(self.stack_handler.files) > 1:
+            sample_paths = [self.stack_handler.files[0], self.stack_handler.files[-1]]
+            sampled = [_get_exif_timestamp(p) for p in sample_paths]
+            if sampled[0] is not None and sampled[0] == sampled[1]:
+                uniformity_note = (
+                    "Warning: sampled image timestamps match exactly. "
+                    "If this stack was pre-aligned/exported, adjust start time manually here."
+                )
+        if inferred is None:
+            missing_note = (
+                "No parseable timestamp was found in first-frame metadata. "
+                "Please confirm the correct experiment start time."
+            )
+            uniformity_note = f"{uniformity_note}\n{missing_note}" if uniformity_note else missing_note
+
+        dlg = _ConfirmStartTimeDialog(
+            suggested_time=qtime,
+            metadata_source=Path(first_file).name,
+            timestamp_uniformity_note=uniformity_note,
+            parent=self,
+        )
+        if dlg.exec() != QDialog.Accepted:
+            return
+
+        if "acquisition" not in self.experiment.settings:
+            self.experiment.settings["acquisition"] = {}
+        self.experiment.settings["acquisition"]["experiment_start_time"] = dlg.selected_start_time()
+        self.experiment.update_modified_date()
 
     def _ensure_detection_data_saved(self) -> None:
         """
@@ -808,6 +1012,7 @@ class MainWindow(QMainWindow):
                         "cell_size": detection_widget.cell_size_spin.value(),
                         "num_peaks": detection_widget.num_peaks_spin.value(),
                         "correlation_threshold": (detection_widget.correlation_threshold_spin.value()),
+                        "max_absent_frames": detection_widget.max_absent_frames_spin.value(),
                         "threshold_rel": detection_widget.threshold_rel_spin.value(),
                         "apply_detrending": detection_widget.detrending_checkbox.isChecked(),
                     }
@@ -1056,24 +1261,15 @@ class MainWindow(QMainWindow):
 
     def _capture_experiment_time_settings(self) -> None:
         """
-        Capture experiment time settings (e.g. Rayleigh experiment start time) into the experiment.
+        Capture experiment time settings into the experiment.
 
-        Stores minutes since midnight in experiment.settings["time"]["start_minutes"] so the
-        Rayleigh plot (and any other time-aware widgets) can be restored on reload.
+        Rayleigh start time is now sourced from acquisition metadata (first frame timestamp),
+        so this method mirrors that value into legacy "time.start_minutes" for compatibility.
         """
-        if not hasattr(self, "analysis"):
-            return
-        try:
-            rayleigh_getter = getattr(self.analysis, "get_rayleigh_plot_widget", None)
-            rayleigh_widget = rayleigh_getter() if callable(rayleigh_getter) else None
-        except Exception:
-            rayleigh_widget = None
-        if rayleigh_widget is None or not hasattr(rayleigh_widget, "get_experiment_start_time_minutes"):
-            return
-
-        try:
-            start_minutes = int(rayleigh_widget.get_experiment_start_time_minutes())
-        except Exception:
+        acquisition = self.experiment.settings.get("acquisition") or {}
+        start_time = acquisition.get("experiment_start_time")
+        start_minutes = _time_string_to_minutes(start_time)
+        if start_minutes is None:
             return
 
         if "time" not in self.experiment.settings:
@@ -1094,6 +1290,70 @@ class MainWindow(QMainWindow):
         self._display_settings_timer.start(500)
         if self.workflow_manager.current_step == WorkflowStep.EDIT_IMAGES:
             self.workflow_manager.mark_step_ready(WorkflowStep.EDIT_IMAGES)
+
+    def _on_frame_culling_changed(self, excluded: set) -> None:
+        """Persist excluded frames to experiment and sync to the stack handler."""
+        if "culling" not in self.experiment.settings:
+            self.experiment.settings["culling"] = {}
+        self.experiment.settings["culling"]["excluded_frames"] = sorted(excluded)
+        self.stack_handler.set_excluded_frames(excluded)
+
+        # Keep neuron detection input in sync with the included-only stack.
+        # Detection operates on the frame_data provided to the widget; if culling
+        # changes after load, we must refresh it.
+        try:
+            if hasattr(self, "analysis"):
+                detection_widget = self.analysis.get_neuron_detection_widget()
+                detection_widget.set_frame_data(self.stack_handler.get_all_frames_as_array())
+        except Exception:
+            # Some tests use lightweight/mocked panels; ignore refresh failures.
+            pass
+
+        total = self.stack_handler.get_total_frame_count()
+        all_excluded = total > 0 and len(excluded) >= total
+
+        if all_excluded:
+            # Cannot advance with zero included frames — remove readiness
+            self.workflow_manager._ready_steps.discard(WorkflowStep.CULL_FRAMES)
+            self.workflow_manager.state_changed.emit()
+        else:
+            self.workflow_manager.mark_step_ready(WorkflowStep.CULL_FRAMES)
+
+        # If culling changed after downstream steps completed, invalidate them
+        if WorkflowStep.CULL_FRAMES in self.workflow_manager.completed_steps:
+            self.workflow_manager.reset_from_step(WorkflowStep.CULL_FRAMES)
+            if not all_excluded:
+                self.workflow_manager.mark_step_ready(WorkflowStep.CULL_FRAMES)
+
+        if self.current_experiment_path:
+            try:
+                self.manager.save_experiment(self.experiment, self.current_experiment_path)
+            except Exception:
+                pass
+
+    def _restore_culling_state(self) -> None:
+        """Restore excluded frames from experiment settings into viewer and handler."""
+        culling = self.experiment.settings.get("culling") or {}
+        excluded_list = culling.get("excluded_frames", [])
+        excluded: set[int] = set()
+        skipped = 0
+        for item in excluded_list:
+            try:
+                excluded.add(int(item))
+            except (ValueError, TypeError):
+                skipped += 1
+        if skipped:
+            logger.warning("Skipped %d malformed excluded-frame entries", skipped)
+        self.stack_handler.set_excluded_frames(excluded)
+        self.viewer.set_excluded_frames(excluded)
+
+        # Ensure detection uses the included-only stack after restoring culling.
+        try:
+            if hasattr(self, "analysis"):
+                detection_widget = self.analysis.get_neuron_detection_widget()
+                detection_widget.set_frame_data(self.stack_handler.get_all_frames_as_array())
+        except Exception:
+            pass
 
     def _flush_pending_display_settings(self) -> None:
         """
@@ -1182,12 +1442,12 @@ class MainWindow(QMainWindow):
             from PIL import Image
 
             output_path = Path(output_dir)
-            original_files = self.stack_handler.files
+            included_files = self.stack_handler.get_included_files()
 
             for i, cropped_frame in enumerate(cropped_stack):
-                # Generate output filename
-                if i < len(original_files):
-                    original_name = Path(original_files[i]).stem
+                # Generate output filename from the matching source file
+                if i < len(included_files):
+                    original_name = Path(included_files[i]).stem
                     output_file = output_path / f"{original_name}_cropped.tif"
                 else:
                     output_file = output_path / f"frame_{i:04d}_cropped.tif"
@@ -1480,10 +1740,11 @@ class MainWindow(QMainWindow):
 
         # Save aligned images (raw, without exposure/contrast adjustments)
         # Users can adjust exposure/contrast in the viewer after loading
+        included_files = self.stack_handler.get_included_files()
         for i, aligned_frame in enumerate(aligned_stack_uint16):
-            # Generate output filename
-            if i < len(self.stack_handler.files):
-                original_name = Path(self.stack_handler.files[i]).stem
+            # Generate output filename from the matching source file
+            if i < len(included_files):
+                original_name = Path(included_files[i]).stem
                 output_file = output_path / f"{original_name}_aligned.tif"
             else:
                 output_file = output_path / f"frame_{i:04d}_aligned.tif"

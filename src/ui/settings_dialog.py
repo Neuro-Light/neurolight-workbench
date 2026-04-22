@@ -21,12 +21,16 @@ from PySide6.QtWidgets import (
 from ui.app_settings import (
     get_avg_trajectory_color,
     get_avg_trajectory_roi_colors,
+    get_peak_marker_color,
     get_roi_colors,
     get_theme,
+    get_trough_marker_color,
     set_avg_trajectory_color,
     set_avg_trajectory_roi_color,
+    set_peak_marker_color,
     set_roi_color,
     set_theme,
+    set_trough_marker_color,
 )
 from ui.styles import get_stylesheet
 
@@ -132,6 +136,38 @@ class SettingsDialog(QDialog):
             row.addStretch()
             traj_layout.addLayout(row)
 
+        # Peak marker color
+        self._peak_marker_color = get_peak_marker_color()
+        peak_row = QHBoxLayout()
+        peak_row.addWidget(QLabel("Peak Markers"))
+        self._peak_swatch = QLabel()
+        self._peak_swatch.setFixedSize(24, 24)
+        self._set_swatch_color(self._peak_swatch, self._peak_marker_color)
+        peak_change_btn = QPushButton("Change...")
+        peak_change_btn.setFixedWidth(90)
+        peak_change_btn.clicked.connect(self._pick_peak_color)
+        peak_change_btn.setToolTip("Color for peak (maxima) markers on graphs")
+        peak_row.addWidget(self._peak_swatch)
+        peak_row.addWidget(peak_change_btn)
+        peak_row.addStretch()
+        traj_layout.addLayout(peak_row)
+
+        # Trough marker color
+        self._trough_marker_color = get_trough_marker_color()
+        trough_row = QHBoxLayout()
+        trough_row.addWidget(QLabel("Trough Markers"))
+        self._trough_swatch = QLabel()
+        self._trough_swatch.setFixedSize(24, 24)
+        self._set_swatch_color(self._trough_swatch, self._trough_marker_color)
+        trough_change_btn = QPushButton("Change...")
+        trough_change_btn.setFixedWidth(90)
+        trough_change_btn.clicked.connect(self._pick_trough_color)
+        trough_change_btn.setToolTip("Color for trough (minima) markers on graphs")
+        trough_row.addWidget(self._trough_swatch)
+        trough_row.addWidget(trough_change_btn)
+        trough_row.addStretch()
+        traj_layout.addLayout(trough_row)
+
         traj_group.setLayout(traj_layout)
         layout.addWidget(traj_group)
 
@@ -175,6 +211,20 @@ class SettingsDialog(QDialog):
             swatch = getattr(self, f"_avg_roi_{roi_key}_swatch")
             self._set_swatch_color(swatch, color.name())
 
+    def _pick_peak_color(self) -> None:
+        current = QColor(self._peak_marker_color)
+        color = QColorDialog.getColor(current, self, "Choose Peak Marker Color")
+        if color.isValid():
+            self._peak_marker_color = color.name()
+            self._set_swatch_color(self._peak_swatch, self._peak_marker_color)
+
+    def _pick_trough_color(self) -> None:
+        current = QColor(self._trough_marker_color)
+        color = QColorDialog.getColor(current, self, "Choose Trough Marker Color")
+        if color.isValid():
+            self._trough_marker_color = color.name()
+            self._set_swatch_color(self._trough_swatch, self._trough_marker_color)
+
     def _apply_and_accept(self) -> None:
         """Save theme + ROI colors + graph colors and reapply stylesheet."""
         theme = "dark"
@@ -190,6 +240,9 @@ class SettingsDialog(QDialog):
         set_avg_trajectory_color(self._avg_traj_color)
         for roi_key, hex_color in self._avg_traj_roi_colors.items():
             set_avg_trajectory_roi_color(roi_key, hex_color)
+
+        set_peak_marker_color(self._peak_marker_color)
+        set_trough_marker_color(self._trough_marker_color)
 
         from PySide6.QtWidgets import QApplication
 

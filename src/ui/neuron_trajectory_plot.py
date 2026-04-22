@@ -15,8 +15,6 @@ from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QFileDialog,
-    QFormLayout,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QMessageBox,
@@ -24,6 +22,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from scipy.signal import find_peaks
 
 from ui.app_settings import get_theme
 from ui.draggable_spinbox import DraggableSpinBox
@@ -52,6 +51,13 @@ class NeuronTrajectoryPlotWidget(QWidget):
         self.neuron_locations: Optional[np.ndarray] = None
         self.roi_origin: Optional[np.ndarray] = None  # 0 = ROI 1, 1 = ROI 2 per neuron
         self._hover_cid = None
+        self._pick_cid = None
+        self._marker_annotation = None
+        self._peak_data: list[tuple[float, float, str, int]] = []  # (time_min, value, type, order)
+        self._trough_data: list[tuple[float, float, str, int]] = []
+        # Time axis settings
+        self._frame_interval_minutes: float = 30.0
+        self._experiment_start_time: Optional[str] = None
 
         layout = QVBoxLayout(self)
 
@@ -61,62 +67,94 @@ class NeuronTrajectoryPlotWidget(QWidget):
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
 
-        # ROI view selector: Both / ROI 1 only / ROI 2 only
-        roi_view_row = QHBoxLayout()
-        roi_view_row.addWidget(QLabel("Show trajectories:"))
+        # Compact single-row controls strip
+        controls_row = QHBoxLayout()
+        controls_row.setContentsMargins(4, 2, 4, 2)
+        controls_row.setSpacing(8)
+
+        # ROI filter
+        controls_row.addWidget(QLabel("ROI:"))
         self.roi_view_combo = QComboBox()
-        self.roi_view_combo.addItem("Both (ROI 1 & 2)", self.VIEW_BOTH)
-        self.roi_view_combo.addItem("ROI 1 only", self.VIEW_ROI1)
-        self.roi_view_combo.addItem("ROI 2 only", self.VIEW_ROI2)
+        self.roi_view_combo.addItem("Both", self.VIEW_BOTH)
+        self.roi_view_combo.addItem("ROI 1", self.VIEW_ROI1)
+        self.roi_view_combo.addItem("ROI 2", self.VIEW_ROI2)
         self.roi_view_combo.setToolTip("Filter trajectories by ROI when detection was run on both ROIs.")
         self.roi_view_combo.currentIndexChanged.connect(self._update_plot)
-        roi_view_row.addWidget(self.roi_view_combo)
-        roi_view_row.addStretch()
-        layout.addLayout(roi_view_row)
+        controls_row.addWidget(self.roi_view_combo)
 
-        # Display options group
-        options_group = QGroupBox("Display Options")
-        options_layout = QFormLayout()
+        controls_row.addSpacing(12)
 
-        # Show good neurons checkbox
-        self.show_good_checkbox = QCheckBox()
+        # Show checkboxes
+        controls_row.addWidget(QLabel("Show:"))
+        controls_row.addSpacing(4)
+        self.show_good_checkbox = QCheckBox("Good")
         self.show_good_checkbox.setChecked(True)
         self.show_good_checkbox.stateChanged.connect(self._update_plot)
-        options_layout.addRow("Show Good Neurons:", self.show_good_checkbox)
+        controls_row.addWidget(self.show_good_checkbox)
+        controls_row.addSpacing(8)
 
-        # Show bad neurons checkbox
-        self.show_bad_checkbox = QCheckBox()
+        self.show_bad_checkbox = QCheckBox("Bad")
         self.show_bad_checkbox.setChecked(False)
         self.show_bad_checkbox.stateChanged.connect(self._update_plot)
-        options_layout.addRow("Show Bad Neurons:", self.show_bad_checkbox)
+        controls_row.addWidget(self.show_bad_checkbox)
+        controls_row.addSpacing(8)
 
-        # Max neurons to display
+        self.show_average_checkbox = QCheckBox("Avg")
+        self.show_average_checkbox.setChecked(True)
+        self.show_average_checkbox.stateChanged.connect(self._update_plot)
+        controls_row.addWidget(self.show_average_checkbox)
+
+        controls_row.addSpacing(12)
+
+        # Max neurons spinbox
+        controls_row.addWidget(QLabel("Max:"))
         self.max_neurons_spin = DraggableSpinBox()
         self.max_neurons_spin.setRange(1, 1000)
         self.max_neurons_spin.setValue(50)
+        self.max_neurons_spin.setMinimumWidth(60)
         self.max_neurons_spin.setToolTip("Maximum number of neurons to display (for performance)")
         self.max_neurons_spin.valueChanged.connect(self._update_plot)
-        options_layout.addRow("Max Neurons to Display:", self.max_neurons_spin)
+        controls_row.addWidget(self.max_neurons_spin)
 
-        # Show average checkbox
-        self.show_average_checkbox = QCheckBox()
-        self.show_average_checkbox.setChecked(True)
-        self.show_average_checkbox.stateChanged.connect(self._update_plot)
-        options_layout.addRow("Show Average:", self.show_average_checkbox)
+        controls_row.addSpacing(12)
 
-        # Smoothing (display only; 0 = none)
+        # Smoothing spinbox
+        controls_row.addWidget(QLabel("Smooth:"))
         self.smoothing_spin = DraggableSpinBox()
         self.smoothing_spin.setRange(0, 51)
         self.smoothing_spin.setValue(0)
         self.smoothing_spin.setSpecialValueText("None")
+        self.smoothing_spin.setMinimumWidth(60)
         self.smoothing_spin.setToolTip(
             "Moving average window in frames for display only (0 = no smoothing). Export uses raw data."
         )
         self.smoothing_spin.valueChanged.connect(self._update_plot)
-        options_layout.addRow("Smoothing (frames):", self.smoothing_spin)
+        controls_row.addWidget(self.smoothing_spin)
 
-        options_group.setLayout(options_layout)
-        layout.addWidget(options_group)
+        controls_row.addSpacing(12)
+
+        # Peaks/troughs toggle
+        self.show_peaks_checkbox = QCheckBox("Peaks/Troughs")
+        self.show_peaks_checkbox.setChecked(False)
+        self.show_peaks_checkbox.setToolTip(
+            "Overlay peak (maxima) and trough (minima) markers on the average trajectory"
+        )
+        self.show_peaks_checkbox.stateChanged.connect(self._on_show_peaks_toggled)
+        controls_row.addWidget(self.show_peaks_checkbox)
+
+        # Number markers (shown only when peaks are enabled)
+        self._number_peaks_row_label = QLabel("Numbers:")
+        self._number_peaks_row_label.setVisible(False)
+        controls_row.addWidget(self._number_peaks_row_label)
+        self.number_peaks_checkbox = QCheckBox()
+        self.number_peaks_checkbox.setChecked(False)
+        self.number_peaks_checkbox.setToolTip("Show order numbers (1, 2, 3...) on peak and trough markers")
+        self.number_peaks_checkbox.stateChanged.connect(self._update_plot)
+        self.number_peaks_checkbox.setVisible(False)
+        controls_row.addWidget(self.number_peaks_checkbox)
+
+        controls_row.addStretch()
+        layout.addLayout(controls_row)
 
         # Matplotlib figure and canvas (theme applied in _update_plot)
         self.figure = Figure(figsize=(10, 8))
@@ -126,8 +164,8 @@ class NeuronTrajectoryPlotWidget(QWidget):
         layout.addWidget(self.toolbar)
         layout.addWidget(self.canvas)
 
-        # Hover status: show frame and intensity when moving over plot
-        self.hover_label = QLabel("Hover over plot for frame and intensity.")
+        # Hover status: show time and intensity when moving over plot
+        self.hover_label = QLabel("Hover over plot for time and intensity.")
         self.hover_label.setAlignment(Qt.AlignCenter)
         self.hover_label.setProperty("class", "plot-hover")
         layout.addWidget(self.hover_label)
@@ -147,6 +185,15 @@ class NeuronTrajectoryPlotWidget(QWidget):
         buttons_layout.addWidget(self.export_btn)
 
         layout.addLayout(buttons_layout)
+
+    def _on_show_peaks_toggled(self, state: int) -> None:
+        """Show/hide the Number Markers option based on Show Peaks/Troughs state."""
+        checked = state != 0
+        self._number_peaks_row_label.setVisible(checked)
+        self.number_peaks_checkbox.setVisible(checked)
+        if not checked:
+            self.number_peaks_checkbox.setChecked(False)
+        self._update_plot()
 
     def plot_trajectories(
         self,
@@ -194,6 +241,20 @@ class NeuronTrajectoryPlotWidget(QWidget):
         # Update plot
         self._update_plot()
 
+    def set_time_settings(self, interval_minutes: float, start_time: Optional[str] = None) -> None:
+        """
+        Configure the time axis for the trajectory plot.
+
+        Args:
+            interval_minutes: Minutes per frame (e.g. 0.5 for 30-second intervals).
+            start_time: Optional "HH:MM:SS" string for the experiment start time shown as a subtitle.
+        """
+        if interval_minutes > 0:
+            self._frame_interval_minutes = float(interval_minutes)
+        self._experiment_start_time = start_time
+        if self.neuron_trajectories is not None and len(self.neuron_trajectories) > 0:
+            self._update_plot()
+
     def _apply_theme(self, ax) -> None:
         """Apply current app theme to figure and axes."""
         theme = get_mpl_theme(get_theme())
@@ -213,19 +274,181 @@ class NeuronTrajectoryPlotWidget(QWidget):
             for t in leg.get_texts():
                 t.set_color(theme["text_color"])
 
-    def _on_motion(self, event) -> None:
-        """Show frame and intensity under cursor in hover label."""
-        if self.neuron_trajectories is None or event.inaxes is None or event.xdata is None or event.ydata is None:
-            self.hover_label.setText("Hover over plot for frame and intensity.")
+    def _find_peaks_and_troughs(self, data: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Find local maxima (peaks) and minima (troughs) in the signal."""
+        if len(data) < 3:
+            return np.array([], dtype=int), np.array([], dtype=int)
+        data_range = np.max(data) - np.min(data)
+        prominence = data_range * 0.10 if data_range > 1e-6 else 1e-6
+        distance = max(2, len(data) // 100)
+        peaks, _ = find_peaks(data, prominence=prominence, distance=distance)
+        troughs, _ = find_peaks(-data, prominence=prominence, distance=distance)
+        return peaks, troughs
+
+    def _collect_markers(
+        self,
+        ax,
+        frames: np.ndarray,
+        data: np.ndarray,
+        peaks: np.ndarray,
+        troughs: np.ndarray,
+        peak_color: str,
+        trough_color: str,
+        add_peak_label: bool,
+        add_trough_label: bool,
+        raw_peaks: list,
+        raw_troughs: list,
+    ) -> None:
+        """Collect and plot marker scatter points (without order numbers yet)."""
+        if len(peaks) > 0:
+            ax.scatter(
+                frames[peaks],
+                data[peaks],
+                marker="^",
+                s=60,
+                color=peak_color,
+                zorder=5,
+                label="Peaks" if add_peak_label else "",
+                edgecolors="white",
+                linewidths=0.5,
+                picker=True,
+                pickradius=5,
+            )
+            for idx in peaks:
+                raw_peaks.append((float(frames[idx]), float(data[idx])))
+        if len(troughs) > 0:
+            ax.scatter(
+                frames[troughs],
+                data[troughs],
+                marker="v",
+                s=60,
+                color=trough_color,
+                zorder=5,
+                label="Troughs" if add_trough_label else "",
+                edgecolors="white",
+                linewidths=0.5,
+                picker=True,
+                pickradius=5,
+            )
+            for idx in troughs:
+                raw_troughs.append((float(frames[idx]), float(data[idx])))
+
+    def _finalize_markers(self, ax, raw_peaks: list, raw_troughs: list, peak_color: str, trough_color: str) -> None:
+        """Sort markers by frame, assign order numbers, and add annotations if enabled."""
+        raw_peaks.sort(key=lambda x: x[0])
+        raw_troughs.sort(key=lambda x: x[0])
+
+        for order, (frame, value) in enumerate(raw_peaks, start=1):
+            self._peak_data.append((frame, value, "peak", order))
+        for order, (frame, value) in enumerate(raw_troughs, start=1):
+            self._trough_data.append((frame, value, "trough", order))
+
+        if self.number_peaks_checkbox.isChecked():
+            for time_min, value, _, order in self._peak_data:
+                ax.annotate(
+                    str(order),
+                    (time_min, value),
+                    textcoords="offset points",
+                    xytext=(0, 8),
+                    ha="center",
+                    fontsize=8,
+                    color=peak_color,
+                    fontweight="bold",
+                )
+            for time_min, value, _, order in self._trough_data:
+                ax.annotate(
+                    str(order),
+                    (time_min, value),
+                    textcoords="offset points",
+                    xytext=(0, -12),
+                    ha="center",
+                    fontsize=8,
+                    color=trough_color,
+                    fontweight="bold",
+                )
+
+    def _get_previous_marker_frame(self, current_frame: float, marker_type: str) -> Optional[float]:
+        """Get the time (in minutes) of the previous marker of the same type."""
+        markers = self._peak_data if marker_type == "peak" else self._trough_data
+        prev_frame = None
+        for m_frame, _, _, _ in markers:
+            if m_frame < current_frame:
+                prev_frame = m_frame
+            else:
+                break
+        return prev_frame
+
+    def _on_pick(self, event) -> None:
+        """Handle click on a marker to show details in hover label."""
+        if not hasattr(event, "ind") or event.ind is None or len(event.ind) == 0:
             return
-        frame_idx = int(round(event.xdata))
+        artist = event.artist
+        ind = event.ind[0]
+        xdata = artist.get_offsets()[ind][0]
+        ydata = artist.get_offsets()[ind][1]
+        all_markers = self._peak_data + self._trough_data
+        y_range = self.figure.axes[0].get_ylim() if self.figure.axes else (0, 1)
+        y_tol = (y_range[1] - y_range[0]) * 0.05
+        x_tol = self._frame_interval_minutes * 0.5
+        for m_frame, m_value, m_type, m_order in all_markers:
+            if abs(xdata - m_frame) < x_tol and abs(ydata - m_value) < y_tol:
+                prev_frame = self._get_previous_marker_frame(m_frame, m_type)
+                interval = f" | Interval: {m_frame - prev_frame:.2f} min" if prev_frame is not None else ""
+                self.hover_label.setTextFormat(Qt.PlainText)
+                self.hover_label.setText(
+                    f"Selected: {m_type.title()} #{m_order} at {m_frame:.2f} min, Value: {m_value:.3f}{interval}"
+                )
+                break
+
+    def _on_motion(self, event) -> None:
+        """Show time and intensity under cursor in hover label."""
+        if self.neuron_trajectories is None or event.inaxes is None or event.xdata is None or event.ydata is None:
+            self.hover_label.setText("Hover over plot for time and intensity.")
+            if self._marker_annotation:
+                self._marker_annotation.set_visible(False)
+                self.canvas.draw_idle()
+            return
+        elapsed_minutes = event.xdata
+        interval = self._frame_interval_minutes if self._frame_interval_minutes > 0 else 1.0
+        frame_idx = int(round(elapsed_minutes / interval))
         num_frames = self.neuron_trajectories.shape[1]
         if frame_idx < 0 or frame_idx >= num_frames:
-            self.hover_label.setText("Hover over plot for frame and intensity.")
+            self.hover_label.setText("Hover over plot for time and intensity.")
             return
-        # Show mean intensity across displayed neurons at this frame (or nearest)
-        intensity = float(np.mean(self.neuron_trajectories[:, frame_idx]))
-        self.hover_label.setText(f"Frame {frame_idx}  ·  Intensity {intensity:.3f}")
+
+        # Check if hovering near a marker and show tooltip
+        marker_found = False
+        if self.show_peaks_checkbox.isChecked() and self._marker_annotation:
+            all_markers = self._peak_data + self._trough_data
+            x_tol = interval * 1.5
+            for m_frame, m_value, m_type, m_order in all_markers:
+                y_range = self.figure.axes[0].get_ylim()
+                if (
+                    abs(elapsed_minutes - m_frame) < x_tol
+                    and abs(event.ydata - m_value) < (y_range[1] - y_range[0]) * 0.05
+                ):
+                    marker_found = True
+                    prev_frame = self._get_previous_marker_frame(m_frame, m_type)
+                    interval_text = f"\nInterval: {m_frame - prev_frame:.2f} min" if prev_frame is not None else ""
+                    tooltip = (
+                        f"{m_type.title()} #{m_order}\nTime: {m_frame:.2f} min\nValue: {m_value:.3f}{interval_text}"
+                    )
+                    self._marker_annotation.xy = (m_frame, m_value)
+                    self._marker_annotation.set_text(tooltip)
+                    self._marker_annotation.set_visible(True)
+                    self.canvas.draw_idle()
+                    break
+            if not marker_found and self._marker_annotation.get_visible():
+                self._marker_annotation.set_visible(False)
+                self.canvas.draw_idle()
+
+        # Show mean intensity across displayed neurons at this frame
+        displayed = self._get_displayed_neuron_indices()
+        if displayed:
+            intensity = float(np.mean(self.neuron_trajectories[displayed, frame_idx]))
+            self.hover_label.setText(f"Time {elapsed_minutes:.2f} min  ·  Intensity {intensity:.3f}")
+        else:
+            self.hover_label.setText(f"Time {elapsed_minutes:.2f} min  ·  No neurons displayed")
 
     def _get_displayed_neuron_indices(self) -> list[int]:
         if self.neuron_trajectories is None or len(self.neuron_trajectories) == 0:
@@ -264,7 +487,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
         ax = self.figure.add_subplot(111)
 
         num_neurons, num_frames = self.neuron_trajectories.shape
-        frames = np.arange(num_frames)
+        frames = np.arange(num_frames) * self._frame_interval_minutes
 
         # Get display options
         show_good = self.show_good_checkbox.isChecked()
@@ -378,63 +601,235 @@ class NeuronTrajectoryPlotWidget(QWidget):
                     label="Neurons" if idx == neurons_to_plot[0] else "",
                 )
 
+        # Clear marker data before plotting
+        self._peak_data = []
+        self._trough_data = []
+
         if show_average and len(neurons_to_plot) > 0:
             avg_color = theme.get("avg_trajectory_color", theme.get("average_color", "#e879f9"))
+            show_peaks = self.show_peaks_checkbox.isChecked()
+            peak_color = theme.get("peak_marker_color", "#f97316")
+            trough_color = theme.get("trough_marker_color", "#06b6d4")
+            peaks_labeled = False
+            troughs_labeled = False
+
+            # Collect raw markers across all averages first, then sort and assign order
+            raw_peaks: list[tuple[int, float]] = []
+            raw_troughs: list[tuple[int, float]] = []
+
             if use_roi_colors:
                 avg_roi_1_color = theme.get("avg_trajectory_roi_1_color", roi_1_color)
                 avg_roi_2_color = theme.get("avg_trajectory_roi_2_color", roi_2_color)
                 if roi_1_indices:
                     avg_1 = np.mean(self.neuron_trajectories[roi_1_indices], axis=0)
+                    display_avg_1 = _display_series(avg_1)
                     ax.plot(
                         frames,
-                        _display_series(avg_1),
+                        display_avg_1,
                         color=avg_roi_1_color,
                         linewidth=2.5,
                         antialiased=True,
                         label="Average (ROI 1)",
                     )
+                    if show_peaks:
+                        peaks, troughs = self._find_peaks_and_troughs(display_avg_1)
+                        self._collect_markers(
+                            ax,
+                            frames,
+                            display_avg_1,
+                            peaks,
+                            troughs,
+                            peak_color,
+                            trough_color,
+                            not peaks_labeled,
+                            not troughs_labeled,
+                            raw_peaks,
+                            raw_troughs,
+                        )
+                        if len(peaks) > 0:
+                            peaks_labeled = True
+                        if len(troughs) > 0:
+                            troughs_labeled = True
                 if roi_2_indices:
                     avg_2 = np.mean(self.neuron_trajectories[roi_2_indices], axis=0)
+                    display_avg_2 = _display_series(avg_2)
                     ax.plot(
                         frames,
-                        _display_series(avg_2),
+                        display_avg_2,
                         color=avg_roi_2_color,
                         linewidth=2.5,
                         antialiased=True,
                         label="Average (ROI 2)",
                     )
+                    if show_peaks:
+                        peaks, troughs = self._find_peaks_and_troughs(display_avg_2)
+                        self._collect_markers(
+                            ax,
+                            frames,
+                            display_avg_2,
+                            peaks,
+                            troughs,
+                            peak_color,
+                            trough_color,
+                            not peaks_labeled,
+                            not troughs_labeled,
+                            raw_peaks,
+                            raw_troughs,
+                        )
+                        if len(peaks) > 0:
+                            peaks_labeled = True
+                        if len(troughs) > 0:
+                            troughs_labeled = True
             elif self.quality_mask is not None and show_good:
                 good_in_plot = [i for i in neurons_to_plot if self.quality_mask[i]]
                 if good_in_plot:
                     avg_trajectory = np.mean(self.neuron_trajectories[good_in_plot], axis=0)
+                    display_avg = _display_series(avg_trajectory)
                     ax.plot(
                         frames,
-                        _display_series(avg_trajectory),
+                        display_avg,
                         color=avg_color,
                         linewidth=2.5,
                         antialiased=True,
                         label="Average (Good Neurons)",
                     )
+                    if show_peaks:
+                        peaks, troughs = self._find_peaks_and_troughs(display_avg)
+                        self._collect_markers(
+                            ax,
+                            frames,
+                            display_avg,
+                            peaks,
+                            troughs,
+                            peak_color,
+                            trough_color,
+                            True,
+                            True,
+                            raw_peaks,
+                            raw_troughs,
+                        )
             else:
                 avg_trajectory = np.mean(self.neuron_trajectories[neurons_to_plot], axis=0)
+                display_avg = _display_series(avg_trajectory)
                 ax.plot(
                     frames,
-                    _display_series(avg_trajectory),
+                    display_avg,
                     color=avg_color,
                     linewidth=2.5,
                     antialiased=True,
                     label="Average",
                 )
+                if show_peaks:
+                    peaks, troughs = self._find_peaks_and_troughs(display_avg)
+                    self._collect_markers(
+                        ax,
+                        frames,
+                        display_avg,
+                        peaks,
+                        troughs,
+                        peak_color,
+                        trough_color,
+                        True,
+                        True,
+                        raw_peaks,
+                        raw_troughs,
+                    )
 
-        ax.set_xlabel("Frame Number", fontsize=12)
+            # Sort by frame and assign chronological order numbers
+            if show_peaks:
+                self._finalize_markers(ax, raw_peaks, raw_troughs, peak_color, trough_color)
+
+        ax.set_xlabel("Time (minutes)", fontsize=12)
         ax.set_ylabel("Intensity", fontsize=12)
-        ax.set_title("Neuron Intensity Trajectories Over Time", fontsize=14)
+        title = "Neuron Intensity Trajectories Over Time"
+        ax.set_title(title, fontsize=14)
+        if self._experiment_start_time:
+            ax.set_title(title, fontsize=14)
+            ax.title.set_text(title)
+            ax.annotate(
+                f"Start: {self._experiment_start_time}",
+                xy=(0.01, 0.99),
+                xycoords="axes fraction",
+                ha="left",
+                va="top",
+                fontsize=9,
+                alpha=0.7,
+            )
         ax.legend(loc="best")
         self._apply_theme(ax)
 
+        # Update status label with peak/trough info if enabled
+        if self.show_peaks_checkbox.isChecked() and show_average and len(neurons_to_plot) > 0:
+            if use_roi_colors:
+                all_peaks, all_troughs = 0, 0
+                if roi_1_indices:
+                    avg_1 = np.mean(self.neuron_trajectories[roi_1_indices], axis=0)
+                    p, t = self._find_peaks_and_troughs(_display_series(avg_1))
+                    all_peaks += len(p)
+                    all_troughs += len(t)
+                if roi_2_indices:
+                    avg_2 = np.mean(self.neuron_trajectories[roi_2_indices], axis=0)
+                    p, t = self._find_peaks_and_troughs(_display_series(avg_2))
+                    all_peaks += len(p)
+                    all_troughs += len(t)
+            else:
+                if self.quality_mask is not None and show_good:
+                    good_in_plot = [i for i in neurons_to_plot if self.quality_mask[i]]
+                    if good_in_plot:
+                        avg = np.mean(self.neuron_trajectories[good_in_plot], axis=0)
+                    else:
+                        avg = np.mean(self.neuron_trajectories[neurons_to_plot], axis=0)
+                else:
+                    avg = np.mean(self.neuron_trajectories[neurons_to_plot], axis=0)
+                p, t = self._find_peaks_and_troughs(_display_series(avg))
+                all_peaks, all_troughs = len(p), len(t)
+
+            # Build status text with current trajectory info + peak/trough counts
+            num_neurons_display = len(neurons_to_plot)
+            status_text = (
+                f"Displaying {num_neurons_display} trajectories | Detected: {all_peaks} peaks, {all_troughs} troughs"
+            )
+            warning_msg = ""
+            if all_peaks > 0 and all_troughs == 0:
+                warning_msg = "No troughs: signal may be mostly rising or troughs too subtle"
+            elif all_troughs > 0 and all_peaks == 0:
+                warning_msg = "No peaks: signal may be mostly falling or peaks too subtle"
+            elif all_peaks == 0 and all_troughs == 0:
+                warning_msg = "Signal may be too flat or noisy"
+
+            if warning_msg:
+                status_text += (
+                    f'<br><span style="background-color: rgba(250, 204, 21, 0.25); '
+                    f'padding: 2px 6px; border-radius: 3px;">⚠ {warning_msg}</span>'
+                )
+                self.status_label.setTextFormat(Qt.RichText)
+            else:
+                self.status_label.setTextFormat(Qt.PlainText)
+            self.status_label.setText(status_text)
+        else:
+            # Reset status when peaks/troughs are not being shown
+            num_neurons_display = len(neurons_to_plot) if neurons_to_plot else 0
+            self.status_label.setTextFormat(Qt.PlainText)
+            self.status_label.setText(f"Displaying {num_neurons_display} trajectories")
+
+        # Create annotation for marker tooltips (hidden initially)
+        self._marker_annotation = ax.annotate(
+            "",
+            xy=(0, 0),
+            xytext=(10, 10),
+            textcoords="offset points",
+            bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor="gray", alpha=0.9),
+            fontsize=9,
+            visible=False,
+            zorder=10,
+        )
+
         if getattr(self, "_hover_cid", None) is not None:
             self.canvas.mpl_disconnect(self._hover_cid)
+        if getattr(self, "_pick_cid", None) is not None:
+            self.canvas.mpl_disconnect(self._pick_cid)
         self._hover_cid = self.canvas.mpl_connect("motion_notify_event", self._on_motion)
+        self._pick_cid = self.canvas.mpl_connect("pick_event", self._on_pick)
         self.canvas.draw_idle()
 
     def _export_to_png(self) -> None:
@@ -523,6 +918,9 @@ class NeuronTrajectoryPlotWidget(QWidget):
         if getattr(self, "_hover_cid", None) is not None:
             self.canvas.mpl_disconnect(self._hover_cid)
             self._hover_cid = None
+        if getattr(self, "_pick_cid", None) is not None:
+            self.canvas.mpl_disconnect(self._pick_cid)
+            self._pick_cid = None
         self.figure.clear()
         self.canvas.draw()
         self.neuron_trajectories = None
