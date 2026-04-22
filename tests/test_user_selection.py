@@ -16,12 +16,21 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
-from PySide6.QtWidgets import QApplication, QDialog, QMessageBox, QWidget
+from PySide6.QtCore import QEvent, QPointF, Qt
+from PySide6.QtGui import QEnterEvent, QFocusEvent, QKeyEvent, QMouseEvent
+from PySide6.QtWidgets import QApplication, QDialog, QGridLayout, QMessageBox, QWidget
 
 from core.experiment_manager import Experiment  # pyright: ignore[reportMissingImports]
 from ui.main_window import MainWindow  # pyright: ignore[reportMissingImports]
 from ui.startup_dialog import StartupDialog  # pyright: ignore[reportMissingImports]
-from ui.user_selection_dialog import UserSelectionDialog, _list_existing_users  # pyright: ignore[reportMissingImports]
+from ui.user_selection_dialog import (  # pyright: ignore[reportMissingImports]
+    UserAccountActionsDialog,
+    UserSelectionDialog,
+    _DeleteConfirmDialog,
+    _UserCard,
+    current_user_button_text,
+    _list_existing_users,
+)
 
 # -----------------------------------------------------------------------------
 # Test strategy (high level)
@@ -574,3 +583,139 @@ def test_main_window_open_user_account_popup_cancelled_selection_restores_window
         main_window._open_user_account_popup()
 
     mock_show.assert_called_once()
+
+
+def test_current_user_button_text_formats_label():
+    assert current_user_button_text("test") == "Current User: test"
+
+
+def test_delete_confirm_dialog_enables_button_on_exact_match(app):
+    dlg = _DeleteConfirmDialog("Alice")
+    assert not dlg._confirm_btn.isEnabled()
+    dlg._on_text_changed("Alice")
+    assert dlg._confirm_btn.isEnabled()
+
+
+def test_delete_confirm_dialog_try_accept_rejects_non_match(app):
+    dlg = _DeleteConfirmDialog("Alice")
+    dlg._input.setText("Bob")
+    dlg._try_accept()
+    assert dlg.result() == QDialog.Rejected
+
+
+def test_delete_confirm_dialog_try_accept_accepts_match(app):
+    dlg = _DeleteConfirmDialog("Alice")
+    dlg._input.setText("Alice")
+    dlg._try_accept()
+    assert dlg.result() == QDialog.Accepted
+
+
+def test_user_account_actions_dialog_sets_switch_requested(app):
+    dlg = UserAccountActionsDialog("test-user")
+    assert dlg.switch_user_requested is False
+    dlg._on_switch()
+    assert dlg.switch_user_requested is True
+    assert dlg.result() == QDialog.Accepted
+
+
+def test_user_card_mouse_click_emits_login_requested(app):
+    parent = QWidget()
+    card = _UserCard("Alice", grid_row=0, grid_col=0, grid_cols=1, parent=parent)
+    called = []
+    card.login_requested.connect(lambda user: called.append(user))
+    event = QMouseEvent(
+        QMouseEvent.Type.MouseButtonPress,
+        card.rect().center(),
+        Qt.LeftButton,
+        Qt.LeftButton,
+        Qt.NoModifier,
+    )
+    card.mousePressEvent(event)
+    assert called == ["Alice"]
+
+
+def test_user_card_key_enter_emits_login_requested(app):
+    parent = QWidget()
+    card = _UserCard("Alice", grid_row=0, grid_col=0, grid_cols=1, parent=parent)
+    called = []
+    card.login_requested.connect(lambda user: called.append(user))
+    event = QKeyEvent(QKeyEvent.Type.KeyPress, Qt.Key_Return, Qt.NoModifier)
+    card.keyPressEvent(event)
+    assert called == ["Alice"]
+
+
+def test_user_card_key_arrow_moves_focus_to_neighbor(app):
+    parent = QWidget()
+    parent.setLayout(QGridLayout())
+    left = _UserCard("Left", grid_row=0, grid_col=0, grid_cols=2, parent=parent)
+    right = _UserCard("Right", grid_row=0, grid_col=1, grid_cols=2, parent=parent)
+    parent.layout().addWidget(left, 0, 0)
+    parent.layout().addWidget(right, 0, 1)
+    right.setFocus = Mock()
+
+    event = QKeyEvent(QKeyEvent.Type.KeyPress, Qt.Key_Right, Qt.NoModifier)
+    left.keyPressEvent(event)
+    right.setFocus.assert_called_once()
+
+
+def test_create_new_user_rejects_dot_and_dotdot(users_root, app):
+    dlg = UserSelectionDialog()
+    with patch.object(QMessageBox, "warning") as mock_warn:
+        dlg._name_input.setText(".")
+        dlg._confirm_new_user()
+        dlg._name_input.setText("..")
+        dlg._confirm_new_user()
+    assert mock_warn.call_count == 2
+
+
+def test_create_new_user_duplicate_shows_info(users_root, app):
+    (users_root / "Alice" / "experiments").mkdir(parents=True)
+    dlg = UserSelectionDialog()
+    dlg._name_input.setText("Alice")
+    with patch.object(QMessageBox, "information") as mock_info:
+        dlg._confirm_new_user()
+    mock_info.assert_called_once()
+
+
+def test_create_new_user_oserror_shows_critical(users_root, app):
+    dlg = UserSelectionDialog()
+    dlg._name_input.setText("Alice")
+    with (
+        patch("ui.user_selection_dialog._experiments_dir_for_user", return_value=users_root / "Alice" / "experiments"),
+        patch("pathlib.Path.mkdir", side_effect=OSError("disk error")),
+        patch.object(QMessageBox, "critical") as mock_critical,
+    ):
+        dlg._confirm_new_user()
+    mock_critical.assert_called_once()
+
+
+def test_user_selection_show_and_hide_new_user_form(app):
+    dlg = UserSelectionDialog()
+    dlg._show_new_user_form()
+    assert dlg._new_user_frame.isHidden() is False
+    assert dlg._add_btn.isHidden() is True
+    dlg._hide_new_user_form()
+    assert dlg._new_user_frame.isHidden() is True
+    assert dlg._add_btn.isHidden() is False
+
+
+def test_user_selection_refresh_cards_rebuilds_existing_widgets(users_root, app):
+    (users_root / "alice").mkdir(parents=True)
+    dlg = UserSelectionDialog()
+    # Refresh twice to force the deleteLater cleanup branch.
+    dlg._refresh_cards()
+    dlg._refresh_cards()
+    assert dlg._cards_layout.count() >= 1
+
+
+def test_user_card_hover_and_focus_update_border(app):
+    parent = QWidget()
+    card = _UserCard("Alice", grid_row=0, grid_col=0, grid_cols=1, parent=parent)
+    card.enterEvent(QEnterEvent(QPointF(0, 0), QPointF(0, 0), QPointF(0, 0)))
+    assert "#4A90E2" in card.styleSheet()
+    card.leaveEvent(QEvent(QEvent.Type.Leave))
+    assert "transparent" in card.styleSheet()
+    card.focusInEvent(QFocusEvent(QEvent.Type.FocusIn))
+    assert "#4A90E2" in card.styleSheet()
+    card.focusOutEvent(QFocusEvent(QEvent.Type.FocusOut))
+    assert "transparent" in card.styleSheet()

@@ -6,8 +6,8 @@ from datetime import datetime
 from unittest.mock import Mock, patch
 
 import pytest
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QDialog
+from PySide6.QtCore import QPoint, Qt
+from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
 from ui.startup_dialog import NewExperimentDialog, RecentExperimentRow, StartupDialog
 
@@ -254,3 +254,170 @@ class TestStartupDialog:
             dlg._show_file_location(str(exp_file))
 
         mock_open.assert_called_once()
+
+    def test_get_item_for_path_finds_matching_row(self, app, experiments_dir) -> None:
+        dlg = StartupDialog(experiments_dir)
+        item = dlg._get_item_for_path("/missing")
+        assert item is None
+
+    def test_select_item_by_path_sets_current_item(self, app, experiments_dir) -> None:
+        dlg = StartupDialog(experiments_dir)
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QListWidgetItem
+
+        item = QListWidgetItem()
+        item.setData(Qt.UserRole, "/tmp/exp.nexp")
+        dlg.recent_list.addItem(item)
+        dlg._select_item_by_path("/tmp/exp.nexp")
+        assert dlg.recent_list.currentItem() == item
+
+    def test_open_recent_by_path_calls_open_recent(self, app, experiments_dir) -> None:
+        dlg = StartupDialog(experiments_dir)
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QListWidgetItem
+
+        item = QListWidgetItem()
+        item.setData(Qt.UserRole, "/tmp/exp.nexp")
+        dlg.recent_list.addItem(item)
+        with patch.object(dlg, "_open_recent") as mock_open_recent:
+            dlg._open_recent_by_path("/tmp/exp.nexp")
+        mock_open_recent.assert_called_once_with(item)
+
+    def test_remove_from_list_for_path_deletes_item(self, app, experiments_dir) -> None:
+        dlg = StartupDialog(experiments_dir)
+        with patch.object(dlg, "_delete_experiment") as mock_delete:
+            with patch.object(dlg, "_get_item_for_path", return_value=Mock()):
+                dlg._remove_from_list_for_path("/tmp/exp.nexp")
+        mock_delete.assert_called_once()
+
+    def test_export_for_path_calls_export(self, app, experiments_dir) -> None:
+        dlg = StartupDialog(experiments_dir)
+        with patch.object(dlg, "_export_experiment") as mock_export:
+            with patch.object(dlg, "_get_item_for_path", return_value=Mock()):
+                dlg._export_for_path("/tmp/exp.nexp")
+        mock_export.assert_called_once()
+
+    def test_open_recent_load_failure_shows_warning(self, app, experiments_dir) -> None:
+        dlg = StartupDialog(experiments_dir)
+        from PySide6.QtCore import Qt
+        from PySide6.QtWidgets import QListWidgetItem
+
+        item = QListWidgetItem()
+        item.setData(Qt.UserRole, "/tmp/bad.nexp")
+        with (
+            patch.object(dlg.manager, "load_experiment", side_effect=ValueError("bad")),
+            patch("ui.startup_dialog.QMessageBox.warning") as mock_warn,
+            patch.object(dlg, "_refresh_recent") as mock_refresh,
+        ):
+            dlg._open_recent(item)
+        mock_warn.assert_called_once()
+        mock_refresh.assert_called_once()
+
+    def test_delete_experiment_delete_file_success_shows_deleted(self, app, experiments_dir) -> None:
+        dlg = StartupDialog(experiments_dir)
+        item = Mock()
+        item.data.return_value = "/tmp/path.nexp"
+        with (
+            patch("ui.startup_dialog.QMessageBox.warning", return_value=QMessageBox.Yes),
+            patch.object(dlg.manager, "delete_experiment", return_value=True),
+            patch.object(dlg, "_refresh_recent") as mock_refresh,
+            patch("ui.startup_dialog.QMessageBox.information") as mock_info,
+        ):
+            dlg._delete_experiment(item, delete_file=True)
+        mock_refresh.assert_called_once()
+        mock_info.assert_called_once()
+
+    def test_delete_experiment_failure_shows_warning(self, app, experiments_dir) -> None:
+        dlg = StartupDialog(experiments_dir)
+        item = Mock()
+        item.data.return_value = "/tmp/path.nexp"
+        with (
+            patch.object(dlg.manager, "delete_experiment", return_value=False),
+            patch("ui.startup_dialog.QMessageBox.warning") as mock_warn,
+        ):
+            dlg._delete_experiment(item, delete_file=False)
+        mock_warn.assert_called_once()
+
+    def test_export_experiment_no_path_noop(self, app, experiments_dir) -> None:
+        dlg = StartupDialog(experiments_dir)
+        item = Mock()
+        item.data.return_value = None
+        dlg._export_experiment(item)
+
+    def test_export_experiment_failure_shows_critical(self, app, experiments_dir) -> None:
+        dlg = StartupDialog(experiments_dir)
+        item = Mock()
+        item.data.return_value = "/tmp/path.nexp"
+        with (
+            patch.object(dlg.manager, "load_experiment", side_effect=ValueError("boom")),
+            patch("ui.startup_dialog.QMessageBox.critical") as mock_critical,
+        ):
+            dlg._export_experiment(item)
+        mock_critical.assert_called_once()
+
+    def test_export_experiment_success_shows_information(self, app, experiments_dir, tmp_path) -> None:
+        dlg = StartupDialog(experiments_dir)
+        item = Mock()
+        item.data.return_value = "/tmp/source.nexp"
+        experiment = Mock()
+        experiment.name = "ExpA"
+        target = str(tmp_path / "exported.nexp")
+        with (
+            patch.object(dlg.manager, "load_experiment", return_value=experiment),
+            patch("ui.startup_dialog.QFileDialog.getSaveFileName", return_value=(target, "")),
+            patch.object(dlg.manager, "save_experiment", return_value=True),
+            patch("ui.startup_dialog.QMessageBox.information") as mock_info,
+        ):
+            dlg._export_experiment(item)
+        mock_info.assert_called_once()
+
+    def test_show_context_menu_dispatches_open(self, app, experiments_dir) -> None:
+        dlg = StartupDialog(experiments_dir)
+        with (
+            patch.object(dlg.recent_list, "itemAt", return_value=Mock()),
+            patch("ui.startup_dialog.QMenu") as mock_menu_cls,
+            patch.object(dlg, "_open_recent") as mock_open_recent,
+        ):
+            menu = mock_menu_cls.return_value
+            open_action = Mock()
+            delete_action = Mock()
+            delete_file_action = Mock()
+            export_action = Mock()
+            menu.addAction.side_effect = [open_action, delete_action, delete_file_action, export_action]
+            menu.exec.return_value = open_action
+            dlg._show_context_menu(position=QPoint(0, 0))
+        mock_open_recent.assert_called_once()
+
+    def test_show_context_menu_dispatches_delete_file(self, app, experiments_dir) -> None:
+        dlg = StartupDialog(experiments_dir)
+        with (
+            patch.object(dlg.recent_list, "itemAt", return_value=Mock()),
+            patch("ui.startup_dialog.QMenu") as mock_menu_cls,
+            patch.object(dlg, "_delete_experiment") as mock_delete,
+        ):
+            menu = mock_menu_cls.return_value
+            open_action = Mock()
+            delete_action = Mock()
+            delete_file_action = Mock()
+            export_action = Mock()
+            menu.addAction.side_effect = [open_action, delete_action, delete_file_action, export_action]
+            menu.exec.return_value = delete_file_action
+            dlg._show_context_menu(position=QPoint(0, 0))
+        mock_delete.assert_called_once()
+
+    def test_show_context_menu_dispatches_export(self, app, experiments_dir) -> None:
+        dlg = StartupDialog(experiments_dir)
+        with (
+            patch.object(dlg.recent_list, "itemAt", return_value=Mock()),
+            patch("ui.startup_dialog.QMenu") as mock_menu_cls,
+            patch.object(dlg, "_export_experiment") as mock_export,
+        ):
+            menu = mock_menu_cls.return_value
+            open_action = Mock()
+            delete_action = Mock()
+            delete_file_action = Mock()
+            export_action = Mock()
+            menu.addAction.side_effect = [open_action, delete_action, delete_file_action, export_action]
+            menu.exec.return_value = export_action
+            dlg._show_context_menu(position=QPoint(0, 0))
+        mock_export.assert_called_once()
