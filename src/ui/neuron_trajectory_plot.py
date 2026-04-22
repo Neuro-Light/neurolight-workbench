@@ -972,9 +972,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
                 writer.writerow(header_parts)
                 writer.writerows(rows)
 
-            QMessageBox.information(
-                self, "Export Successful", f"Peak/trough data exported to:\n{file_path}"
-            )
+            QMessageBox.information(self, "Export Successful", f"Peak/trough data exported to:\n{file_path}")
         except Exception as e:
             QMessageBox.critical(self, "Export Failed", f"Failed to export data:\n{str(e)}")
 

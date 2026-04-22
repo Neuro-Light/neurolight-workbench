@@ -619,8 +619,6 @@ class ROIIntensityPlotWidget(QWidget):
                 writer.writerow(["ROI", "Type", "Frame", "Time_Minutes", "Intensity"])
                 writer.writerows(rows)
 
-            QMessageBox.information(
-                self, "Export Successful", f"Peak/trough data exported to:\n{file_path}"
-            )
+            QMessageBox.information(self, "Export Successful", f"Peak/trough data exported to:\n{file_path}")
         except Exception as e:
             QMessageBox.critical(self, "Export Failed", f"Failed to export data:\n{e}")
