@@ -33,10 +33,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-
 # ---------------------------------------------------------------------------
 # Public helper (used by StartupDialog and MainWindow for the badge label)
 # ---------------------------------------------------------------------------
+
 
 def current_user_button_text(user_name: str) -> str:
     return f"Current User: {user_name}"
@@ -45,6 +45,7 @@ def current_user_button_text(user_name: str) -> str:
 # ---------------------------------------------------------------------------
 # Path helpers (unchanged logic)
 # ---------------------------------------------------------------------------
+
 
 def _repo_root() -> Path:
     # This file lives at src/ui/user_selection_dialog.py
@@ -93,6 +94,7 @@ def _avatar_color(name: str) -> str:
 # Delete-with-typed-confirmation dialog
 # ---------------------------------------------------------------------------
 
+
 class _DeleteConfirmDialog(QDialog):
     """Requires the user to type the username before deletion is allowed."""
 
@@ -104,13 +106,12 @@ class _DeleteConfirmDialog(QDialog):
         self._user_name = user_name
 
         warning = QLabel(
-            f"<b>This cannot be undone.</b> All experiments for "
-            f"<b>{user_name}</b> will be permanently deleted."
+            f"<b>This cannot be undone.</b> All experiments for <b>{user_name}</b> will be permanently deleted."
         )
         warning.setWordWrap(True)
         warning.setContentsMargins(0, 0, 0, 4)
 
-        instruction = QLabel(f'Type <b>{user_name}</b> to confirm:')
+        instruction = QLabel(f"Type <b>{user_name}</b> to confirm:")
 
         self._input = QLineEdit()
         self._input.setPlaceholderText(user_name)
@@ -162,8 +163,9 @@ class _UserCard(QFrame):
     login_requested: Signal = Signal(str)
     delete_requested: Signal = Signal(str)
 
-    def __init__(self, user_name: str, grid_row: int, grid_col: int, grid_cols: int,
-                 parent: Optional[QWidget] = None) -> None:
+    def __init__(
+        self, user_name: str, grid_row: int, grid_col: int, grid_cols: int, parent: Optional[QWidget] = None
+    ) -> None:
         super().__init__(parent)
         self._user_name = user_name
         self._grid_row = grid_row
@@ -221,9 +223,7 @@ class _UserCard(QFrame):
         highlighted = self._hovered or self._focused
         color = "#4A90E2" if highlighted else "transparent"
         # Scoped to objectName so child widgets are not affected
-        self.setStyleSheet(
-            f"QFrame#userCard {{ border: 2px solid {color}; border-radius: 12px; }}"
-        )
+        self.setStyleSheet(f"QFrame#userCard {{ border: 2px solid {color}; border-radius: 12px; }}")
 
     # --- Mouse & focus events ---
 
@@ -277,6 +277,7 @@ class _UserCard(QFrame):
 # Improved UserAccountActionsDialog (same public interface, better look)
 # ---------------------------------------------------------------------------
 
+
 class UserAccountActionsDialog(QDialog):
     """Clean modal: shows signed-in user, offers Switch User or Cancel."""
 
@@ -287,7 +288,7 @@ class UserAccountActionsDialog(QDialog):
         self.setMinimumWidth(280)
         self.switch_user_requested = False
 
-        signed_in = QLabel(f"Signed in as")
+        signed_in = QLabel("Signed in as")
         signed_in.setAlignment(Qt.AlignCenter)
 
         name_lbl = QLabel(f"<b>{user_name}</b>")
@@ -322,6 +323,7 @@ class UserAccountActionsDialog(QDialog):
 # ---------------------------------------------------------------------------
 # Main login screen
 # ---------------------------------------------------------------------------
+
 
 class UserSelectionDialog(QDialog):
     """Full-size 'Who's using NeuroLight?' onboarding screen.
