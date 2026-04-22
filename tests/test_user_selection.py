@@ -585,6 +585,45 @@ def test_main_window_open_user_account_popup_cancelled_selection_restores_window
     mock_show.assert_called_once()
 
 
+def test_main_window_open_user_account_popup_blocks_when_alignment_running(main_window):
+    account_popup = Mock()
+    account_popup.exec.return_value = QDialog.Accepted
+    account_popup.switch_user_requested = True
+    worker = Mock()
+    worker.isRunning.return_value = True
+    main_window._alignment_worker = worker
+
+    with (
+        patch("ui.main_window.UserAccountActionsDialog", return_value=account_popup),
+        patch("ui.main_window.QMessageBox.warning") as mock_warn,
+        patch.object(main_window, "hide") as mock_hide,
+    ):
+        main_window._open_user_account_popup()
+
+    mock_warn.assert_called_once()
+    mock_hide.assert_not_called()
+
+
+def test_main_window_open_user_account_popup_raises_when_preswitch_save_fails(main_window):
+    account_popup = Mock()
+    account_popup.exec.return_value = QDialog.Accepted
+    account_popup.switch_user_requested = True
+    main_window.current_experiment_path = "/tmp/current.nexp"
+    main_window._alignment_worker = None
+
+    with (
+        patch("ui.main_window.UserAccountActionsDialog", return_value=account_popup),
+        patch.object(main_window.manager, "save_experiment", side_effect=RuntimeError("save failed")),
+        patch.object(main_window, "hide") as mock_hide,
+        patch.object(main_window, "_capture_experiment_time_settings") as mock_capture_time,
+    ):
+        with pytest.raises(RuntimeError, match="save failed"):
+            main_window._open_user_account_popup()
+
+    mock_capture_time.assert_called_once()
+    mock_hide.assert_not_called()
+
+
 def test_current_user_button_text_formats_label():
     assert current_user_button_text("test") == "Current User: test"
 

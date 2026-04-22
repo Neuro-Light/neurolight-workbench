@@ -461,14 +461,24 @@ class MainWindow(QMainWindow):
         if popup.exec() != QDialog.Accepted or not popup.switch_user_requested:
             return
 
+        if self._alignment_worker is not None and self._alignment_worker.isRunning():
+            QMessageBox.warning(
+                self,
+                "Alignment In Progress",
+                "Cannot switch users while image alignment is running. Please wait for alignment to finish.",
+            )
+            return
+
         self._flush_pending_display_settings()
         self._sync_rois_to_experiment()
         self._capture_display_settings()
+        self._capture_experiment_time_settings()
         if self.current_experiment_path:
             try:
                 self.manager.save_experiment(self.experiment, self.current_experiment_path)
             except Exception:
                 logger.exception("Failed to save experiment before switching user.")
+                raise
 
         self.hide()
         user_dialog = UserSelectionDialog()
