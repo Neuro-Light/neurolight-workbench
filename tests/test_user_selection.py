@@ -465,10 +465,12 @@ def test_main_window_switch_user_then_switch_back_updates_button_correctly(app, 
 
     mock_analysis = QWidget()
     mock_roi_plot_widget = Mock()
+    mock_traj_plot_widget = Mock()
+    mock_detection_widget = Mock()
     mock_analysis.roi_plot_widget = mock_roi_plot_widget
     mock_analysis.get_roi_plot_widget = Mock(return_value=mock_roi_plot_widget)
-    mock_analysis.get_neuron_detection_widget = Mock(return_value=Mock())
-    mock_analysis.get_neuron_trajectory_plot_widget = Mock(return_value=Mock())
+    mock_analysis.get_neuron_detection_widget = Mock(return_value=mock_detection_widget)
+    mock_analysis.get_neuron_trajectory_plot_widget = Mock(return_value=mock_traj_plot_widget)
 
     mock_stack_handler = Mock()
     mock_stack_handler.files = []
@@ -503,6 +505,13 @@ def test_main_window_switch_user_then_switch_back_updates_button_correctly(app, 
         # not the intermediate ("Marcus").
         assert window.user_experiments_dir == test_dir
         assert window._current_user_btn.text() == "Current User: test"
+        # Experiment-bound widgets should be rebound after reloading a new experiment.
+        assert window.image_processor.experiment == startup_choice.experiment
+        assert mock_roi_plot_widget.experiment == startup_choice.experiment
+        assert mock_detection_widget.experiment == startup_choice.experiment
+        mock_detection_widget.set_image_processor.assert_called()
+        mock_detection_widget.set_trajectory_plot_callback.assert_called()
+        mock_detection_widget.set_save_experiment_callback.assert_called_with(window._save_neuron_detection)
 
 
 def test_user_selection_delete_user_success_refreshes_cards(users_root, app):

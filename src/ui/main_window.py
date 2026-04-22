@@ -441,6 +441,7 @@ class MainWindow(QMainWindow):
         self.set_current_experiment_path(startup.experiment_path, persist_workflow=False)
         self.workflow_manager.attach_experiment(self.experiment)
         self.setWindowTitle(f"Neurolight - {self.experiment.name}")
+        self.image_processor = ImageProcessor(self.experiment)
 
         self.viewer.reset()
 
@@ -449,9 +450,58 @@ class MainWindow(QMainWindow):
 
         self.stack_handler.associate_with_experiment(self.experiment)
         self.data_analyzer = DataAnalyzer(self.experiment)
+        self._bind_analysis_widgets_to_experiment()
 
         self._auto_load_experiment_data()
         self.show()
+
+    def _bind_analysis_widgets_to_experiment(self) -> None:
+        """Rebind analysis/detection widgets to the current experiment instance."""
+        try:
+            roi_plot_widget = self.analysis.get_roi_plot_widget()
+            roi_plot_widget.experiment = self.experiment
+        except Exception:
+            roi_plot_widget = None
+
+        try:
+            trajectory_plot_widget = self.analysis.get_neuron_trajectory_plot_widget()
+            if hasattr(trajectory_plot_widget, "experiment"):
+                trajectory_plot_widget.experiment = self.experiment
+        except Exception:
+            trajectory_plot_widget = None
+
+        rayleigh_plot_getter = getattr(self.analysis, "get_rayleigh_plot_widget", None)
+        rayleigh_plot_widget = rayleigh_plot_getter() if callable(rayleigh_plot_getter) else None
+
+        try:
+            detection_widget = self.analysis.get_neuron_detection_widget()
+            detection_widget.set_image_processor(self.image_processor)
+            detection_widget.experiment = self.experiment
+
+            def _update_neuron_plots(
+                trajectories,
+                quality_mask,
+                locations,
+                roi_origin=None,
+            ) -> None:
+                if trajectory_plot_widget is not None:
+                    trajectory_plot_widget.plot_trajectories(
+                        trajectories,
+                        quality_mask,
+                        locations,
+                        roi_origin=roi_origin,
+                    )
+                if rayleigh_plot_widget is not None:
+                    rayleigh_plot_widget.set_trajectory_data(
+                        trajectories,
+                        quality_mask,
+                        roi_origin=roi_origin,
+                    )
+
+            detection_widget.set_trajectory_plot_callback(_update_neuron_plots)
+            detection_widget.set_save_experiment_callback(self._save_neuron_detection)
+        except Exception:
+            pass
 
     def _open_user_account_popup(self) -> None:
         if self.user_experiments_dir is None:
@@ -619,15 +669,10 @@ class MainWindow(QMainWindow):
 
         # Right panel: analysis dashboard
         self.analysis = AnalysisPanel()
-        self.analysis.get_roi_plot_widget().experiment = self.experiment
-
-        # Set up neuron detection widget
-        detection_widget = self.analysis.get_neuron_detection_widget()
-        detection_widget.set_image_processor(self.image_processor)
-        detection_widget.experiment = self.experiment
 
         # Notify workflow manager when detection completes
         try:
+            detection_widget = self.analysis.get_neuron_detection_widget()
             detection_widget.detectionCompleted.connect(
                 lambda: self.workflow_manager.complete_step_if_current(WorkflowStep.DETECT_NEURONS)
             )
@@ -635,36 +680,8 @@ class MainWindow(QMainWindow):
             # In tests the widget may be heavily mocked; ignore connection errors
             pass
 
-        # Connect detection widget to trajectory and Rayleigh plots. Some tests use a
-        # lightweight AnalysisPanel double that does not expose every plot.
-        trajectory_plot_widget = self.analysis.get_neuron_trajectory_plot_widget()
-        rayleigh_plot_getter = getattr(self.analysis, "get_rayleigh_plot_widget", None)
-        rayleigh_plot_widget = rayleigh_plot_getter() if callable(rayleigh_plot_getter) else None
-
-        def _update_neuron_plots(
-            trajectories,
-            quality_mask,
-            locations,
-            roi_origin=None,
-        ) -> None:
-            trajectory_plot_widget.plot_trajectories(
-                trajectories,
-                quality_mask,
-                locations,
-                roi_origin=roi_origin,
-            )
-            # Rayleigh plot ignores ROI; it just needs trajectories and quality mask.
-            if rayleigh_plot_widget is not None:
-                rayleigh_plot_widget.set_trajectory_data(
-                    trajectories,
-                    quality_mask,
-                    roi_origin=roi_origin,
-                )
-
-        detection_widget.set_trajectory_plot_callback(_update_neuron_plots)
-
-        # Connect detection widget to save experiment callback
-        detection_widget.set_save_experiment_callback(self._save_neuron_detection)
+        # Bind widgets to current experiment and connect detection callbacks.
+        self._bind_analysis_widgets_to_experiment()
 
         # Connect ROI selection to analysis and saving (signal: str, ROI)
         self.viewer.roiSelected.connect(self._on_roi_selected)
