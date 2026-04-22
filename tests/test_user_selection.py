@@ -162,6 +162,7 @@ from ui.user_selection_dialog import UserSelectionDialog, _list_existing_users  
 # Fixtures
 # -----------------------------------------------------------------------------
 
+
 @pytest.fixture
 def app():
     """Ensure a QApplication exists (conftest also creates one very early)."""
@@ -269,6 +270,7 @@ def main_window(app, sample_experiment, test_user_experiments_dir):
 # Unit tests for `ui.user_selection_dialog`
 # -----------------------------------------------------------------------------
 
+
 def test_list_existing_users_empty(users_root):
     # When users/ exists but is empty.
     assert _list_existing_users() == []
@@ -308,7 +310,7 @@ def test_create_new_user_rejects_empty_name(users_root, app):
 def test_create_new_user_rejects_invalid_chars(users_root, app):
     dlg = UserSelectionDialog()
     with (
-        patch("ui.user_selection_dialog.QInputDialog.getText", return_value=('Bad|Name', True)),
+        patch("ui.user_selection_dialog.QInputDialog.getText", return_value=("Bad|Name", True)),
         patch.object(QMessageBox, "warning") as mock_warning,
     ):
         dlg._create_new_user()
@@ -339,6 +341,7 @@ def test_load_existing_user_accepts_selection(users_root, app):
 # Unit tests for `ui.startup_dialog` current user button + switching
 # -----------------------------------------------------------------------------
 
+
 def test_startup_dialog_shows_current_user_button_text(users_root, app):
     experiments_dir = users_root / "test" / "experiments"
     experiments_dir.mkdir(parents=True)
@@ -364,6 +367,7 @@ def test_startup_dialog_uses_experiments_dir_parent_as_user_name(users_root, app
 # -----------------------------------------------------------------------------
 # Integration-ish tests for `ui.main_window` current user button + switching
 # -----------------------------------------------------------------------------
+
 
 def test_main_window_corner_current_user_button_matches_user_experiments_dir(app, sample_experiment, users_root):
     (users_root / "test" / "experiments").mkdir(parents=True)
@@ -501,4 +505,3 @@ def test_main_window_switch_user_then_switch_back_updates_button_correctly(app, 
         # not the intermediate ("Marcus").
         assert window.user_experiments_dir == test_dir
         assert window._current_user_btn.text() == "Current User: test"
-

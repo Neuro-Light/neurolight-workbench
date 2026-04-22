@@ -246,6 +246,7 @@ class TestExitExperiment:
             # Verify app was quit
             mock_quit.assert_called_once()
 
+
 @pytest.mark.skip(reason="PySide6 QMenu C++ object lifecycle unreliable in headless CI")
 class TestMenuActions:
     """Tests for menu action connections."""
