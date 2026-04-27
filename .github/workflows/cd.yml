@@ -96,7 +96,7 @@ jobs:
       matrix:
         include:
           - runner: windows-latest
-            exe_name: neurolight-${{ github.ref_name }}-windows-amd64.exe
+            exe_name: NeuroLight-windows-x86_64.exe
             artifact_name: exe-windows
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -136,10 +136,20 @@ jobs:
           name: ${{ matrix.artifact_name }}
           path: release-asset/
 
-  macos-release-assets:
-    name: Build macOS DMG and attach to release
-    runs-on: macos-latest
+  build-macos:
+    name: Build macOS DMG (${{ matrix.arch }})
     needs: [ci-check]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: arm64
+            runner: macos-15
+            dmg_name: NeuroLight-arm64.dmg
+          - arch: x86_64
+            runner: macos-13
+            dmg_name: NeuroLight-x86_64.dmg
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: write
     steps:
@@ -192,30 +202,32 @@ jobs:
       - name: Re-package signed app into DMG
         run: ./build-macos-dmg.sh
 
+      - name: Rename DMG for architecture
+        run: mv dist/Neurolight.dmg dist/${{ matrix.dmg_name }}
+
       - name: Notarize DMG
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           TEAM_ID: ${{ secrets.TEAM_ID }}
           APP_SPECIFIC_PASSWORD: ${{ secrets.APP_SPECIFIC_PASSWORD }}
         run: |
-          xcrun notarytool submit dist/Neurolight.dmg \
+          xcrun notarytool submit dist/${{ matrix.dmg_name }} \
             --apple-id "$APPLE_ID" \
             --team-id "$TEAM_ID" \
             --password "$APP_SPECIFIC_PASSWORD" \
             --wait
 
       - name: Staple notarization
-        run: xcrun stapler staple dist/Neurolight.dmg
+        run: xcrun stapler staple dist/${{ matrix.dmg_name }}
 
       - name: Upload DMG to GitHub Release
         uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2
         with:
-          files: |
-            dist/Neurolight.dmg
+          files: dist/${{ matrix.dmg_name }}
 
   release:
     runs-on: ubuntu-latest
-    needs: [build-python, build-exe, macos-release-assets]
+    needs: [build-python, build-exe, build-macos]
     permissions:
       contents: write
     steps:
