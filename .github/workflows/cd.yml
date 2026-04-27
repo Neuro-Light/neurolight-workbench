@@ -147,7 +147,7 @@ jobs:
             runner: macos-15
             dmg_name: NeuroLight-arm64.dmg
           - arch: x86_64
-            runner: macos-13
+            runner: macos-15-intel
             dmg_name: NeuroLight-x86_64.dmg
     runs-on: ${{ matrix.runner }}
     permissions:
