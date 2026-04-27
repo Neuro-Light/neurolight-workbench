@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 import numpy as np
-from PySide6.QtCore import QTime, QTimer, QUrl
+from PySide6.QtCore import Qt, QTime, QTimer, QUrl
 from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPlainTextEdit,
+    QPushButton,
     QSplitter,
     QTimeEdit,
     QVBoxLayout,
@@ -38,6 +39,7 @@ from ui.image_viewer import ImageViewer
 from ui.loading_dialog import LoadingDialog
 from ui.settings_dialog import SettingsDialog
 from ui.startup_dialog import StartupDialog
+from ui.user_selection_dialog import UserAccountActionsDialog, UserSelectionDialog, current_user_button_text
 from ui.workflow import STEP_DEFINITIONS, WorkflowManager, WorkflowStep, WorkflowStepper
 from utils.file_handler import ImageStackHandler, _get_exif_timestamp
 
@@ -212,11 +214,21 @@ def _time_string_to_minutes(value: object) -> Optional[int]:
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, experiment: Experiment) -> None:
+    def __init__(
+        self,
+        experiment: Experiment,
+        recent_file: Optional[Path] = None,
+        *,
+        user_experiments_dir: Optional[Path] = None,
+    ) -> None:
         super().__init__()
         self.experiment = experiment
-        self.manager = ExperimentManager()
+        self.manager = ExperimentManager(recent_file)
         self.current_experiment_path: Optional[str] = None
+        # Set by the launcher (main.py). Used when returning to the experiment manager.
+        self.user_experiments_dir = user_experiments_dir
+        self.user_recent_file: Optional[Path] = recent_file
+        self._current_user_btn: Optional[QPushButton] = None
         self.image_processor = ImageProcessor(experiment)
         self._alignment_worker: Optional[AlignmentWorker] = None
 
@@ -242,6 +254,7 @@ class MainWindow(QMainWindow):
         self.workflow_stepper.requestAlignImages.connect(self._align_images)
 
         self._init_menu()
+        self._init_current_user_menu_corner()
         self._init_layout()
 
     # ------------------------------------------------------------------
@@ -403,6 +416,138 @@ class MainWindow(QMainWindow):
         about_action = help_meun.addAction("About")
         about_action.triggered.connect(self.open_website)
 
+    def _init_current_user_menu_corner(self) -> None:
+        if self.user_experiments_dir is None:
+            return
+        self._current_user_btn = QPushButton(current_user_button_text(self.user_experiments_dir.parent.name))
+        self._current_user_btn.setProperty("class", "tab-action")
+        self._current_user_btn.clicked.connect(self._open_user_account_popup)
+        self.menuBar().setCornerWidget(self._current_user_btn, Qt.Corner.TopLeftCorner)
+
+    def _update_current_user_button_text(self) -> None:
+        if self._current_user_btn is None or self.user_experiments_dir is None:
+            return
+        self._current_user_btn.setText(current_user_button_text(self.user_experiments_dir.parent.name))
+
+    def _reload_workbench_after_startup_choice(self, startup: StartupDialog) -> None:
+        """Apply an experiment chosen from StartupDialog and show the main window again."""
+        # StartupDialog may have switched workspace (Current User) while open; keep paths in sync.
+        self.user_experiments_dir = startup.experiments_dir
+        self.user_recent_file = startup.experiments_dir.parent / "recent_experiments.json"
+        self.manager = ExperimentManager(self.user_recent_file)
+        self._update_current_user_button_text()
+
+        self.experiment = startup.experiment  # type: ignore[assignment]
+        self.set_current_experiment_path(startup.experiment_path, persist_workflow=False)
+        self.workflow_manager.attach_experiment(self.experiment)
+        self.setWindowTitle(f"Neurolight - {self.experiment.name}")
+        self.image_processor = ImageProcessor(self.experiment)
+
+        self.viewer.reset()
+
+        self.analysis.roi_plot_widget.clear_plot()
+        self.analysis.get_neuron_trajectory_plot_widget().clear_plot()
+
+        self.stack_handler.associate_with_experiment(self.experiment)
+        self.data_analyzer = DataAnalyzer(self.experiment)
+        self._bind_analysis_widgets_to_experiment()
+
+        self._auto_load_experiment_data()
+        self.show()
+
+    def _bind_analysis_widgets_to_experiment(self) -> None:
+        """Rebind analysis/detection widgets to the current experiment instance."""
+        try:
+            roi_plot_widget = self.analysis.get_roi_plot_widget()
+            roi_plot_widget.experiment = self.experiment
+        except Exception:
+            roi_plot_widget = None
+
+        try:
+            trajectory_plot_widget = self.analysis.get_neuron_trajectory_plot_widget()
+            if hasattr(trajectory_plot_widget, "experiment"):
+                trajectory_plot_widget.experiment = self.experiment
+        except Exception:
+            trajectory_plot_widget = None
+
+        rayleigh_plot_getter = getattr(self.analysis, "get_rayleigh_plot_widget", None)
+        rayleigh_plot_widget = rayleigh_plot_getter() if callable(rayleigh_plot_getter) else None
+
+        try:
+            detection_widget = self.analysis.get_neuron_detection_widget()
+            detection_widget.set_image_processor(self.image_processor)
+            detection_widget.experiment = self.experiment
+
+            def _update_neuron_plots(
+                trajectories,
+                quality_mask,
+                locations,
+                roi_origin=None,
+            ) -> None:
+                if trajectory_plot_widget is not None:
+                    trajectory_plot_widget.plot_trajectories(
+                        trajectories,
+                        quality_mask,
+                        locations,
+                        roi_origin=roi_origin,
+                    )
+                if rayleigh_plot_widget is not None:
+                    rayleigh_plot_widget.set_trajectory_data(
+                        trajectories,
+                        quality_mask,
+                        roi_origin=roi_origin,
+                    )
+
+            detection_widget.set_trajectory_plot_callback(_update_neuron_plots)
+            detection_widget.set_save_experiment_callback(self._save_neuron_detection)
+        except Exception:
+            pass
+
+    def _open_user_account_popup(self) -> None:
+        if self.user_experiments_dir is None:
+            return
+        user_name = self.user_experiments_dir.parent.name
+        popup = UserAccountActionsDialog(user_name, self)
+        if popup.exec() != QDialog.Accepted or not popup.switch_user_requested:
+            return
+
+        if self._alignment_worker is not None and self._alignment_worker.isRunning():
+            QMessageBox.warning(
+                self,
+                "Alignment In Progress",
+                "Cannot switch users while image alignment is running. Please wait for alignment to finish.",
+            )
+            return
+
+        self._flush_pending_display_settings()
+        self._sync_rois_to_experiment()
+        self._capture_display_settings()
+        self._capture_experiment_time_settings()
+        if self.current_experiment_path:
+            try:
+                self.manager.save_experiment(self.experiment, self.current_experiment_path)
+            except Exception:
+                logger.exception("Failed to save experiment before switching user.")
+                raise
+
+        self.hide()
+        user_dialog = UserSelectionDialog()
+        if user_dialog.exec() != QDialog.Accepted or not user_dialog.selected_user_experiments_dir:
+            self.show()
+            return
+
+        self.user_experiments_dir = user_dialog.selected_user_experiments_dir
+        self.user_recent_file = self.user_experiments_dir.parent / "recent_experiments.json"
+        self.manager = ExperimentManager(self.user_recent_file)
+        self._update_current_user_button_text()
+
+        startup = StartupDialog(self.user_experiments_dir)
+        result = startup.exec()
+        if result == QDialog.Accepted and startup.experiment is not None:
+            self._reload_workbench_after_startup_choice(startup)
+        else:
+            QApplication.quit()
+
     def open_website(self):
         QDesktopServices.openUrl(
             QUrl("https://sce.nau.edu/capstone/projects/CS/2026/NeuroNauts_F25/project_overview.html")
@@ -524,15 +669,10 @@ class MainWindow(QMainWindow):
 
         # Right panel: analysis dashboard
         self.analysis = AnalysisPanel()
-        self.analysis.get_roi_plot_widget().experiment = self.experiment
-
-        # Set up neuron detection widget
-        detection_widget = self.analysis.get_neuron_detection_widget()
-        detection_widget.set_image_processor(self.image_processor)
-        detection_widget.experiment = self.experiment
 
         # Notify workflow manager when detection completes
         try:
+            detection_widget = self.analysis.get_neuron_detection_widget()
             detection_widget.detectionCompleted.connect(
                 lambda: self.workflow_manager.complete_step_if_current(WorkflowStep.DETECT_NEURONS)
             )
@@ -540,36 +680,8 @@ class MainWindow(QMainWindow):
             # In tests the widget may be heavily mocked; ignore connection errors
             pass
 
-        # Connect detection widget to trajectory and Rayleigh plots. Some tests use a
-        # lightweight AnalysisPanel double that does not expose every plot.
-        trajectory_plot_widget = self.analysis.get_neuron_trajectory_plot_widget()
-        rayleigh_plot_getter = getattr(self.analysis, "get_rayleigh_plot_widget", None)
-        rayleigh_plot_widget = rayleigh_plot_getter() if callable(rayleigh_plot_getter) else None
-
-        def _update_neuron_plots(
-            trajectories,
-            quality_mask,
-            locations,
-            roi_origin=None,
-        ) -> None:
-            trajectory_plot_widget.plot_trajectories(
-                trajectories,
-                quality_mask,
-                locations,
-                roi_origin=roi_origin,
-            )
-            # Rayleigh plot ignores ROI; it just needs trajectories and quality mask.
-            if rayleigh_plot_widget is not None:
-                rayleigh_plot_widget.set_trajectory_data(
-                    trajectories,
-                    quality_mask,
-                    roi_origin=roi_origin,
-                )
-
-        detection_widget.set_trajectory_plot_callback(_update_neuron_plots)
-
-        # Connect detection widget to save experiment callback
-        detection_widget.set_save_experiment_callback(self._save_neuron_detection)
+        # Bind widgets to current experiment and connect detection callbacks.
+        self._bind_analysis_widgets_to_experiment()
 
         # Connect ROI selection to analysis and saving (signal: str, ROI)
         self.viewer.roiSelected.connect(self._on_roi_selected)
@@ -968,7 +1080,18 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Error", str(e))
 
     def _save_as(self) -> None:
-        file_path, _ = QFileDialog.getSaveFileName(self, "Save Experiment As", "", "Neurolight Experiment (*.nexp)")
+        default_dir = ""
+        if self.current_experiment_path:
+            try:
+                default_dir = str(Path(self.current_experiment_path).resolve().parent)
+            except Exception:
+                default_dir = ""
+        elif self.user_experiments_dir is not None:
+            default_dir = str(self.user_experiments_dir)
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Save Experiment As", default_dir, "Neurolight Experiment (*.nexp)"
+        )
         if not file_path:
             return
         if not file_path.endswith(".nexp"):
@@ -1013,33 +1136,18 @@ class MainWindow(QMainWindow):
         # Hide the main window
         self.hide()
 
-        # Show startup dialog
-        startup = StartupDialog()
+        # Show startup dialog rooted at the active user's experiments directory.
+        #
+        # In production, `user_experiments_dir` is always set by the launcher (main.py).
+        # In tests (and some ad-hoc scripts), MainWindow may be constructed directly.
+        # Fall back to the current working directory so the close flow remains testable.
+        experiments_root = self.user_experiments_dir or Path.cwd()
+
+        startup = StartupDialog(experiments_root)
         result = startup.exec()
 
         if result == QDialog.Accepted and startup.experiment is not None:
-            # User selected a new experiment - replace current experiment
-            self.experiment = startup.experiment
-            self.set_current_experiment_path(startup.experiment_path, persist_workflow=False)
-            self.workflow_manager.attach_experiment(self.experiment)
-            self.setWindowTitle(f"Neurolight - {self.experiment.name}")
-
-            # Reset viewer state
-            self.viewer.reset()
-
-            # Clear analysis panel (ROI intensity and trajectory graphs)
-            self.analysis.roi_plot_widget.clear_plot()
-            self.analysis.get_neuron_trajectory_plot_widget().clear_plot()
-
-            # Reassociate handler and data analyzer with new experiment
-            self.stack_handler.associate_with_experiment(self.experiment)
-            self.data_analyzer = DataAnalyzer(self.experiment)
-
-            # Auto-load image stack/ROI/display settings if experiment has saved data
-            self._auto_load_experiment_data()
-
-            # Show the window again
-            self.show()
+            self._reload_workbench_after_startup_choice(startup)
         else:
             # User canceled - exit the application
             QApplication.quit()

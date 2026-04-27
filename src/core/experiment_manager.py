@@ -4,7 +4,7 @@ import base64
 import json
 import os
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -25,8 +25,8 @@ class Experiment:
     name: str
     description: str = ""
     principal_investigator: str = ""
-    created_date: datetime = field(default_factory=datetime.utcnow)
-    modified_date: datetime = field(default_factory=datetime.utcnow)
+    created_date: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    modified_date: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     image_stack_path: Optional[str] = None
     image_count: int = 0
     image_stack_files: List[str] = field(default_factory=list)  # List of selected file paths
@@ -90,8 +90,13 @@ class Experiment:
         exp = data.get("experiment", {})
         created = exp.get("created_date")
         modified = exp.get("modified_date")
-        created_dt = datetime.fromisoformat(created) if created else datetime.utcnow()
-        modified_dt = datetime.fromisoformat(modified) if modified else datetime.utcnow()
+        created_dt = datetime.fromisoformat(created) if created else datetime.now(timezone.utc)
+        modified_dt = datetime.fromisoformat(modified) if modified else datetime.now(timezone.utc)
+        # Legacy files may have naive timestamps; treat them as UTC.
+        if isinstance(created_dt, datetime) and created_dt.tzinfo is None:
+            created_dt = created_dt.replace(tzinfo=timezone.utc)
+        if isinstance(modified_dt, datetime) and modified_dt.tzinfo is None:
+            modified_dt = modified_dt.replace(tzinfo=timezone.utc)
         image_stack = exp.get("image_stack", {})
         # Load dual ROIs: prefer new "rois" key, fall back to legacy "roi" → roi_1
         rois_raw = exp.get("rois")
@@ -125,7 +130,7 @@ class Experiment:
         return experiment
 
     def update_modified_date(self) -> None:
-        self.modified_date = datetime.utcnow()
+        self.modified_date = datetime.now(timezone.utc)
 
     def _serialize_neuron_detection(self) -> Optional[Dict[str, Any]]:
         """Serialize neuron detection data to JSON-serializable format."""
@@ -274,11 +279,13 @@ class Experiment:
 
 
 class ExperimentManager:
-    def __init__(self) -> None:
+    def __init__(self, recent_file: Optional[Path] = None) -> None:
+        self.recent_file = recent_file or RECENT_FILE
         try:
-            RECENT_FILE.touch(exist_ok=True)
-            if RECENT_FILE.stat().st_size == 0:
-                RECENT_FILE.write_text(json.dumps({"recent": []}, indent=2))
+            self.recent_file.parent.mkdir(parents=True, exist_ok=True)
+            self.recent_file.touch(exist_ok=True)
+            if self.recent_file.stat().st_size == 0:
+                self.recent_file.write_text(json.dumps({"recent": []}, indent=2))
         except OSError:
             # Recent experiments list is best-effort; ignore filesystem restrictions.
             pass
@@ -291,8 +298,8 @@ class ExperimentManager:
             name=name,
             description=metadata.get("description", ""),
             principal_investigator=metadata.get("principal_investigator", ""),
-            created_date=metadata.get("created_date", datetime.utcnow()),
-            modified_date=datetime.utcnow(),
+            created_date=metadata.get("created_date", datetime.now(timezone.utc)),
+            modified_date=datetime.now(timezone.utc),
         )
         # Apply optional analysis type (e.g., "SCN") for future pipeline branching
         analysis_type = metadata.get("analysis_type")
@@ -345,7 +352,7 @@ class ExperimentManager:
 
     def get_recent_experiments(self) -> List[Dict[str, Any]]:
         try:
-            with open(RECENT_FILE, "r", encoding="utf-8") as f:
+            with open(self.recent_file, "r", encoding="utf-8") as f:
                 data = json.load(f) or {"recent": []}
             items = data.get("recent", [])
 
@@ -363,7 +370,7 @@ class ExperimentManager:
             if invalid_paths:
                 data["recent"] = valid_items
                 try:
-                    with open(RECENT_FILE, "w", encoding="utf-8") as f:
+                    with open(self.recent_file, "w", encoding="utf-8") as f:
                         json.dump(data, f, indent=2)
                 except OSError:
                     pass
@@ -379,10 +386,10 @@ class ExperimentManager:
         entry = {
             "path": file_path,
             "name": name or Path(file_path).stem,
-            "last_opened": datetime.utcnow().isoformat(timespec="seconds"),
+            "last_opened": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         }
         try:
-            with open(RECENT_FILE, "r", encoding="utf-8") as f:
+            with open(self.recent_file, "r", encoding="utf-8") as f:
                 data = json.load(f) or {"recent": []}
         except Exception:
             data = {"recent": []}
@@ -391,7 +398,7 @@ class ExperimentManager:
         data["recent"].insert(0, entry)
         data["recent"] = data["recent"][:20]
         try:
-            with open(RECENT_FILE, "w", encoding="utf-8") as f:
+            with open(self.recent_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
         except OSError:
             pass
@@ -400,14 +407,14 @@ class ExperimentManager:
         """Remove an experiment from the recent experiments list."""
         file_path = str(Path(file_path).resolve())
         try:
-            with open(RECENT_FILE, "r", encoding="utf-8") as f:
+            with open(self.recent_file, "r", encoding="utf-8") as f:
                 data = json.load(f) or {"recent": []}
         except Exception:
             data = {"recent": []}
         # Remove the entry
         data["recent"] = [e for e in data.get("recent", []) if e.get("path") != file_path]
         try:
-            with open(RECENT_FILE, "w", encoding="utf-8") as f:
+            with open(self.recent_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
         except OSError:
             pass

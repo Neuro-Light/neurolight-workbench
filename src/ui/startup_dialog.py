@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Optional
 
@@ -37,9 +37,7 @@ from ui.app_settings import (
     set_enable_alignment_multiprocessing,
 )
 from ui.settings_dialog import SettingsDialog
-
-EXPERIMENTS_DIR = Path(__file__).resolve().parents[2] / "experiments"
-EXPERIMENTS_DIR.mkdir(parents=True, exist_ok=True)
+from ui.user_selection_dialog import UserAccountActionsDialog, UserSelectionDialog, current_user_button_text
 
 # Options button label for recent-experiment rows (text only, no icon)
 OPTIONS_LABEL = "..."
@@ -93,16 +91,17 @@ class RecentExperimentRow(QWidget):
 
 
 class NewExperimentDialog(QDialog):
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, experiments_dir: Path, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Neurolight - New Experiment")
         self.setModal(True)
         self.setMinimumWidth(500)
+        self._experiments_dir = experiments_dir
 
         self.name_edit = QLineEdit()
         self.pi_edit = QLineEdit()
         self.desc_edit = QPlainTextEdit()
-        self.date_edit = QLineEdit(datetime.utcnow().strftime("%Y-%m-%d"))
+        self.date_edit = QLineEdit(datetime.now(timezone.utc).strftime("%Y-%m-%d"))
 
         # Analysis type selection (future-proof for multiple analysis pipelines)
         self.analysis_combo = QComboBox()
@@ -120,13 +119,9 @@ class NewExperimentDialog(QDialog):
             "Time between successive image frames (e.g. 0.5 for 30-second intervals, 30 for 30-minute intervals)."
         )
 
-        self.path_edit = QLineEdit(str(EXPERIMENTS_DIR))
-        browse_btn = QPushButton("Browse…")
-        browse_btn.clicked.connect(self._browse)
-
-        path_row = QHBoxLayout()
-        path_row.addWidget(self.path_edit)
-        path_row.addWidget(browse_btn)
+        self._path_display = QLineEdit(str(self._experiments_dir.resolve()))
+        self._path_display.setReadOnly(True)
+        self._path_display.setToolTip(self._path_display.text())
 
         form = QFormLayout()
         form.addRow("Experiment Name*", self.name_edit)
@@ -141,7 +136,7 @@ class NewExperimentDialog(QDialog):
 
         path_container = QVBoxLayout()
         path_container.addWidget(QLabel("Save Location"))
-        path_container.addLayout(path_row)
+        path_container.addWidget(self._path_display)
         container.addLayout(path_container)
 
         buttons = QDialogButtonBox(QDialogButtonBox.Cancel | QDialogButtonBox.Ok)
@@ -157,19 +152,28 @@ class NewExperimentDialog(QDialog):
         self.output_path: Optional[str] = None
         self.metadata: dict = {}
 
-    def _browse(self) -> None:
-        directory = QFileDialog.getExistingDirectory(self, "Select Save Location", self.path_edit.text())
-        if directory:
-            self.path_edit.setText(directory)
-
     def _accept(self) -> None:
         name = self.name_edit.text().strip()
         if not name:
             self.name_edit.setFocus()
             return
-        base_dir = Path(self.path_edit.text().strip() or str(EXPERIMENTS_DIR))
+        if name in {".", ".."}:
+            QMessageBox.warning(self, "New Experiment", 'Experiment name cannot be "." or "..".')
+            self.name_edit.setFocus()
+            return
+        if any(ch in name for ch in '\\/:*?"<>|'):
+            QMessageBox.warning(
+                self,
+                "New Experiment",
+                'Experiment name cannot contain any of: \\ / : * ? " < > |',
+            )
+            self.name_edit.setFocus()
+            return
+        base_dir = self._experiments_dir
         base_dir.mkdir(parents=True, exist_ok=True)
-        file_path = base_dir / f"{name}.nexp"
+        exp_dir = base_dir / name
+        exp_dir.mkdir(parents=True, exist_ok=True)
+        file_path = exp_dir / f"{name}.nexp"
         if file_path.exists():
             self.name_edit.setFocus()
             return
@@ -178,7 +182,7 @@ class NewExperimentDialog(QDialog):
             "name": name,
             "description": self.desc_edit.toPlainText().strip(),
             "principal_investigator": self.pi_edit.text().strip(),
-            "created_date": datetime.utcnow(),
+            "created_date": datetime.now(timezone.utc),
             "analysis_type": self.analysis_combo.currentData(),
             "frame_interval_minutes": self.frame_interval_spin.value(),
         }
@@ -186,15 +190,25 @@ class NewExperimentDialog(QDialog):
 
 
 class StartupDialog(QDialog):
-    def __init__(self) -> None:
+    def __init__(self, experiments_dir: Path) -> None:
         super().__init__()
         self.setObjectName("experimentManagerDialog")
         self.setWindowTitle("Neurolight - Experiment Manager")
         self.setModal(True)
         self.setMinimumWidth(520)
+        self.experiments_dir = experiments_dir
+        self._current_user_name = experiments_dir.parent.name
         self.experiment: Optional[Experiment] = None
         self.experiment_path: Optional[str] = None
-        self.manager = ExperimentManager()
+        # Store recent experiments per user (in the user's folder, not globally in ~/.neurolight).
+        self.manager = ExperimentManager(self.experiments_dir.parent / "recent_experiments.json")
+
+        top_row = QHBoxLayout()
+        self._current_user_btn = QPushButton(current_user_button_text(self._current_user_name))
+        self._current_user_btn.setProperty("class", "tab-action")
+        self._current_user_btn.clicked.connect(self._open_user_account_popup)
+        top_row.addWidget(self._current_user_btn, 0, Qt.AlignLeft)
+        top_row.addStretch()
 
         title = QLabel("Neurolight - Experiment Manager")
         title.setAlignment(Qt.AlignCenter)
@@ -229,6 +243,7 @@ class StartupDialog(QDialog):
         buttons_layout.addWidget(self.settings_btn)
 
         layout = QVBoxLayout()
+        layout.addLayout(top_row)
         layout.addWidget(title)
         layout.addWidget(new_btn)
         layout.addWidget(load_btn)
@@ -248,10 +263,30 @@ class StartupDialog(QDialog):
         layout.addLayout(buttons_layout)
         self.setLayout(layout)
 
+    def _open_user_account_popup(self) -> None:
+        popup = UserAccountActionsDialog(self._current_user_name, self)
+        if popup.exec() != QDialog.Accepted or not popup.switch_user_requested:
+            return
+        picker = UserSelectionDialog()
+        if picker.exec() != QDialog.Accepted or not picker.selected_user_experiments_dir:
+            return
+        self.experiments_dir = picker.selected_user_experiments_dir
+        self._current_user_name = picker.selected_user
+        self._current_user_btn.setText(current_user_button_text(self._current_user_name))
+        self.manager = ExperimentManager(self.experiments_dir.parent / "recent_experiments.json")
+        self._refresh_recent()
+
     def _refresh_recent(self) -> None:
         self.recent_list.clear()
+        base_dir = self.experiments_dir.resolve()
         for rec in self.manager.get_recent_experiments():
             path = rec.get("path") or ""
+            if path:
+                try:
+                    if base_dir not in Path(path).resolve().parents and Path(path).resolve() != base_dir:
+                        continue
+                except Exception:
+                    continue
             name = rec.get("name") or Path(path).stem if path else ""
             list_item = QListWidgetItem()
             list_item.setData(Qt.UserRole, path)
@@ -326,7 +361,7 @@ class StartupDialog(QDialog):
         QDesktopServices.openUrl(QUrl.fromLocalFile(parent_dir))
 
     def _start_new(self) -> None:
-        dlg = NewExperimentDialog(self)
+        dlg = NewExperimentDialog(self.experiments_dir, self)
         if dlg.exec() == QDialog.Accepted and dlg.output_path:
             exp = self.manager.create_new_experiment(dlg.metadata)
             try:
@@ -343,7 +378,7 @@ class StartupDialog(QDialog):
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "Open Experiment",
-            str(EXPERIMENTS_DIR),
+            str(self.experiments_dir),
             "Neurolight Experiment (*.nexp)",
         )
         if not file_path:
@@ -454,10 +489,14 @@ class StartupDialog(QDialog):
 
             # Get export location
             default_name = f"{experiment.name}_export.nexp"
+            try:
+                default_dir = str(Path(path).resolve().parent / default_name)
+            except Exception:
+                default_dir = str(self.experiments_dir / default_name)
             file_path, _ = QFileDialog.getSaveFileName(
                 self,
                 "Export Experiment",
-                default_name,
+                default_dir,
                 "Neurolight Experiment (*.nexp);;All Files (*)",
             )
 

@@ -12,8 +12,8 @@ from unittest.mock import Mock, patch
 import pytest
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox, QWidget
 
-from core.experiment_manager import Experiment
-from ui.main_window import MainWindow
+from core.experiment_manager import Experiment  # pyright: ignore[reportMissingImports]
+from ui.main_window import MainWindow  # pyright: ignore[reportMissingImports]
 
 
 @pytest.fixture
@@ -35,7 +35,20 @@ def sample_experiment():
 
 
 @pytest.fixture
-def main_window(app, sample_experiment):
+def user_experiments_dir(tmp_path):
+    """
+    Create a per-user experiments directory.
+
+    MainWindow._close_experiment() requires this to be set; otherwise it displays
+    a modal QMessageBox.critical() which can hang headless test runs.
+    """
+    exp_dir = tmp_path / "users" / "test" / "experiments"
+    exp_dir.mkdir(parents=True, exist_ok=True)
+    return exp_dir
+
+
+@pytest.fixture
+def main_window(app, sample_experiment, user_experiments_dir):
     """Create a MainWindow instance for testing."""
     # Use real QWidget subclasses so QSplitter.addWidget() accepts them,
     # but attach mock attributes/methods the tests and MainWindow.__init__ need.
@@ -90,7 +103,7 @@ def main_window(app, sample_experiment):
         patch("ui.main_window.DataAnalyzer", return_value=mock_data_analyzer),
         patch("ui.main_window.QTimer.singleShot"),  # Avoid timer side effects
     ):
-        window = MainWindow(sample_experiment)
+        window = MainWindow(sample_experiment, user_experiments_dir=user_experiments_dir)
         yield window
 
 
@@ -160,6 +173,8 @@ class TestCloseExperiment:
         mock_startup_dialog.exec.return_value = QDialog.Accepted
         mock_startup_dialog.experiment = new_experiment
         mock_startup_dialog.experiment_path = "/path/to/new/experiment.nexp"
+        # MainWindow now syncs user workspace from StartupDialog.experiments_dir
+        mock_startup_dialog.experiments_dir = main_window.user_experiments_dir
 
         # Setup mocks for viewer and analysis components
         main_window.viewer.image_label = Mock()
@@ -241,40 +256,18 @@ class TestMenuActions:
 
     def test_close_action_connected(self, main_window):
         """Test that Close Experiment action is properly connected."""
-        # Access _file_menu directly to avoid PySide6 wrapper issues in headless CI
-        actions = main_window._file_menu.actions()
-
-        close_action = None
-        for action in actions:
-            if action.text() == "Close Experiment":
-                close_action = action
-                break
-
-        assert close_action is not None, "Close Experiment action not found in menu"
-        assert close_action.isEnabled()
+        assert main_window._action_close_experiment is not None
+        assert main_window._action_close_experiment.text() == "Close Experiment"
+        assert main_window._action_close_experiment.isEnabled()
 
     def test_exit_action_connected(self, main_window):
         """Test that Exit Experiment action is properly connected."""
-        # Access _file_menu directly to avoid PySide6 wrapper issues in headless CI
-        actions = main_window._file_menu.actions()
-
-        exit_action = None
-        for action in actions:
-            if action.text() == "Exit Experiment":
-                exit_action = action
-                break
-
-        assert exit_action is not None, "Exit Experiment action not found in menu"
-        assert exit_action.isEnabled()
+        assert main_window._action_exit_app is not None
+        assert main_window._action_exit_app.text() == "Exit"
+        assert main_window._action_exit_app.isEnabled()
 
     def test_action_labels_are_distinct(self, main_window):
         """Test that Close and Exit actions have distinct labels."""
-        # Access _file_menu directly to avoid PySide6 wrapper issues in headless CI
-        actions = main_window._file_menu.actions()
-
-        action_texts = [action.text() for action in actions]
-
-        assert "Close Experiment" in action_texts
-        assert "Exit Experiment" in action_texts
-        assert action_texts.count("Close Experiment") == 1
-        assert action_texts.count("Exit Experiment") == 1
+        assert main_window._action_close_experiment is not None
+        assert main_window._action_exit_app is not None
+        assert main_window._action_close_experiment.text() != main_window._action_exit_app.text()
