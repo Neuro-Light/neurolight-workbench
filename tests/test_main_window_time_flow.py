@@ -118,6 +118,21 @@ def test_confirm_start_time_from_loaded_stack_accept_updates_settings(main_windo
     main_window.experiment.update_modified_date.assert_called_once()
 
 
+def test_confirm_start_time_from_loaded_stack_skips_prompt_when_time_already_saved(main_window):
+    main_window.stack_handler.files = ["/tmp/a.tif"]
+    main_window.experiment.settings = {"acquisition": {"experiment_start_time": "08:00:00"}}
+
+    with (
+        patch("ui.main_window._get_exif_timestamp") as get_exif_timestamp,
+        patch("ui.main_window._ConfirmStartTimeDialog") as confirm_dialog,
+    ):
+        main_window._confirm_start_time_from_loaded_stack()
+
+    get_exif_timestamp.assert_not_called()
+    confirm_dialog.assert_not_called()
+    assert main_window.experiment.settings["acquisition"]["experiment_start_time"] == "08:00:00"
+
+
 def test_confirm_start_time_from_loaded_stack_cancel_keeps_existing(main_window):
     main_window.stack_handler.files = ["/tmp/a.tif"]
     main_window.experiment.settings = {"acquisition": {"experiment_start_time": "08:00:00"}}
