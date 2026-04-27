@@ -96,7 +96,7 @@ jobs:
       matrix:
         include:
           - runner: windows-latest
-            exe_name: neurolight-${{ github.ref_name }}-windows-amd64.exe
+            exe_name: neurolight-${{ github.ref_name }}-windows-amd64.zip
             artifact_name: exe-windows
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -128,7 +128,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p release-asset
-          cp dist/Neurolight/Neurolight.exe "release-asset/${{ matrix.exe_name }}"
+          cd dist
+          7z a -tzip "../release-asset/${{ matrix.exe_name }}" Neurolight/
 
       - name: Upload executable artifact
         uses: actions/upload-artifact@v4
