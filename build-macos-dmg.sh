@@ -28,6 +28,7 @@ cp -R "$APP" "$DMG_STAGE/"
 ln -s /Applications "$DMG_STAGE/Applications"
 
 echo "Creating DMG..."
+hdiutil detach "/Volumes/$VOL_NAME" 2>/dev/null || true
 hdiutil create \
   -volname "$VOL_NAME" \
   -srcfolder "$DMG_STAGE" \
