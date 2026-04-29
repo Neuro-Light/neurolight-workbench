@@ -98,7 +98,9 @@ class LombScarglePlotWidget(QWidget):
             controls_row.addWidget(swatch)
             controls_row.addWidget(cb)
             if key == "roi_2":
-                controls_row.addWidget(HelpIconButton("lomb_scargle.roi_toggles", accessible_name="Help: ROI selectors"))
+                controls_row.addWidget(
+                    HelpIconButton("lomb_scargle.roi_toggles", accessible_name="Help: ROI selectors")
+                )
             if idx < len(ROI_KEYS) - 1:
                 controls_row.addSpacing(8)
 

@@ -117,13 +117,17 @@ class NeuronDetectionWidget(QWidget):
         self.cell_size_spin.setRange(2, 50)
         self.cell_size_spin.setValue(8)
         self.cell_size_spin.setToolTip("Neuron diameter in pixels")
-        params_layout.addRow(_label_with_help("Cell Size (pixels):", "neuron_detection.param.cell_size"), self.cell_size_spin)
+        params_layout.addRow(
+            _label_with_help("Cell Size (pixels):", "neuron_detection.param.cell_size"), self.cell_size_spin
+        )
 
         self.num_peaks_spin = DraggableSpinBox()
         self.num_peaks_spin.setRange(1, 2000)
         self.num_peaks_spin.setValue(800)
         self.num_peaks_spin.setToolTip("Maximum number of neurons to detect")
-        params_layout.addRow(_label_with_help("Max Neurons:", "neuron_detection.param.max_neurons"), self.num_peaks_spin)
+        params_layout.addRow(
+            _label_with_help("Max Neurons:", "neuron_detection.param.max_neurons"), self.num_peaks_spin
+        )
 
         self.correlation_threshold_spin = DraggableDoubleSpinBox()
         self.correlation_threshold_spin.setRange(0.0, 1.0)
@@ -157,7 +161,9 @@ class NeuronDetectionWidget(QWidget):
             "Relative threshold for peak detection (0.0-1.0). "
             "Lower values find dimmer neurons; raise if you get many false positives."
         )
-        params_layout.addRow(_label_with_help("Peak Threshold:", "neuron_detection.param.peak_threshold"), self.threshold_rel_spin)
+        params_layout.addRow(
+            _label_with_help("Peak Threshold:", "neuron_detection.param.peak_threshold"), self.threshold_rel_spin
+        )
 
         self.max_projection_checkbox = QCheckBox()
         self.max_projection_checkbox.setChecked(True)
@@ -165,7 +171,9 @@ class NeuronDetectionWidget(QWidget):
             "Use max projection across frames for detection. "
             "Better for calcium imaging where neurons flash; uncheck to use mean."
         )
-        params_layout.addRow(_label_with_help("Max Projection:", "neuron_detection.param.max_projection"), self.max_projection_checkbox)
+        params_layout.addRow(
+            _label_with_help("Max Projection:", "neuron_detection.param.max_projection"), self.max_projection_checkbox
+        )
 
         self.preprocess_sigma_spin = DraggableDoubleSpinBox()
         self.preprocess_sigma_spin.setRange(0.0, 3.0)
@@ -183,7 +191,9 @@ class NeuronDetectionWidget(QWidget):
         self.detrending_checkbox = QCheckBox()
         self.detrending_checkbox.setChecked(True)
         self.detrending_checkbox.setToolTip("Apply Savitzky-Golay filter to remove slow drift")
-        params_layout.addRow(_label_with_help("Apply Detrending:", "neuron_detection.param.detrending"), self.detrending_checkbox)
+        params_layout.addRow(
+            _label_with_help("Apply Detrending:", "neuron_detection.param.detrending"), self.detrending_checkbox
+        )
 
         params_group.setLayout(params_layout)
         sidebar_layout.addWidget(params_group)
@@ -239,7 +249,9 @@ class NeuronDetectionWidget(QWidget):
         plot_help_row = QHBoxLayout(plot_help_row_widget)
         plot_help_row.setContentsMargins(0, 0, 0, 0)
         plot_help_row.addStretch()
-        plot_help_row.addWidget(HelpIconButton("neuron_detection.plot", accessible_name="Help: detected neurons overlay"))
+        plot_help_row.addWidget(
+            HelpIconButton("neuron_detection.plot", accessible_name="Help: detected neurons overlay")
+        )
         plot_help_row.addStretch()
         main_layout.addWidget(plot_help_row_widget)
 
