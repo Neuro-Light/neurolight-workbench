@@ -7,14 +7,14 @@ from __future__ import annotations
 
 from typing import Final
 
-
 HELP_TEXT: Final[dict[str, str]] = {
     # Lomb–Scargle
     "lomb_scargle.plot": (
         "Lomb–Scargle periodogram\n\n"
         "Shows how strong different repeating cycle lengths are in the ROI intensity trace.\n"
         "A taller peak suggests a more prominent rhythm at that frequency/period.\n\n"
-        "Tip: In Period mode, the x-axis is cycle length (minutes per cycle). In Frequency mode, it is cycles per minute."
+        "Tip: In Period mode, the x-axis is cycle length (minutes per cycle).\n"
+        "In Frequency mode, it is cycles per minute."
     ),
     "lomb_scargle.summary": (
         "Peak readout\n\n"
