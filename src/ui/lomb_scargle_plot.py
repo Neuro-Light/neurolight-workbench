@@ -7,6 +7,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -20,7 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.lomb_scargle import compute_lomb_scargle
-from ui.app_settings import get_theme
+from ui.app_settings import get_roi_colors, get_theme
 from ui.constants import DEFAULT_FRAME_INTERVAL_MINUTES, ROI_DISPLAY_NAMES, ROI_KEYS
 from ui.draggable_spinbox import DraggableDoubleSpinBox
 from ui.help_content import get_help_text
@@ -74,15 +75,30 @@ class LombScarglePlotWidget(QWidget):
         controls_row.setSpacing(8)
 
         # ROI checkboxes
-        controls_row.addWidget(QLabel("ROIs:"))
+        rois_label = QLabel("ROIs:")
+        rois_label.setToolTip(get_help_text("lomb_scargle.roi_toggles"))
+        controls_row.addWidget(rois_label)
         controls_row.addSpacing(4)
         self._roi_checkboxes: Dict[str, QCheckBox] = {}
+        colors = get_roi_colors()
         for idx, key in enumerate(ROI_KEYS):
+            # Color swatch to match ROI intensity plot
+            swatch = QLabel()
+            swatch.setFixedSize(12, 12)
+            pix = QPixmap(12, 12)
+            pix.fill(QColor(colors[key]))
+            swatch.setPixmap(pix)
+            swatch.setToolTip(get_help_text("lomb_scargle.roi_toggles"))
+
             cb = QCheckBox(ROI_DISPLAY_NAMES[key])
             cb.setChecked(True)
+            cb.setToolTip(get_help_text("lomb_scargle.roi_toggles"))
             cb.toggled.connect(self._update_plot)
             self._roi_checkboxes[key] = cb
+            controls_row.addWidget(swatch)
             controls_row.addWidget(cb)
+            if key == "roi_2":
+                controls_row.addWidget(HelpIconButton("lomb_scargle.roi_toggles", accessible_name="Help: ROI selectors"))
             if idx < len(ROI_KEYS) - 1:
                 controls_row.addSpacing(8)
 

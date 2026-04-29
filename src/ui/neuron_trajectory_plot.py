@@ -26,6 +26,8 @@ from scipy.signal import find_peaks
 
 from ui.app_settings import get_theme
 from ui.draggable_spinbox import DraggableSpinBox
+from ui.help_content import get_help_text
+from ui.help_widgets import HelpIconButton
 from ui.styles import get_mpl_theme
 
 
@@ -67,20 +69,36 @@ class NeuronTrajectoryPlotWidget(QWidget):
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
 
+        # Title row with contextual help
+        title_row_widget = QWidget()
+        title_row = QHBoxLayout(title_row_widget)
+        title_row.setContentsMargins(4, 0, 4, 0)
+        title_row.setSpacing(6)
+        title_row.addStretch()
+        title_label = QLabel("Neuron Trajectories")
+        title_label.setStyleSheet("font-size: 15px; font-weight: 700;")
+        title_row.addWidget(title_label)
+        title_row.addWidget(HelpIconButton("neuron_trajectories.plot", accessible_name="Help: neuron trajectories"))
+        title_row.addStretch()
+        layout.addWidget(title_row_widget)
+
         # Compact single-row controls strip
         controls_row = QHBoxLayout()
         controls_row.setContentsMargins(4, 2, 4, 2)
         controls_row.setSpacing(8)
 
         # ROI filter
-        controls_row.addWidget(QLabel("ROI:"))
+        roi_label = QLabel("ROI:")
+        roi_label.setToolTip(get_help_text("neuron_trajectories.roi_filter"))
+        controls_row.addWidget(roi_label)
         self.roi_view_combo = QComboBox()
         self.roi_view_combo.addItem("Both", self.VIEW_BOTH)
         self.roi_view_combo.addItem("ROI 1", self.VIEW_ROI1)
         self.roi_view_combo.addItem("ROI 2", self.VIEW_ROI2)
-        self.roi_view_combo.setToolTip("Filter trajectories by ROI when detection was run on both ROIs.")
+        self.roi_view_combo.setToolTip(get_help_text("neuron_trajectories.roi_filter"))
         self.roi_view_combo.currentIndexChanged.connect(self._update_plot)
         controls_row.addWidget(self.roi_view_combo)
+        controls_row.addWidget(HelpIconButton("neuron_trajectories.roi_filter", accessible_name="Help: ROI filter"))
 
         controls_row.addSpacing(12)
 
@@ -89,20 +107,24 @@ class NeuronTrajectoryPlotWidget(QWidget):
         controls_row.addSpacing(4)
         self.show_good_checkbox = QCheckBox("Good")
         self.show_good_checkbox.setChecked(True)
+        self.show_good_checkbox.setToolTip(get_help_text("neuron_trajectories.good_bad_avg"))
         self.show_good_checkbox.stateChanged.connect(self._update_plot)
         controls_row.addWidget(self.show_good_checkbox)
         controls_row.addSpacing(8)
 
         self.show_bad_checkbox = QCheckBox("Bad")
         self.show_bad_checkbox.setChecked(False)
+        self.show_bad_checkbox.setToolTip(get_help_text("neuron_trajectories.good_bad_avg"))
         self.show_bad_checkbox.stateChanged.connect(self._update_plot)
         controls_row.addWidget(self.show_bad_checkbox)
         controls_row.addSpacing(8)
 
         self.show_average_checkbox = QCheckBox("Avg")
         self.show_average_checkbox.setChecked(True)
+        self.show_average_checkbox.setToolTip(get_help_text("neuron_trajectories.good_bad_avg"))
         self.show_average_checkbox.stateChanged.connect(self._update_plot)
         controls_row.addWidget(self.show_average_checkbox)
+        controls_row.addWidget(HelpIconButton("neuron_trajectories.good_bad_avg", accessible_name="Help: good/bad/avg"))
 
         controls_row.addSpacing(12)
 
@@ -112,9 +134,10 @@ class NeuronTrajectoryPlotWidget(QWidget):
         self.max_neurons_spin.setRange(1, 1000)
         self.max_neurons_spin.setValue(50)
         self.max_neurons_spin.setMinimumWidth(60)
-        self.max_neurons_spin.setToolTip("Maximum number of neurons to display (for performance)")
+        self.max_neurons_spin.setToolTip(get_help_text("neuron_trajectories.max_neurons"))
         self.max_neurons_spin.valueChanged.connect(self._update_plot)
         controls_row.addWidget(self.max_neurons_spin)
+        controls_row.addWidget(HelpIconButton("neuron_trajectories.max_neurons", accessible_name="Help: max neurons"))
 
         controls_row.addSpacing(12)
 
@@ -125,22 +148,20 @@ class NeuronTrajectoryPlotWidget(QWidget):
         self.smoothing_spin.setValue(0)
         self.smoothing_spin.setSpecialValueText("None")
         self.smoothing_spin.setMinimumWidth(60)
-        self.smoothing_spin.setToolTip(
-            "Moving average window in frames for display only (0 = no smoothing). Export uses raw data."
-        )
+        self.smoothing_spin.setToolTip(get_help_text("neuron_trajectories.smoothing"))
         self.smoothing_spin.valueChanged.connect(self._update_plot)
         controls_row.addWidget(self.smoothing_spin)
+        controls_row.addWidget(HelpIconButton("neuron_trajectories.smoothing", accessible_name="Help: smoothing"))
 
         controls_row.addSpacing(12)
 
         # Peaks/troughs toggle
         self.show_peaks_checkbox = QCheckBox("Peaks/Troughs")
         self.show_peaks_checkbox.setChecked(False)
-        self.show_peaks_checkbox.setToolTip(
-            "Overlay peak (maxima) and trough (minima) markers on the average trajectory"
-        )
+        self.show_peaks_checkbox.setToolTip(get_help_text("neuron_trajectories.peaks"))
         self.show_peaks_checkbox.stateChanged.connect(self._on_show_peaks_toggled)
         controls_row.addWidget(self.show_peaks_checkbox)
+        controls_row.addWidget(HelpIconButton("neuron_trajectories.peaks", accessible_name="Help: peaks/troughs"))
 
         # Number markers (shown only when peaks are enabled)
         self._number_peaks_row_label = QLabel("Numbers:")
@@ -148,7 +169,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
         controls_row.addWidget(self._number_peaks_row_label)
         self.number_peaks_checkbox = QCheckBox()
         self.number_peaks_checkbox.setChecked(False)
-        self.number_peaks_checkbox.setToolTip("Show order numbers (1, 2, 3...) on peak and trough markers")
+        self.number_peaks_checkbox.setToolTip(get_help_text("neuron_trajectories.peaks"))
         self.number_peaks_checkbox.stateChanged.connect(self._update_plot)
         self.number_peaks_checkbox.setVisible(False)
         controls_row.addWidget(self.number_peaks_checkbox)
@@ -168,7 +189,16 @@ class NeuronTrajectoryPlotWidget(QWidget):
         self.hover_label = QLabel("Hover over plot for time and intensity.")
         self.hover_label.setAlignment(Qt.AlignCenter)
         self.hover_label.setProperty("class", "plot-hover")
+        self.hover_label.setToolTip(get_help_text("neuron_trajectories.hover"))
         layout.addWidget(self.hover_label)
+
+        hover_help_row_widget = QWidget()
+        hover_help_row = QHBoxLayout(hover_help_row_widget)
+        hover_help_row.setContentsMargins(0, 0, 0, 0)
+        hover_help_row.addStretch()
+        hover_help_row.addWidget(HelpIconButton("neuron_trajectories.hover", accessible_name="Help: hover readout"))
+        hover_help_row.addStretch()
+        layout.addWidget(hover_help_row_widget)
 
         # Buttons layout
         buttons_layout = QHBoxLayout()

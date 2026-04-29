@@ -30,6 +30,8 @@ from scipy.signal import find_peaks
 from core.roi import ROI, ROIShape
 from ui.app_settings import get_roi_colors, get_theme
 from ui.constants import DEFAULT_FRAME_INTERVAL_MINUTES, ROI_DISPLAY_NAMES, ROI_KEYS
+from ui.help_content import get_help_text
+from ui.help_widgets import HelpIconButton
 from ui.styles import get_mpl_theme
 
 
@@ -58,6 +60,19 @@ class ROIIntensityPlotWidget(QWidget):
         self.status_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.status_label)
 
+        # Title row with contextual help
+        title_row_widget = QWidget()
+        title_row = QHBoxLayout(title_row_widget)
+        title_row.setContentsMargins(4, 0, 4, 0)
+        title_row.setSpacing(6)
+        title_row.addStretch()
+        title_label = QLabel("ROI Intensity Over Time")
+        title_label.setStyleSheet("font-size: 15px; font-weight: 700;")
+        title_row.addWidget(title_label)
+        title_row.addWidget(HelpIconButton("roi_intensity.plot", accessible_name="Help: ROI intensity plot"))
+        title_row.addStretch()
+        layout.addWidget(title_row_widget)
+
         # Toggle checkboxes for each ROI (with colour indicators)
         toggle_row = QHBoxLayout()
         self._checkboxes: Dict[str, QCheckBox] = {}
@@ -76,6 +91,10 @@ class ROIIntensityPlotWidget(QWidget):
 
             toggle_row.addWidget(swatch)
             toggle_row.addWidget(cb)
+            # Place the ROI-toggle help icon right after ROI 2 so it clearly
+            # refers to the ROI selectors (not peaks/troughs).
+            if key == "roi_2":
+                toggle_row.addWidget(HelpIconButton("roi_intensity.roi_toggles", accessible_name="Help: ROI toggles"))
             toggle_row.addSpacing(12)
 
         toggle_row.addStretch()
@@ -83,14 +102,15 @@ class ROIIntensityPlotWidget(QWidget):
         # Peak/Trough markers toggle
         self.show_peaks_checkbox = QCheckBox("Show Peaks/Troughs")
         self.show_peaks_checkbox.setChecked(False)
-        self.show_peaks_checkbox.setToolTip("Overlay peak (maxima) and trough (minima) markers on the graph")
+        self.show_peaks_checkbox.setToolTip(get_help_text("roi_intensity.peaks"))
         self.show_peaks_checkbox.toggled.connect(self._on_show_peaks_toggled)
         toggle_row.addWidget(self.show_peaks_checkbox)
+        toggle_row.addWidget(HelpIconButton("roi_intensity.peaks", accessible_name="Help: peaks and troughs"))
 
         # Peak numbering toggle (hidden until Show Peaks/Troughs is enabled)
         self.number_peaks_checkbox = QCheckBox("Number Markers")
         self.number_peaks_checkbox.setChecked(False)
-        self.number_peaks_checkbox.setToolTip("Show order numbers (1, 2, 3...) on peak and trough markers")
+        self.number_peaks_checkbox.setToolTip(get_help_text("roi_intensity.peaks"))
         self.number_peaks_checkbox.toggled.connect(self._replot)
         self.number_peaks_checkbox.setVisible(False)
         toggle_row.addWidget(self.number_peaks_checkbox)
@@ -108,7 +128,16 @@ class ROIIntensityPlotWidget(QWidget):
         # Hover label
         self.hover_label = QLabel("Hover over plot for time and intensity.")
         self.hover_label.setAlignment(Qt.AlignCenter)
+        self.hover_label.setToolTip(get_help_text("roi_intensity.hover"))
         layout.addWidget(self.hover_label)
+
+        hover_help_row_widget = QWidget()
+        hover_help_row = QHBoxLayout(hover_help_row_widget)
+        hover_help_row.setContentsMargins(0, 0, 0, 0)
+        hover_help_row.addStretch()
+        hover_help_row.addWidget(HelpIconButton("roi_intensity.hover", accessible_name="Help: hover readout"))
+        hover_help_row.addStretch()
+        layout.addWidget(hover_help_row_widget)
 
         # Export buttons
         button_layout = QHBoxLayout()
