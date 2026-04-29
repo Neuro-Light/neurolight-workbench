@@ -32,9 +32,9 @@ def test_dialog_minimum_size(app) -> None:
     assert dlg.minimumHeight() >= 150
 
 
-def test_dialog_stays_on_top(app) -> None:
+def test_dialog_is_not_always_on_top(app) -> None:
     dlg = LoadingDialog()
-    assert dlg.windowFlags() & Qt.WindowStaysOnTopHint
+    assert not (dlg.windowFlags() & Qt.WindowStaysOnTopHint)
 
 
 def test_initial_labels(app) -> None:

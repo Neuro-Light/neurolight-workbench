@@ -19,8 +19,9 @@ class LoadingDialog(QDialog):
         self.setMinimumWidth(400)
         self.setMinimumHeight(150)
 
-        # Make it stay on top and visible
-        self.setWindowFlags(Qt.Dialog | Qt.WindowTitleHint | Qt.CustomizeWindowHint | Qt.WindowStaysOnTopHint)
+        # Keep this as a normal (non always-on-top) dialog so modal dialogs like
+        # "Confirm Experiment Start Time" can appear in front of it.
+        self.setWindowFlags(Qt.Dialog | Qt.WindowTitleHint | Qt.CustomizeWindowHint)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(15)
