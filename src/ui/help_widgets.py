@@ -48,4 +48,3 @@ class HelpIconButton(QToolButton):
         # Show tooltip slightly below the icon to avoid covering labels.
         pos = self.mapToGlobal(QPoint(self.width() // 2, self.height()))
         QToolTip.showText(pos, self._tooltip, self)
-

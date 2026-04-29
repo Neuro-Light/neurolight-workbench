@@ -57,4 +57,3 @@ HELP_TEXT: Final[dict[str, str]] = {
 def get_help_text(help_id: str) -> str:
     """Return help text for a given ID, or a fallback."""
     return HELP_TEXT.get(help_id, "Help is not available for this item yet.")
-
