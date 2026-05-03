@@ -764,6 +764,11 @@ class ImageViewer(QWidget):
         if self._filter_excluded == enabled:
             return
         self._filter_excluded = enabled
+        self._sync_nav_to_visible()
+        self._show_current()
+
+    def _sync_nav_to_visible(self) -> None:
+        """Resync the nav slider bounds and current index to _visible_indices."""
         vis = self._visible_indices
         if not vis:
             return
@@ -773,7 +778,6 @@ class ImageViewer(QWidget):
             self.index = vis[0]
         self.slider.setValue(vis.index(self.index))
         self.slider.blockSignals(False)
-        self._show_current()
 
     def get_cull_range(self) -> tuple:
         """Return (start_frame, end_frame) of the current included range."""
@@ -789,11 +793,15 @@ class ImageViewer(QWidget):
             self._cull_start = start
             self._cull_end = end
         self._range_slider.set_values(self._cull_start, self._cull_end)
+        if self._filter_excluded:
+            self._sync_nav_to_visible()
         self._show_current()
 
     def _on_range_changed(self, start: int, end: int) -> None:
         self._cull_start = start
         self._cull_end = end
+        if self._filter_excluded:
+            self._sync_nav_to_visible()
         self._show_current()
         self.frameCullingChanged.emit(start, end)
 
