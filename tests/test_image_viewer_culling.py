@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import Mock
 
 import numpy as np
 import pytest
@@ -195,3 +196,53 @@ class TestResetClearsCullRange:
         viewer.reset()
         assert viewer._cull_end == -1
         assert viewer._filter_excluded is False
+
+
+# ── set_stack edge cases ─────────────────────────────────────────────────
+
+
+class TestSetStackEdgeCases:
+    def test_set_stack_empty_list_sets_cull_end_negative(self, app) -> None:
+        handler = ImageStackHandler()
+        v = ImageViewer(handler)
+        v.set_stack([])
+        assert v._cull_end == -1
+
+    def test_set_stack_emits_stackLoaded_for_list(self, app, tmp_path) -> None:
+        files = _make_stack(tmp_path, 2)
+        handler = ImageStackHandler()
+        v = ImageViewer(handler)
+        received = []
+        v.stackLoaded.connect(received.append)
+        v.set_stack(files)
+        assert len(received) == 1
+
+    def test_set_stack_emits_stackLoaded_for_directory(self, app, tmp_path) -> None:
+        _make_stack(tmp_path, 2)
+        handler = ImageStackHandler()
+        v = ImageViewer(handler)
+        received = []
+        v.stackLoaded.connect(received.append)
+        v.set_stack(str(tmp_path))
+        assert len(received) == 1
+
+    def test_set_stack_empty_list_no_stackLoaded(self, app) -> None:
+        handler = ImageStackHandler()
+        v = ImageViewer(handler)
+        received = []
+        v.stackLoaded.connect(received.append)
+        v.set_stack([])
+        assert received == []
+
+
+# ── set_cull_range with no stack ─────────────────────────────────────────
+
+
+class TestSetCullRangeNoStack:
+    def test_set_cull_range_no_stack_stores_values(self, app) -> None:
+        handler = ImageStackHandler()
+        v = ImageViewer(handler)
+        # No stack loaded: total == 0, else branch is taken
+        v.set_cull_range(2, 7)
+        assert v._cull_start == 2
+        assert v._cull_end == 7

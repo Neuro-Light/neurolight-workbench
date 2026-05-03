@@ -98,6 +98,11 @@ def test_get_total_frame_count() -> None:
     assert h.get_total_frame_count() == 3
 
 
+def test_get_included_files_empty_files_returns_empty() -> None:
+    h = ImageStackHandler()
+    assert h.get_included_files() == []
+
+
 def test_get_included_files_no_range_set() -> None:
     h = ImageStackHandler()
     h.files = ["/a.tif", "/b.tif"]
@@ -118,6 +123,26 @@ def test_load_stack_resets_included_range(tmp_path: Path) -> None:
     h.load_image_stack(str(tmp_path))
     # After load, _included_end should be -1 (unset = all frames)
     assert h._included_end == -1
+
+
+def test_load_stack_with_non_directory_string_returns_empty(tmp_path: Path) -> None:
+    # Passing a path that is not a directory takes the is_dir()=False branch
+    non_dir = str(tmp_path / "not_a_dir.tif")
+    h = ImageStackHandler()
+    result = h.load_image_stack(non_dir)
+    assert result == []
+
+
+def test_get_all_frames_as_array_rgb_frame(tmp_path: Path) -> None:
+    p = tmp_path / "rgb.tif"
+    rgb = np.zeros((4, 4, 3), dtype=np.uint8)
+    tifffile.imwrite(p, rgb)
+    h = ImageStackHandler()
+    h.load_image_stack([str(p)])
+    stack = h.get_all_frames_as_array()
+    # RGB frame should be collapsed to 2D (mean across channels)
+    assert stack is not None
+    assert stack.ndim == 3  # (1 frame, height, width)
 
 
 def test_get_all_frames_as_array_uses_range(tmp_path: Path) -> None:

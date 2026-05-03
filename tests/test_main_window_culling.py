@@ -111,6 +111,14 @@ class TestOnFrameCullingChanged:
             main_window._on_frame_culling_changed(0, 9)
             mock_save.assert_not_called()
 
+    def test_updates_existing_culling_dict(self, main_window) -> None:
+        # "culling" already present — should update keys, not reinitialize
+        main_window.experiment.settings["culling"] = {"start_frame": 0, "end_frame": 5}
+        main_window._on_frame_culling_changed(1, 8)
+        culling = main_window.experiment.settings["culling"]
+        assert culling["start_frame"] == 1
+        assert culling["end_frame"] == 8
+
     def test_resets_downstream_when_cull_already_completed(self, main_window) -> None:
         wm = main_window.workflow_manager
         wm.completed_steps.add(WorkflowStep.CULL_FRAMES)
