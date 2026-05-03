@@ -854,6 +854,26 @@ def get_stylesheet(theme: str = "dark") -> str:
         font-size: {FONT_SIZE_SMALL};
     }}
 
+    /* Inline help icon (small, non-obstructive) */
+    QToolButton[class="help-icon"] {{
+        background-color: transparent;
+        color: {c["text_secondary"]};
+        border: 1px solid {c["border"]};
+        border-radius: 9px;
+        padding: 0px;
+        font-weight: 700;
+    }}
+
+    QToolButton[class="help-icon"]:hover {{
+        color: {c["primary"]};
+        border-color: {c["primary"]};
+        background-color: {c["hover"]};
+    }}
+
+    QToolButton[class="help-icon"]:focus {{
+        border-color: {c["border_focus"]};
+    }}
+
     /* === Workflow stepper (top process bar) === */
     QFrame[objectName="workflowStepper"] {{
         background-color: {c["surface"]};

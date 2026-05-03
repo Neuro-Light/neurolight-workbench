@@ -33,6 +33,8 @@ from PySide6.QtWidgets import (
 from core.circular_stats import rao_spacing_test, rayleigh_test
 from ui.app_settings import get_theme
 from ui.constants import DEFAULT_FRAME_INTERVAL_MINUTES
+from ui.help_content import get_help_text
+from ui.help_widgets import HelpIconButton
 from ui.styles import get_mpl_theme
 
 
@@ -133,26 +135,46 @@ class RayLeighPlotWidget(QWidget):
         stats_container = QVBoxLayout()
         stats_container.setSpacing(4)
 
+        rayleigh_title_row_widget = QWidget()
+        rayleigh_title_row = QHBoxLayout(rayleigh_title_row_widget)
+        rayleigh_title_row.setContentsMargins(0, 0, 0, 0)
+        rayleigh_title_row.setSpacing(6)
+        rayleigh_title_row.addStretch()
         self.rayleigh_title_label = QLabel("Rayleigh:")
         self.rayleigh_title_label.setAlignment(Qt.AlignCenter)
         self.rayleigh_title_label.setStyleSheet("font-size: 16px; font-weight: 700; color: #4A90E2;")
-        stats_container.addWidget(self.rayleigh_title_label)
+        self.rayleigh_title_label.setToolTip(get_help_text("rayleigh.stats"))
+        rayleigh_title_row.addWidget(self.rayleigh_title_label)
+        rayleigh_title_row.addWidget(HelpIconButton("rayleigh.stats", accessible_name="Help: Rayleigh test"))
+        rayleigh_title_row.addStretch()
+        stats_container.addWidget(rayleigh_title_row_widget)
 
         self.rayleigh_stats_label = QLabel("")
         self.rayleigh_stats_label.setAlignment(Qt.AlignCenter)
         self.rayleigh_stats_label.setWordWrap(True)
         self.rayleigh_stats_label.setStyleSheet("font-size: 14px; font-weight: 500;")
+        self.rayleigh_stats_label.setToolTip(get_help_text("rayleigh.stats"))
         stats_container.addWidget(self.rayleigh_stats_label)
 
+        rao_title_row_widget = QWidget()
+        rao_title_row = QHBoxLayout(rao_title_row_widget)
+        rao_title_row.setContentsMargins(0, 0, 0, 0)
+        rao_title_row.setSpacing(6)
+        rao_title_row.addStretch()
         self.rao_title_label = QLabel("Rao:")
         self.rao_title_label.setAlignment(Qt.AlignCenter)
         self.rao_title_label.setStyleSheet("font-size: 16px; font-weight: 700; color: #4A90E2; margin-top: 6px;")
-        stats_container.addWidget(self.rao_title_label)
+        self.rao_title_label.setToolTip(get_help_text("rao.stats"))
+        rao_title_row.addWidget(self.rao_title_label)
+        rao_title_row.addWidget(HelpIconButton("rao.stats", accessible_name="Help: Rao's spacing test"))
+        rao_title_row.addStretch()
+        stats_container.addWidget(rao_title_row_widget)
 
         self.rao_stats_label = QLabel("")
         self.rao_stats_label.setAlignment(Qt.AlignCenter)
         self.rao_stats_label.setWordWrap(True)
         self.rao_stats_label.setStyleSheet("font-size: 14px; font-weight: 500;")
+        self.rao_stats_label.setToolTip(get_help_text("rao.stats"))
         stats_container.addWidget(self.rao_stats_label)
 
         sidebar_layout.addLayout(stats_container)
@@ -172,6 +194,7 @@ class RayLeighPlotWidget(QWidget):
         self.figure = Figure(figsize=(6, 6))
         self.canvas = FigureCanvas(self.figure)
         self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.canvas.setToolTip(get_help_text("rayleigh.plot"))
         self.toolbar = NavigationToolbar(self.canvas, self)
         self.toolbar.setObjectName("mpl_nav_toolbar")
         plot_layout.addWidget(self.toolbar)

@@ -7,6 +7,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -20,9 +21,11 @@ from PySide6.QtWidgets import (
 )
 
 from core.lomb_scargle import compute_lomb_scargle
-from ui.app_settings import get_theme
+from ui.app_settings import get_roi_colors, get_theme
 from ui.constants import DEFAULT_FRAME_INTERVAL_MINUTES, ROI_DISPLAY_NAMES, ROI_KEYS
 from ui.draggable_spinbox import DraggableDoubleSpinBox
+from ui.help_content import get_help_text
+from ui.help_widgets import HelpIconButton
 from ui.styles import get_mpl_theme
 
 
@@ -53,28 +56,59 @@ class LombScarglePlotWidget(QWidget):
         self.status_label.setWordWrap(True)
         layout.addWidget(self.status_label)
 
+        # Title row with contextual help (non-obstructive)
+        title_row_widget = QWidget()
+        title_row = QHBoxLayout(title_row_widget)
+        title_row.setContentsMargins(4, 0, 4, 0)
+        title_row.setSpacing(6)
+        title_row.addStretch()
+        title_label = QLabel("Lomb–Scargle Periodogram")
+        title_label.setStyleSheet("font-size: 15px; font-weight: 700;")
+        title_row.addWidget(title_label)
+        title_row.addWidget(HelpIconButton("lomb_scargle.plot", accessible_name="Help: Lomb–Scargle periodogram"))
+        title_row.addStretch()
+        layout.addWidget(title_row_widget)
+
         # Compact single-row controls strip
         controls_row = QHBoxLayout()
         controls_row.setContentsMargins(4, 2, 4, 2)
         controls_row.setSpacing(8)
 
         # ROI checkboxes
-        controls_row.addWidget(QLabel("ROIs:"))
+        rois_label = QLabel("ROIs:")
+        rois_label.setToolTip(get_help_text("lomb_scargle.roi_toggles"))
+        controls_row.addWidget(rois_label)
         controls_row.addSpacing(4)
         self._roi_checkboxes: Dict[str, QCheckBox] = {}
+        colors = get_roi_colors()
         for idx, key in enumerate(ROI_KEYS):
+            # Color swatch to match ROI intensity plot
+            swatch = QLabel()
+            swatch.setFixedSize(12, 12)
+            pix = QPixmap(12, 12)
+            pix.fill(QColor(colors[key]))
+            swatch.setPixmap(pix)
+            swatch.setToolTip(get_help_text("lomb_scargle.roi_toggles"))
+
             cb = QCheckBox(ROI_DISPLAY_NAMES[key])
             cb.setChecked(True)
+            cb.setToolTip(get_help_text("lomb_scargle.roi_toggles"))
             cb.toggled.connect(self._update_plot)
             self._roi_checkboxes[key] = cb
+            controls_row.addWidget(swatch)
             controls_row.addWidget(cb)
+            if key == "roi_2":
+                controls_row.addWidget(
+                    HelpIconButton("lomb_scargle.roi_toggles", accessible_name="Help: ROI selectors")
+                )
             if idx < len(ROI_KEYS) - 1:
                 controls_row.addSpacing(8)
 
         controls_row.addSpacing(12)
 
         # Sampling interval
-        controls_row.addWidget(QLabel("Interval (min):"))
+        interval_label = QLabel("Interval (min):")
+        controls_row.addWidget(interval_label)
         self.sampling_interval_spin = DraggableDoubleSpinBox()
         self.sampling_interval_spin.setRange(0.0001, 10_000.0)
         self.sampling_interval_spin.setDecimals(4)
@@ -84,16 +118,21 @@ class LombScarglePlotWidget(QWidget):
         self.sampling_interval_spin.setToolTip(
             "Time between successive frames in minutes.\nSet this to match the experiment's acquisition interval."
         )
+        interval_label.setToolTip(get_help_text("lomb_scargle.interval"))
+        self.sampling_interval_spin.setToolTip(get_help_text("lomb_scargle.interval"))
         self.sampling_interval_spin.valueChanged.connect(self._update_plot)
         controls_row.addWidget(self.sampling_interval_spin)
 
         controls_row.addSpacing(12)
 
         # X-axis mode
-        controls_row.addWidget(QLabel("X-axis:"))
+        axis_label = QLabel("X-axis:")
+        axis_label.setToolTip(get_help_text("lomb_scargle.axis_mode"))
+        controls_row.addWidget(axis_label)
         self.axis_mode_combo = QComboBox()
         self.axis_mode_combo.addItem("Frequency", self.AXIS_FREQ)
         self.axis_mode_combo.addItem("Period", self.AXIS_PERIOD)
+        self.axis_mode_combo.setToolTip(get_help_text("lomb_scargle.axis_mode"))
         self.axis_mode_combo.currentIndexChanged.connect(self._update_plot)
         controls_row.addWidget(self.axis_mode_combo)
 
@@ -113,7 +152,17 @@ class LombScarglePlotWidget(QWidget):
         self.summary_label.setAlignment(Qt.AlignCenter)
         self.summary_label.setProperty("class", "plot-hover")
         self.summary_label.setStyleSheet("font-size: 14px; font-weight: 600; margin-top: 4px; margin-bottom: 4px;")
+        self.summary_label.setToolTip(get_help_text("lomb_scargle.summary"))
         layout.addWidget(self.summary_label)
+
+        # Subtle help icon next to the summary (clickable for users who don't hover)
+        summary_help_row_widget = QWidget()
+        summary_help_row = QHBoxLayout(summary_help_row_widget)
+        summary_help_row.setContentsMargins(0, 0, 0, 0)
+        summary_help_row.addStretch()
+        summary_help_row.addWidget(HelpIconButton("lomb_scargle.summary", accessible_name="Help: peak readout"))
+        summary_help_row.addStretch()
+        layout.addWidget(summary_help_row_widget)
 
         # Export buttons
         buttons_layout = QHBoxLayout()

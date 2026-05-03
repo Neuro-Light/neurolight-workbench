@@ -32,6 +32,8 @@ from PySide6.QtWidgets import (
 from ui.detection_progress_dialog import DetectionProgressDialog
 from ui.detection_worker import DetectionWorker
 from ui.draggable_spinbox import DraggableDoubleSpinBox, DraggableSpinBox
+from ui.help_content import get_help_text
+from ui.help_widgets import HelpIconButton
 
 _DETECT_ROI1 = "Detect ROI 1"
 _DETECT_ROI2 = "Detect ROI 2"
@@ -74,6 +76,19 @@ class NeuronDetectionWidget(QWidget):
         self.status_label.setWordWrap(True)
         sidebar_layout.addWidget(self.status_label)
 
+        # Detection title + help (keeps UI compact; help is only on demand)
+        title_row_widget = QWidget()
+        title_row = QHBoxLayout(title_row_widget)
+        title_row.setContentsMargins(0, 0, 0, 0)
+        title_row.setSpacing(6)
+        title_row.addStretch()
+        title_label = QLabel("Neuron Detection")
+        title_label.setStyleSheet("font-size: 15px; font-weight: 700;")
+        title_row.addWidget(title_label)
+        title_row.addWidget(HelpIconButton("neuron_detection.params", accessible_name="Help: detection parameters"))
+        title_row.addStretch()
+        sidebar_layout.addWidget(title_row_widget)
+
         mode_row = QHBoxLayout()
         mode_row.addWidget(QLabel("Detection target:"))
         self.detect_mode_combo = QComboBox()
@@ -86,17 +101,33 @@ class NeuronDetectionWidget(QWidget):
         params_group = QGroupBox("Detection Parameters")
         params_layout = QFormLayout()
 
+        def _label_with_help(text: str, help_id: str) -> QWidget:
+            w = QWidget()
+            row = QHBoxLayout(w)
+            row.setContentsMargins(0, 0, 0, 0)
+            row.setSpacing(6)
+            row.addWidget(HelpIconButton(help_id, accessible_name=f"Help: {text}"))
+            lbl = QLabel(text)
+            lbl.setToolTip(get_help_text(help_id))
+            row.addWidget(lbl)
+            row.addStretch()
+            return w
+
         self.cell_size_spin = DraggableSpinBox()
         self.cell_size_spin.setRange(2, 50)
         self.cell_size_spin.setValue(8)
         self.cell_size_spin.setToolTip("Neuron diameter in pixels")
-        params_layout.addRow("Cell Size (pixels):", self.cell_size_spin)
+        params_layout.addRow(
+            _label_with_help("Cell Size (pixels):", "neuron_detection.param.cell_size"), self.cell_size_spin
+        )
 
         self.num_peaks_spin = DraggableSpinBox()
         self.num_peaks_spin.setRange(1, 2000)
         self.num_peaks_spin.setValue(800)
         self.num_peaks_spin.setToolTip("Maximum number of neurons to detect")
-        params_layout.addRow("Max Neurons:", self.num_peaks_spin)
+        params_layout.addRow(
+            _label_with_help("Max Neurons:", "neuron_detection.param.max_neurons"), self.num_peaks_spin
+        )
 
         self.correlation_threshold_spin = DraggableDoubleSpinBox()
         self.correlation_threshold_spin.setRange(0.0, 1.0)
@@ -104,7 +135,10 @@ class NeuronDetectionWidget(QWidget):
         self.correlation_threshold_spin.setValue(0.5)
         self.correlation_threshold_spin.setDecimals(2)
         self.correlation_threshold_spin.setToolTip("Threshold for filtering neurons by correlation quality")
-        params_layout.addRow("Correlation Threshold:", self.correlation_threshold_spin)
+        params_layout.addRow(
+            _label_with_help("Correlation Threshold:", "neuron_detection.param.correlation_threshold"),
+            self.correlation_threshold_spin,
+        )
 
         self.max_absent_frames_spin = DraggableSpinBox()
         self.max_absent_frames_spin.setRange(0, 0)
@@ -113,7 +147,10 @@ class NeuronDetectionWidget(QWidget):
             "Maximum number of frames where a neuron's extracted intensity can be zero before it is marked bad. "
             "Defaults to the total frame count, which preserves current behavior."
         )
-        params_layout.addRow("Max Absent Frames:", self.max_absent_frames_spin)
+        params_layout.addRow(
+            _label_with_help("Max Absent Frames:", "neuron_detection.param.max_absent_frames"),
+            self.max_absent_frames_spin,
+        )
 
         self.threshold_rel_spin = DraggableDoubleSpinBox()
         self.threshold_rel_spin.setRange(0.0, 1.0)
@@ -124,7 +161,9 @@ class NeuronDetectionWidget(QWidget):
             "Relative threshold for peak detection (0.0-1.0). "
             "Lower values find dimmer neurons; raise if you get many false positives."
         )
-        params_layout.addRow("Peak Threshold:", self.threshold_rel_spin)
+        params_layout.addRow(
+            _label_with_help("Peak Threshold:", "neuron_detection.param.peak_threshold"), self.threshold_rel_spin
+        )
 
         self.max_projection_checkbox = QCheckBox()
         self.max_projection_checkbox.setChecked(True)
@@ -132,7 +171,9 @@ class NeuronDetectionWidget(QWidget):
             "Use max projection across frames for detection. "
             "Better for calcium imaging where neurons flash; uncheck to use mean."
         )
-        params_layout.addRow("Max Projection:", self.max_projection_checkbox)
+        params_layout.addRow(
+            _label_with_help("Max Projection:", "neuron_detection.param.max_projection"), self.max_projection_checkbox
+        )
 
         self.preprocess_sigma_spin = DraggableDoubleSpinBox()
         self.preprocess_sigma_spin.setRange(0.0, 3.0)
@@ -142,12 +183,17 @@ class NeuronDetectionWidget(QWidget):
         self.preprocess_sigma_spin.setToolTip(
             "Gaussian blur sigma before peak detection. Smooths noise to find dimmer peaks; use 0 to disable."
         )
-        params_layout.addRow("Smoothing (sigma):", self.preprocess_sigma_spin)
+        params_layout.addRow(
+            _label_with_help("Smoothing (sigma):", "neuron_detection.param.smoothing_sigma"),
+            self.preprocess_sigma_spin,
+        )
 
         self.detrending_checkbox = QCheckBox()
         self.detrending_checkbox.setChecked(True)
         self.detrending_checkbox.setToolTip("Apply Savitzky-Golay filter to remove slow drift")
-        params_layout.addRow("Apply Detrending:", self.detrending_checkbox)
+        params_layout.addRow(
+            _label_with_help("Apply Detrending:", "neuron_detection.param.detrending"), self.detrending_checkbox
+        )
 
         params_group.setLayout(params_layout)
         sidebar_layout.addWidget(params_group)
@@ -197,6 +243,17 @@ class NeuronDetectionWidget(QWidget):
         self.canvas.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.canvas.setMinimumSize(400, 300)
         main_layout.addWidget(self.canvas, 1)
+
+        # Small help icon below the canvas (centered) for users who don't hover.
+        plot_help_row_widget = QWidget()
+        plot_help_row = QHBoxLayout(plot_help_row_widget)
+        plot_help_row.setContentsMargins(0, 0, 0, 0)
+        plot_help_row.addStretch()
+        plot_help_row.addWidget(
+            HelpIconButton("neuron_detection.plot", accessible_name="Help: detected neurons overlay")
+        )
+        plot_help_row.addStretch()
+        main_layout.addWidget(plot_help_row_widget)
 
     def set_image_processor(self, image_processor: "ImageProcessor") -> None:
         """Set the image processor for detection."""
