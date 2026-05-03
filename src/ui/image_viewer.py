@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from pathlib import Path
-from typing import Dict, Optional, Set
+from typing import Dict, Optional
 
 import cv2
 import numpy as np
@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 from core.roi import ROI, ROIShape
 from ui.app_settings import get_roi_colors
 from ui.constants import ROI_DISPLAY_NAMES, ROI_KEYS
+from ui.range_slider import DualHandleRangeSlider
 from utils.file_handler import ImageStackHandler
 from utils.image_utils import numpy_to_qimage
 
@@ -55,7 +56,7 @@ class ImageViewer(QWidget):
     roiChanged = Signal(str, object)  # Emits (roi_key, ROI object) when adjusted
     roiDeleted = Signal(str)  # Emits roi_key when an ROI is deleted
     displaySettingsChanged = Signal(int, int)  # Emits (exposure, contrast) when display settings change
-    frameCullingChanged = Signal(object)  # Emits set of excluded frame indices
+    frameCullingChanged = Signal(int, int)  # Emits (start_frame, end_frame) of included range
 
     def __init__(self, handler: ImageStackHandler) -> None:
         super().__init__()
@@ -63,8 +64,9 @@ class ImageViewer(QWidget):
         self.index = 0
         self.cache = _LRUCache(20)
 
-        # Frame culling state
-        self._excluded_frames: Set[int] = set()
+        # Frame culling state — range-based (inclusive, 0-indexed; -1 means unset)
+        self._cull_start: int = 0
+        self._cull_end: int = -1
         self._filter_excluded: bool = False
 
         # Dual ROI state
@@ -207,16 +209,13 @@ class ImageViewer(QWidget):
         # Frame culling panel (shown only during Cull Frames workflow step)
         self.cull_controls_panel = QWidget()
         cull_panel_layout = QVBoxLayout(self.cull_controls_panel)
-        cull_panel_layout.setContentsMargins(0, 0, 0, 0)
-        cull_panel_layout.setSpacing(4)
+        cull_panel_layout.setContentsMargins(0, 4, 0, 0)
+        cull_panel_layout.setSpacing(0)
 
-        self._cull_toggle_btn = QPushButton("Exclude Frame")
-        self._cull_toggle_btn.setCheckable(True)
-        self._cull_toggle_btn.clicked.connect(self._on_cull_toggle)
-        cull_panel_layout.addWidget(self._cull_toggle_btn)
-
-        self._cull_count_label = QLabel("0 frames excluded")
-        cull_panel_layout.addWidget(self._cull_count_label)
+        self._range_slider = DualHandleRangeSlider()
+        self._range_slider.range_changed.connect(self._on_range_changed)
+        self._range_slider.frame_preview_requested.connect(self._on_frame_preview)
+        cull_panel_layout.addWidget(self._range_slider)
 
         self.cull_controls_panel.setVisible(False)
 
@@ -275,6 +274,15 @@ class ImageViewer(QWidget):
 
     def set_stack(self, files) -> None:
         self.handler.load_image_stack(files)
+        total = self.handler.get_image_count()
+        if total > 0:
+            self._cull_start = 0
+            self._cull_end = total - 1
+            self._range_slider.set_total(total)
+        else:
+            self._cull_start = 0
+            self._cull_end = -1
+            self._range_slider.set_total(0)
         vis = self._visible_indices
         self.slider.setRange(0, max(0, len(vis) - 1))
         self.index = vis[0] if vis else 0
@@ -304,8 +312,10 @@ class ImageViewer(QWidget):
         self.handler.files = []
         self.index = 0
         self.cache = _LRUCache(20)
-        self._excluded_frames = set()
+        self._cull_start = 0
+        self._cull_end = -1
         self._filter_excluded = False
+        self._range_slider.set_total(0)
         self.current_rois = {"roi_1": None, "roi_2": None}
         self.active_roi_key = "roi_1"
         self._populate_roi_selector()
@@ -314,7 +324,6 @@ class ImageViewer(QWidget):
         self.frame_index_label.setText("— / —")
         self.slider.setRange(0, 0)
         self._update_roi_button_text()
-        self._refresh_cull_button()
         self.prev_btn.setEnabled(True)
         self.next_btn.setEnabled(True)
         self.slider.setEnabled(True)
@@ -505,26 +514,25 @@ class ImageViewer(QWidget):
                 painter.drawEllipse(x_scaled, y_scaled, w_scaled, h_scaled)
             painter.end()
 
-        # Draw "EXCLUDED" overlay when current frame is culled
-        if self.index in self._excluded_frames:
-            painter = QPainter(scaled_pix)
-            overlay_color = QColor(180, 40, 40, 100)
-            painter.fillRect(scaled_pix.rect(), overlay_color)
-            painter.setPen(QPen(QColor(255, 60, 60, 220)))
-            font = QFont()
-            font.setPixelSize(max(20, scaled_pix.height() // 8))
-            font.setBold(True)
-            painter.setFont(font)
-            painter.drawText(scaled_pix.rect(), Qt.AlignCenter, "EXCLUDED")
-            painter.end()
+        # Draw "EXCLUDED" overlay when browsing frames outside the included range
+        if not self._filter_excluded and self._cull_end >= 0:
+            if self.index < self._cull_start or self.index > self._cull_end:
+                painter = QPainter(scaled_pix)
+                overlay_color = QColor(180, 40, 40, 100)
+                painter.fillRect(scaled_pix.rect(), overlay_color)
+                painter.setPen(QPen(QColor(255, 60, 60, 220)))
+                font = QFont()
+                font.setPixelSize(max(20, scaled_pix.height() // 8))
+                font.setBold(True)
+                painter.setFont(font)
+                painter.drawText(scaled_pix.rect(), Qt.AlignCenter, "EXCLUDED")
+                painter.end()
 
         self.image_label.setPixmap(scaled_pix)
         current_path = Path(self.handler.files[self.index])
         display_pos = vis.index(self.index) + 1 if self.index in vis else self.index + 1
         self._update_frame_index_label(count)
         self.filename_label.setText(f"{display_pos}/{count}: \n{current_path.name}")
-
-        self._refresh_cull_button()
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         # ROI FIX: Redraw on resize so ROI scale updates correctly
@@ -743,12 +751,14 @@ class ImageViewer(QWidget):
     def _visible_indices(self) -> list:
         """Raw file indices the viewer should navigate through."""
         total = self.handler.get_image_count()
-        if not self._filter_excluded or not self._excluded_frames:
+        if not self._filter_excluded or self._cull_end < 0:
             return list(range(total))
-        return [i for i in range(total) if i not in self._excluded_frames]
+        start = max(0, min(self._cull_start, total - 1))
+        end = max(start, min(self._cull_end, total - 1))
+        return list(range(start, end + 1))
 
     def set_filter_excluded(self, enabled: bool) -> None:
-        """Toggle whether excluded frames are hidden from navigation."""
+        """Toggle whether only included-range frames are shown in navigation."""
         if self._filter_excluded == enabled:
             return
         self._filter_excluded = enabled
@@ -757,37 +767,35 @@ class ImageViewer(QWidget):
             return
         self.slider.blockSignals(True)
         self.slider.setRange(0, max(0, len(vis) - 1))
-        # Snap current index to the nearest visible frame
         if self.index not in vis:
             self.index = vis[0]
         self.slider.setValue(vis.index(self.index))
         self.slider.blockSignals(False)
         self._show_current()
 
-    def get_excluded_frames(self) -> Set[int]:
-        return set(self._excluded_frames)
+    def get_cull_range(self) -> tuple:
+        """Return (start_frame, end_frame) of the current included range."""
+        return (self._cull_start, self._cull_end)
 
-    def set_excluded_frames(self, indices: Set[int]) -> None:
-        """Restore excluded frames (e.g. from saved experiment), without emitting."""
-        self._excluded_frames = set(indices)
-        self._refresh_cull_button()
-        self._show_current()
-
-    def _on_cull_toggle(self) -> None:
-        if self.index in self._excluded_frames:
-            self._excluded_frames.discard(self.index)
+    def set_cull_range(self, start: int, end: int) -> None:
+        """Restore included range (e.g. from saved experiment), without emitting."""
+        total = self.handler.get_image_count()
+        if total > 0:
+            self._cull_start = max(0, min(start, total - 1))
+            self._cull_end = max(self._cull_start, min(end, total - 1))
         else:
-            self._excluded_frames.add(self.index)
-        self._refresh_cull_button()
+            self._cull_start = start
+            self._cull_end = end
+        self._range_slider.set_values(self._cull_start, self._cull_end)
         self._show_current()
-        self.frameCullingChanged.emit(set(self._excluded_frames))
 
-    def _refresh_cull_button(self) -> None:
-        is_excluded = self.index in self._excluded_frames
-        self._cull_toggle_btn.blockSignals(True)
-        self._cull_toggle_btn.setChecked(is_excluded)
-        self._cull_toggle_btn.blockSignals(False)
-        self._cull_toggle_btn.setText("Include Frame" if is_excluded else "Exclude Frame")
+    def _on_range_changed(self, start: int, end: int) -> None:
+        self._cull_start = start
+        self._cull_end = end
+        self._show_current()
+        self.frameCullingChanged.emit(start, end)
 
-        n = len(self._excluded_frames)
-        self._cull_count_label.setText(f"{n} frame{'s' if n != 1 else ''} excluded")
+    def _on_frame_preview(self, frame: int) -> None:
+        """Jump to frame requested by range slider handle drag."""
+        self.index = frame
+        self._show_current()
