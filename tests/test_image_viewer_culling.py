@@ -101,6 +101,23 @@ class TestVisibleIndices:
         assert viewer._visible_indices == [0, 1, 2, 3, 4]
 
 
+class TestVisibleIndicesEmptyStack:
+    def test_empty_stack_filter_off_returns_empty(self, app) -> None:
+        handler = ImageStackHandler()
+        v = ImageViewer(handler)
+        assert v._visible_indices == []
+
+    def test_empty_stack_filter_on_returns_empty(self, app) -> None:
+        # Regression: if _cull_end was set from a previous stack and filter is
+        # enabled but total is now 0, must still return [] not [0].
+        handler = ImageStackHandler()
+        v = ImageViewer(handler)
+        v._cull_start = 1
+        v._cull_end = 3
+        v._filter_excluded = True
+        assert v._visible_indices == []
+
+
 class TestSetFilterExcluded:
     def test_enables_filtering(self, viewer) -> None:
         viewer.set_cull_range(1, 3)

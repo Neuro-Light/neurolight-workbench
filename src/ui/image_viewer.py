@@ -751,6 +751,8 @@ class ImageViewer(QWidget):
     def _visible_indices(self) -> list:
         """Raw file indices the viewer should navigate through."""
         total = self.handler.get_image_count()
+        if total == 0:
+            return []
         if not self._filter_excluded or self._cull_end < 0:
             return list(range(total))
         start = max(0, min(self._cull_start, total - 1))

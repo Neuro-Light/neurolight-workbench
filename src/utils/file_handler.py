@@ -95,7 +95,9 @@ class ImageStackHandler:
         if self._included_end < 0:
             return list(self.files)
         start = max(0, min(self._included_start, len(self.files) - 1))
-        end = max(start, min(self._included_end, len(self.files) - 1))
+        end = max(0, min(self._included_end, len(self.files) - 1))
+        if start > end:
+            return []
         return self.files[start : end + 1]
 
     def load_image_stack(self, directory_or_files) -> List[str]:
