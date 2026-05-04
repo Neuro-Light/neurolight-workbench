@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import List, Optional
 
 import numpy as np
 from PIL import Image
@@ -72,23 +72,33 @@ class ImageStackHandler:
     def __init__(self) -> None:
         self.files: List[str] = []
         self._experiment: Optional[Experiment] = None
-        self._excluded_frames: Set[int] = set()
+        self._included_start: int = 0
+        self._included_end: int = -1  # -1 means "all frames"
 
-    def set_excluded_frames(self, indices: Set[int]) -> None:
-        self._excluded_frames = set(indices)
+    def set_included_range(self, start: int, end: int) -> None:
+        """Set the inclusive range of frames to treat as included."""
+        self._included_start = start
+        self._included_end = end
 
-    def get_excluded_frames(self) -> Set[int]:
-        return set(self._excluded_frames)
+    def get_included_range(self) -> tuple:
+        """Return (start, end) of the current included range."""
+        return (self._included_start, self._included_end)
 
     def get_total_frame_count(self) -> int:
-        """Return total number of files regardless of exclusions."""
+        """Return total number of files regardless of the included range."""
         return len(self.files)
 
     def get_included_files(self) -> List[str]:
-        """Return the file list with excluded frames removed, in original order."""
-        if not self._excluded_frames:
+        """Return the file list trimmed to the included range, in original order."""
+        if not self.files:
+            return []
+        if self._included_end < 0:
             return list(self.files)
-        return [p for i, p in enumerate(self.files) if i not in self._excluded_frames]
+        start = max(0, min(self._included_start, len(self.files) - 1))
+        end = max(0, min(self._included_end, len(self.files) - 1))
+        if start > end:
+            return []
+        return self.files[start : end + 1]
 
     def load_image_stack(self, directory_or_files) -> List[str]:
         paths: List[str] = []
@@ -104,7 +114,8 @@ class ImageStackHandler:
                     if p.is_file() and p.suffix.lower() in (".tif", ".tiff"):
                         paths.append(str(p))
         self.files = paths
-        self._excluded_frames = set()
+        self._included_start = 0
+        self._included_end = -1
         return self.files
 
     def validate_tif_files(self, file_paths: List[str]) -> bool:
@@ -134,13 +145,13 @@ class ImageStackHandler:
             return np.asarray(img)
 
     def get_all_frames_as_array(self) -> Optional[np.ndarray]:
-        """Load all non-excluded frames as a 3D numpy array (frames, height, width).
+        """Load all included-range frames as a 3D numpy array (frames, height, width).
         Preserves original image dtype to avoid precision loss (consistent with get_image_at_index).
         """
         if not self.files:
             return None
 
-        included_files = [p for i, p in enumerate(self.files) if i not in self._excluded_frames]
+        included_files = self.get_included_files()
         if not included_files:
             return None
 

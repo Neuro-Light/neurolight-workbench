@@ -1318,16 +1318,15 @@ class MainWindow(QMainWindow):
         if self.workflow_manager.current_step == WorkflowStep.EDIT_IMAGES:
             self.workflow_manager.mark_step_ready(WorkflowStep.EDIT_IMAGES)
 
-    def _on_frame_culling_changed(self, excluded: set) -> None:
-        """Persist excluded frames to experiment and sync to the stack handler."""
+    def _on_frame_culling_changed(self, start: int, end: int) -> None:
+        """Persist included frame range to experiment and sync to the stack handler."""
         if "culling" not in self.experiment.settings:
             self.experiment.settings["culling"] = {}
-        self.experiment.settings["culling"]["excluded_frames"] = sorted(excluded)
-        self.stack_handler.set_excluded_frames(excluded)
+        self.experiment.settings["culling"]["start_frame"] = start
+        self.experiment.settings["culling"]["end_frame"] = end
+        self.stack_handler.set_included_range(start, end)
 
         # Keep neuron detection input in sync with the included-only stack.
-        # Detection operates on the frame_data provided to the widget; if culling
-        # changes after load, we must refresh it.
         try:
             if hasattr(self, "analysis"):
                 detection_widget = self.analysis.get_neuron_detection_widget()
@@ -1337,10 +1336,9 @@ class MainWindow(QMainWindow):
             pass
 
         total = self.stack_handler.get_total_frame_count()
-        all_excluded = total > 0 and len(excluded) >= total
+        no_frames = total == 0 or start > end
 
-        if all_excluded:
-            # Cannot advance with zero included frames — remove readiness
+        if no_frames:
             self.workflow_manager._ready_steps.discard(WorkflowStep.CULL_FRAMES)
             self.workflow_manager.state_changed.emit()
         else:
@@ -1349,7 +1347,7 @@ class MainWindow(QMainWindow):
         # If culling changed after downstream steps completed, invalidate them
         if WorkflowStep.CULL_FRAMES in self.workflow_manager.completed_steps:
             self.workflow_manager.reset_from_step(WorkflowStep.CULL_FRAMES)
-            if not all_excluded:
+            if not no_frames:
                 self.workflow_manager.mark_step_ready(WorkflowStep.CULL_FRAMES)
 
         if self.current_experiment_path:
@@ -1359,20 +1357,21 @@ class MainWindow(QMainWindow):
                 pass
 
     def _restore_culling_state(self) -> None:
-        """Restore excluded frames from experiment settings into viewer and handler."""
+        """Restore included frame range from experiment settings into viewer and handler."""
         culling = self.experiment.settings.get("culling") or {}
-        excluded_list = culling.get("excluded_frames", [])
-        excluded: set[int] = set()
-        skipped = 0
-        for item in excluded_list:
-            try:
-                excluded.add(int(item))
-            except (ValueError, TypeError):
-                skipped += 1
-        if skipped:
-            logger.warning("Skipped %d malformed excluded-frame entries", skipped)
-        self.stack_handler.set_excluded_frames(excluded)
-        self.viewer.set_excluded_frames(excluded)
+        total = self.stack_handler.get_total_frame_count()
+        try:
+            start = int(culling.get("start_frame", 0))
+        except (ValueError, TypeError):
+            start = 0
+        try:
+            end = int(culling.get("end_frame", max(0, total - 1)))
+        except (ValueError, TypeError):
+            end = max(0, total - 1)
+        start = max(0, min(start, max(0, total - 1)))
+        end = max(start, min(end, max(0, total - 1)))
+        self.stack_handler.set_included_range(start, end)
+        self.viewer.set_cull_range(start, end)
 
         # Ensure detection uses the included-only stack after restoring culling.
         try:

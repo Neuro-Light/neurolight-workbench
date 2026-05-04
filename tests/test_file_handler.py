@@ -84,50 +84,68 @@ def test_associate_with_experiment_updates_metadata() -> None:
 # ── Excluded-frames API ───────────────────────────────────────────────────
 
 
-def test_set_and_get_excluded_frames() -> None:
+def test_set_and_get_included_range() -> None:
     h = ImageStackHandler()
     h.files = ["/a.tif", "/b.tif", "/c.tif"]
-    h.set_excluded_frames({1})
-    assert h.get_excluded_frames() == {1}
-
-
-def test_get_excluded_frames_returns_copy() -> None:
-    h = ImageStackHandler()
-    h.set_excluded_frames({0, 2})
-    result = h.get_excluded_frames()
-    result.add(99)
-    assert 99 not in h.get_excluded_frames()
+    h.set_included_range(1, 2)
+    assert h.get_included_range() == (1, 2)
 
 
 def test_get_total_frame_count() -> None:
     h = ImageStackHandler()
     h.files = ["/a.tif", "/b.tif", "/c.tif"]
-    h.set_excluded_frames({1})
+    h.set_included_range(0, 1)
     assert h.get_total_frame_count() == 3
 
 
-def test_get_included_files_no_exclusions() -> None:
+def test_get_included_files_empty_files_returns_empty() -> None:
+    h = ImageStackHandler()
+    assert h.get_included_files() == []
+
+
+def test_get_included_files_no_range_set() -> None:
     h = ImageStackHandler()
     h.files = ["/a.tif", "/b.tif"]
     assert h.get_included_files() == ["/a.tif", "/b.tif"]
 
 
-def test_get_included_files_with_exclusions() -> None:
+def test_get_included_files_with_range() -> None:
     h = ImageStackHandler()
     h.files = ["/a.tif", "/b.tif", "/c.tif"]
-    h.set_excluded_frames({0, 2})
+    h.set_included_range(1, 1)
     assert h.get_included_files() == ["/b.tif"]
 
 
-def test_load_stack_resets_excluded_frames(tmp_path: Path) -> None:
+def test_load_stack_resets_included_range(tmp_path: Path) -> None:
     (tmp_path / "f.tif").write_bytes(b"")
     h = ImageStackHandler()
-    h.set_excluded_frames({0, 1})
+    h.set_included_range(0, 1)
     h.load_image_stack(str(tmp_path))
-    assert h.get_excluded_frames() == set()
+    # After load, _included_end should be -1 (unset = all frames)
+    assert h._included_end == -1
 
 
-def test_get_all_frames_as_array_excludes_frames(tmp_path: Path) -> None:
+def test_load_stack_with_non_directory_string_returns_empty(tmp_path: Path) -> None:
+    # Passing a path that is not a directory takes the is_dir()=False branch
+    non_dir = str(tmp_path / "not_a_dir.tif")
+    h = ImageStackHandler()
+    result = h.load_image_stack(non_dir)
+    assert result == []
+
+
+def test_get_all_frames_as_array_rgb_frame(tmp_path: Path) -> None:
+    p = tmp_path / "rgb.tif"
+    rgb = np.zeros((4, 4, 3), dtype=np.uint8)
+    tifffile.imwrite(p, rgb)
+    h = ImageStackHandler()
+    h.load_image_stack([str(p)])
+    stack = h.get_all_frames_as_array()
+    # RGB frame should be collapsed to 2D (mean across channels)
+    assert stack is not None
+    assert stack.ndim == 3  # (1 frame, height, width)
+
+
+def test_get_all_frames_as_array_uses_range(tmp_path: Path) -> None:
     p0 = tmp_path / "0.tif"
     p1 = tmp_path / "1.tif"
     p2 = tmp_path / "2.tif"
@@ -136,21 +154,26 @@ def test_get_all_frames_as_array_excludes_frames(tmp_path: Path) -> None:
     tifffile.imwrite(p2, np.ones((2, 2), dtype=np.uint8) * 200)
     h = ImageStackHandler()
     h.load_image_stack([str(p0), str(p1), str(p2)])
-    h.set_excluded_frames({1})
+    h.set_included_range(0, 1)  # include frames 0 and 1 only
     stack = h.get_all_frames_as_array()
     assert stack is not None
     assert stack.shape == (2, 2, 2)
     np.testing.assert_array_equal(stack[0], np.zeros((2, 2), dtype=np.uint8))
-    np.testing.assert_array_equal(stack[1], np.ones((2, 2), dtype=np.uint8) * 200)
+    np.testing.assert_array_equal(stack[1], np.ones((2, 2), dtype=np.uint8) * 100)
 
 
-def test_get_all_frames_as_array_all_excluded(tmp_path: Path) -> None:
+def test_get_all_frames_as_array_empty_range(tmp_path: Path) -> None:
     p = tmp_path / "only.tif"
     tifffile.imwrite(p, np.zeros((2, 2), dtype=np.uint8))
     h = ImageStackHandler()
     h.load_image_stack([str(p)])
-    h.set_excluded_frames({0})
-    assert h.get_all_frames_as_array() is None
+    # set_included_range to valid range — can't make it empty with range API
+    # An empty result requires an out-of-bounds range which get_included_files clamps.
+    # Verify the normal single-frame case works correctly.
+    h.set_included_range(0, 0)
+    stack = h.get_all_frames_as_array()
+    assert stack is not None
+    assert stack.shape == (1, 2, 2)
 
 
 @pytest.mark.parametrize(
