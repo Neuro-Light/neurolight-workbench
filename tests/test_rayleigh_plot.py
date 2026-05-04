@@ -164,6 +164,31 @@ def test_plot_with_no_matching_filtered_neurons_clears_plot(app) -> None:
     assert widget.cycle_info_label.text() == "No neurons match the current ROI / quality filters."
 
 
+def test_plot_filters_roi_1_before_computing_cycles(app) -> None:
+    widget = RayLeighPlotWidget()
+    widget.neuron_trajectories = _sample_trajectories()
+    widget.quality_mask = np.array([True, True, True])
+    widget.roi_origin = np.array([0, 1, 0])
+    widget.roi_view_combo.setCurrentText("ROI 1 only")
+
+    captured: dict[str, object] = {}
+
+    def _capture_cycle_call(*, signal, neuron_trajectories, interval_minutes, neuron_indices):
+        captured["signal"] = signal
+        captured["neuron_trajectories"] = neuron_trajectories
+        captured["interval_minutes"] = interval_minutes
+        captured["neuron_indices"] = neuron_indices
+        return [_first_cycle()]
+
+    with patch("ui.rayleigh_plot.compute_cycle_rayleigh_data", side_effect=_capture_cycle_call):
+        widget._plot_selected_cycle = Mock()
+        widget._plot()
+
+    assert np.array_equal(captured["neuron_indices"], np.array([0, 2]))
+    assert np.asarray(captured["neuron_trajectories"]).shape == (2, 13)
+    assert widget._plot_selected_cycle.call_count == 1
+
+
 def test_plot_selected_cycle_without_data_clears_plot(app) -> None:
     widget = RayLeighPlotWidget()
     widget.canvas.draw_idle = Mock()
@@ -244,6 +269,22 @@ def test_plot_selected_cycle_handles_stats_errors(app) -> None:
     assert widget.rao_stats_label.text() == ""
 
 
+def test_plot_selected_cycle_formats_stats_when_tests_succeed(app) -> None:
+    widget = RayLeighPlotWidget()
+    widget.canvas.draw_idle = Mock()
+    widget._apply_theme = Mock()
+    widget._cycle_data = [_first_cycle()]
+
+    with (
+        patch("ui.rayleigh_plot.rayleigh_test", return_value={"r": 0.4321, "p_value": 0.01234}),
+        patch("ui.rayleigh_plot.rao_spacing_test", return_value={"U": 145.67, "p_value": "< 0.05"}),
+    ):
+        widget._plot_selected_cycle()
+
+    assert widget.rayleigh_stats_label.text() == "r = 0.432, p ≈ 0.0123"
+    assert widget.rao_stats_label.text() == "U = 145.7, p < 0.05"
+
+
 def test_refresh_theme_replots_only_with_data(app) -> None:
     widget = RayLeighPlotWidget()
     widget._plot = Mock()
@@ -298,6 +339,22 @@ def test_on_pick_updates_selection_message(app) -> None:
     assert "Selected (ROI 1): 1 neuron(s)" in widget.cursor_label.text()
     assert "normalized time = 06:00, frame = 12" in widget.cursor_label.text()
     assert "θ = 90.0°, r = 0.800" in widget.cursor_label.text()
+
+
+def test_on_pick_formats_selection_without_frame_metadata(app) -> None:
+    widget = RayLeighPlotWidget()
+    widget.figure.clear()
+    ax = widget.figure.add_subplot(111, projection="polar")
+    scatter = ax.scatter([np.pi], [0.6], picker=5)
+    assert isinstance(scatter, PathCollection)
+    scatter._rayleigh_peak_minutes = np.array([720.0])  # type: ignore[attr-defined]
+    scatter._rayleigh_roi = None  # type: ignore[attr-defined]
+
+    widget._on_pick(SimpleNamespace(artist=scatter, ind=[0]))
+
+    assert "Selected: 1 neuron(s)" in widget.cursor_label.text()
+    assert "normalized time = 12:00" in widget.cursor_label.text()
+    assert "frame =" not in widget.cursor_label.text()
 
 
 def test_export_current_cycle_png_guard_and_save(app, tmp_path) -> None:

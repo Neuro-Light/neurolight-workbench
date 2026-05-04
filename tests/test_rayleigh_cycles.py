@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from unittest.mock import patch
 
 from core.rayleigh_cycles import compute_cycle_rayleigh_data, find_signal_peaks_and_troughs
 
@@ -138,5 +139,15 @@ def test_compute_cycle_rayleigh_data_returns_empty_without_consecutive_troughs()
     trajectories = np.vstack([signal, signal + 0.1])
 
     cycles = compute_cycle_rayleigh_data(signal, trajectories, interval_minutes=30.0)
+
+    assert cycles == []
+
+
+def test_compute_cycle_rayleigh_data_skips_non_positive_cycle_windows() -> None:
+    signal = np.array([0.0, 1.0, 0.0, 1.0, 0.0])
+    trajectories = np.vstack([signal, signal + 0.5])
+
+    with patch("core.rayleigh_cycles.find_signal_peaks_and_troughs", return_value=(np.array([], dtype=int), np.array([3, 3]))):
+        cycles = compute_cycle_rayleigh_data(signal, trajectories, interval_minutes=10.0)
 
     assert cycles == []
