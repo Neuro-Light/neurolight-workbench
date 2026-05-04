@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import csv
-from typing import TYPE_CHECKING, Any, Dict, Optional
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from core.experiment_manager import Experiment
@@ -45,20 +45,20 @@ class NeuronDetectionWidget(QWidget):
 
     detectionCompleted = Signal()
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.neuron_locations: Optional[np.ndarray] = None
-        self.neuron_trajectories: Optional[np.ndarray] = None
-        self.quality_mask: Optional[np.ndarray] = None
-        self.mean_frame: Optional[np.ndarray] = None
-        self._display_frame: Optional[np.ndarray] = None  # First frame for visualization (or mean when loading)
-        self.roi_masks: Dict[str, Optional[np.ndarray]] = {"roi_1": None, "roi_2": None}
-        self.experiment: Optional["Experiment"] = None
-        self.image_processor: Optional["ImageProcessor"] = None
-        self.frame_data: Optional[np.ndarray] = None
-        self._detection_progress_dialog: Optional[DetectionProgressDialog] = None
-        self._detection_worker: Optional[DetectionWorker] = None
-        self._loaded_roi_origin: Optional[np.ndarray] = None
+        self.neuron_locations: np.ndarray | None = None
+        self.neuron_trajectories: np.ndarray | None = None
+        self.quality_mask: np.ndarray | None = None
+        self.mean_frame: np.ndarray | None = None
+        self._display_frame: np.ndarray | None = None  # First frame for visualization (or mean when loading)
+        self.roi_masks: dict[str, np.ndarray | None] = {"roi_1": None, "roi_2": None}
+        self.experiment: Experiment | None = None
+        self.image_processor: ImageProcessor | None = None
+        self.frame_data: np.ndarray | None = None
+        self._detection_progress_dialog: DetectionProgressDialog | None = None
+        self._detection_worker: DetectionWorker | None = None
+        self._loaded_roi_origin: np.ndarray | None = None
         self._max_absent_frames_default = 0
 
         main_layout = QHBoxLayout(self)
@@ -255,11 +255,11 @@ class NeuronDetectionWidget(QWidget):
         plot_help_row.addStretch()
         main_layout.addWidget(plot_help_row_widget)
 
-    def set_image_processor(self, image_processor: "ImageProcessor") -> None:
+    def set_image_processor(self, image_processor: ImageProcessor) -> None:
         """Set the image processor for detection."""
         self.image_processor = image_processor
 
-    def set_frame_data(self, frame_data: Optional[np.ndarray]) -> None:
+    def set_frame_data(self, frame_data: np.ndarray | None) -> None:
         """Set the frame data (3D array: frames, height, width)."""
         previous_default = self._max_absent_frames_default
         current_value = self.max_absent_frames_spin.value()
@@ -267,7 +267,7 @@ class NeuronDetectionWidget(QWidget):
         self._sync_max_absent_frames_with_stack(reset_to_default=current_value == previous_default)
         self._update_ui_state()
 
-    def set_roi_mask(self, roi_key: str, roi_mask: Optional[np.ndarray]) -> None:
+    def set_roi_mask(self, roi_key: str, roi_mask: np.ndarray | None) -> None:
         """Set the ROI mask for *roi_key* (``"roi_1"`` or ``"roi_2"``)."""
         self.roi_masks[roi_key] = roi_mask
         self._update_ui_state()
@@ -279,7 +279,7 @@ class NeuronDetectionWidget(QWidget):
         """
         self.trajectory_plot_callback = callback
 
-    def _compute_roi_origin(self) -> Optional[np.ndarray]:
+    def _compute_roi_origin(self) -> np.ndarray | None:
         """Return 1D array of 0 (ROI 1) or 1 (ROI 2) per neuron based on location and ROI masks."""
         if self.neuron_locations is None or len(self.neuron_locations) == 0:
             return None
@@ -333,9 +333,9 @@ class NeuronDetectionWidget(QWidget):
         neuron_locations: np.ndarray,
         neuron_trajectories: np.ndarray,
         quality_mask: np.ndarray,
-        mean_frame: Optional[np.ndarray] = None,
-        detection_params: Optional[Dict[str, Any]] = None,
-        roi_origin: Optional[np.ndarray] = None,
+        mean_frame: np.ndarray | None = None,
+        detection_params: dict[str, Any] | None = None,
+        roi_origin: np.ndarray | None = None,
     ) -> None:
         """Load previously saved detection data."""
         self.neuron_locations = neuron_locations
@@ -420,7 +420,7 @@ class NeuronDetectionWidget(QWidget):
             )
         self._loaded_roi_origin = None  # Clear so next run uses computed
 
-    def _effective_mask(self) -> Optional[np.ndarray]:
+    def _effective_mask(self) -> np.ndarray | None:
         """Return the combined boolean mask for the currently selected detection mode."""
         mode = self.detect_mode_combo.currentText()
         m1 = self.roi_masks.get("roi_1")

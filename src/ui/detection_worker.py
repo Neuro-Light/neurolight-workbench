@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from core.image_processor import ImageProcessor
@@ -20,10 +20,10 @@ class DetectionWorker(QThread):
 
     def __init__(
         self,
-        image_processor: "ImageProcessor",
+        image_processor: ImageProcessor,
         frame_data: np.ndarray,
         roi_mask: np.ndarray,
-        params: Dict[str, Any],
+        params: dict[str, Any],
         parent=None,
     ):
         super().__init__(parent)

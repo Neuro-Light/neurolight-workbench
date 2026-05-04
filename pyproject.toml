@@ -43,7 +43,7 @@ target-version = "py310"
 exclude = [".venv", "build", "dist"]
 
 [tool.ruff.lint]
-select = ["F", "E", "I"]
+select = ["F", "E", "I", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

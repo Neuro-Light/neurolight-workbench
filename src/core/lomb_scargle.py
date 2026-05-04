@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+from typing import Any
 
 import numpy as np
 from scipy.signal import lombscargle
@@ -28,10 +28,10 @@ def compute_lomb_scargle(
     t: np.ndarray,
     y: np.ndarray,
     *,
-    min_freq: Optional[float] = None,
-    max_freq: Optional[float] = None,
+    min_freq: float | None = None,
+    max_freq: float | None = None,
     num_freqs: int = 1000,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Compute a Lomb–Scargle periodogram for a single time series.
 

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Dict, Optional
-
 import numpy as np
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
@@ -41,12 +39,12 @@ class LombScarglePlotWidget(QWidget):
     AXIS_FREQ = "frequency"
     AXIS_PERIOD = "period"
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
 
-        self._intensity: Dict[str, Optional[np.ndarray]] = {key: None for key in ROI_KEYS}
-        self._results: Dict[str, Dict[str, float]] = {}
-        self._last_frequency: Optional[np.ndarray] = None
+        self._intensity: dict[str, np.ndarray | None] = {key: None for key in ROI_KEYS}
+        self._results: dict[str, dict[str, float]] = {}
+        self._last_frequency: np.ndarray | None = None
 
         layout = QVBoxLayout(self)
 
@@ -79,7 +77,7 @@ class LombScarglePlotWidget(QWidget):
         rois_label.setToolTip(get_help_text("lomb_scargle.roi_toggles"))
         controls_row.addWidget(rois_label)
         controls_row.addSpacing(4)
-        self._roi_checkboxes: Dict[str, QCheckBox] = {}
+        self._roi_checkboxes: dict[str, QCheckBox] = {}
         colors = get_roi_colors()
         for idx, key in enumerate(ROI_KEYS):
             # Color swatch to match ROI intensity plot
@@ -215,7 +213,7 @@ class LombScarglePlotWidget(QWidget):
         self.export_png_btn.setEnabled(False)
         self.export_csv_btn.setEnabled(False)
 
-    def get_peak_for_roi(self, roi_key: str) -> Optional[Dict[str, float]]:
+    def get_peak_for_roi(self, roi_key: str) -> dict[str, float] | None:
         """
         Return peak frequency / power information for a given ROI, if available.
 
@@ -234,7 +232,7 @@ class LombScarglePlotWidget(QWidget):
             "peak_period": float(result["peak_period"]),
         }
 
-    def get_all_peaks(self) -> Dict[str, Dict[str, float]]:
+    def get_all_peaks(self) -> dict[str, dict[str, float]]:
         """Return peak results for all ROIs that have been analyzed."""
         return {k: self.get_peak_for_roi(k) for k in ROI_KEYS if self.get_peak_for_roi(k) is not None}
 
@@ -275,7 +273,7 @@ class LombScarglePlotWidget(QWidget):
         self.figure.clear()
         self._last_frequency = None
 
-        visible: Dict[str, np.ndarray] = {}
+        visible: dict[str, np.ndarray] = {}
         for key in ROI_KEYS:
             data = self._intensity.get(key)
             cb = self._roi_checkboxes.get(key)

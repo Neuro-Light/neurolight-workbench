@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 import cv2
 import numpy as np
@@ -20,7 +21,7 @@ class ImageProcessor:
             raise FileNotFoundError(path)
         return img
 
-    def preprocess_image(self, image: np.ndarray, params: Dict[str, Any]) -> np.ndarray:
+    def preprocess_image(self, image: np.ndarray, params: dict[str, Any]) -> np.ndarray:
         # Simple placeholder: Gaussian blur
         ksize = int(params.get("ksize", 3))
         out = cv2.GaussianBlur(image, (ksize, ksize), 0)
@@ -35,7 +36,7 @@ class ImageProcessor:
         self.log_processing_step("filter", {"type": filter_type})
         return out
 
-    def log_processing_step(self, operation: str, params: Dict[str, Any]) -> None:
+    def log_processing_step(self, operation: str, params: dict[str, Any]) -> None:
         self.experiment.processing_history.append(
             {
                 "timestamp": self.experiment.modified_date.isoformat(),
@@ -165,7 +166,7 @@ class ImageProcessor:
         threshold_percentile: float = 95.0,
         min_area: int = 2,
         max_area: int = 100,
-    ) -> List[Tuple[int, int]]:
+    ) -> list[tuple[int, int]]:
         """
         Detect neuron positions (bright spots) in an image.
 
@@ -304,8 +305,8 @@ class ImageProcessor:
         image_stack: np.ndarray,
         transform_type: str = "RIGID_BODY",
         reference: str = "first",
-        progress_callback: Optional[Callable[[int, int, str], bool]] = None,
-    ) -> Tuple[np.ndarray, np.ndarray, List[float]]:
+        progress_callback: Callable[[int, int, str], bool] | None = None,
+    ) -> tuple[np.ndarray, np.ndarray, list[float]]:
         """
         Align images using PyStackReg.
 
@@ -443,13 +444,13 @@ class ImageProcessor:
         cell_size: int = 6,
         num_peaks: int = 800,
         correlation_threshold: float = 0.4,
-        max_absent_frames: Optional[int] = None,
+        max_absent_frames: int | None = None,
         threshold_rel: float = 0.03,
         apply_detrending: bool = True,
         use_max_projection: bool = True,
         preprocess_sigma: float = 1.0,
-        progress_callback: Optional[Callable[[int, int, str], None]] = None,
-    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+        progress_callback: Callable[[int, int, str], None] | None = None,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Detect neurons within a specified ROI using local maxima detection.
 

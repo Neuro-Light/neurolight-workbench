@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import List, Optional
-
 import numpy as np
 from PySide6.QtCore import QPointF, QRectF, Qt
 from PySide6.QtGui import (
@@ -46,7 +44,7 @@ class _ROIGraphicsView(QGraphicsView):
     MIN_ZOOM = 0.1
     MAX_ZOOM = 30.0
 
-    def __init__(self, scene: QGraphicsScene, dialog: "ROISelectionDialog") -> None:
+    def __init__(self, scene: QGraphicsScene, dialog: ROISelectionDialog) -> None:
         super().__init__(scene)
         self._dialog = dialog
         self._zoom_factor = 1.0
@@ -154,12 +152,12 @@ class ROISelectionDialog(QDialog):
     def __init__(
         self,
         image: np.ndarray,
-        existing_roi: Optional[ROI] = None,
-        parent: Optional[QWidget] = None,
+        existing_roi: ROI | None = None,
+        parent: QWidget | None = None,
         *,
         roi_color: str = "#22c55e",
         active_roi_label: str = "ROI 1",
-        other_roi: Optional[ROI] = None,
+        other_roi: ROI | None = None,
         other_roi_color: str = "#f59e0b",
         other_roi_label: str = "ROI 2",
     ) -> None:
@@ -170,13 +168,13 @@ class ROISelectionDialog(QDialog):
         # ---- state ----
         self._image = image
         self._image_height, self._image_width = image.shape[:2]
-        self._polygon_points: List[QPointF] = []
-        self._preview_pos: Optional[QPointF] = None
-        self._current_roi: Optional[ROI] = existing_roi
+        self._polygon_points: list[QPointF] = []
+        self._preview_pos: QPointF | None = None
+        self._current_roi: ROI | None = existing_roi
         self._selection_mode: bool = existing_roi is None
         self._adjust_mode: bool = False
         self._dragging_handle: HandleResult = ROIHandle.NONE
-        self._last_drag_pos: Optional[QPointF] = None
+        self._last_drag_pos: QPointF | None = None
 
         # Configurable colours and labels
         self._roi_color = QColor(roi_color)
@@ -482,7 +480,7 @@ class ROISelectionDialog(QDialog):
         if self._current_roi is not None:
             self.accept()
 
-    def get_roi(self) -> Optional[ROI]:
+    def get_roi(self) -> ROI | None:
         return self._current_roi
 
     # ------------------------------------------------------------------

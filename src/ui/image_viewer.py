@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections import OrderedDict
 from pathlib import Path
-from typing import Dict, Optional
 
 import cv2
 import numpy as np
@@ -33,9 +32,9 @@ from utils.image_utils import numpy_to_qimage
 class _LRUCache:
     def __init__(self, capacity: int = 20) -> None:
         self.capacity = capacity
-        self.store: "OrderedDict[int, np.ndarray]" = OrderedDict()
+        self.store: OrderedDict[int, np.ndarray] = OrderedDict()
 
-    def get(self, key: int) -> Optional[np.ndarray]:
+    def get(self, key: int) -> np.ndarray | None:
         if key not in self.store:
             return None
         value = self.store.pop(key)
@@ -70,7 +69,7 @@ class ImageViewer(QWidget):
         self._filter_excluded: bool = False
 
         # Dual ROI state
-        self.current_rois: Dict[str, Optional[ROI]] = {"roi_1": None, "roi_2": None}
+        self.current_rois: dict[str, ROI | None] = {"roi_1": None, "roi_2": None}
         self.active_roi_key: str = "roi_1"
 
         self.filename_label = QLabel("Load image to see data")
@@ -294,7 +293,7 @@ class ImageViewer(QWidget):
             self.upload_btn.hide()
 
         # Determine directory path and emit
-        directory: Optional[str] = None
+        directory: str | None = None
         if isinstance(files, (list, tuple)) and files:
             directory = str(Path(files[0]).parent)
         elif isinstance(files, str):
@@ -663,7 +662,7 @@ class ImageViewer(QWidget):
             self._show_current()
             self.roiDeleted.emit(key)
 
-    def _open_roi_dialog(self, existing_roi: "Optional[ROI]" = None) -> None:
+    def _open_roi_dialog(self, existing_roi: ROI | None = None) -> None:
         """Open the ROI selection dialog and handle the result."""
         from PySide6.QtWidgets import QDialog
 
@@ -709,13 +708,13 @@ class ImageViewer(QWidget):
         if active_roi is not None:
             self.delete_roi_btn.setText(f"Delete {name}")
 
-    def get_current_roi(self, key: Optional[str] = None) -> Optional[ROI]:
+    def get_current_roi(self, key: str | None = None) -> ROI | None:
         """Get an ROI by key (defaults to active key)."""
         if key is None:
             key = self.active_roi_key
         return self.current_rois.get(key)
 
-    def get_all_rois(self) -> Dict[str, Optional[ROI]]:
+    def get_all_rois(self) -> dict[str, ROI | None]:
         """Return both ROIs."""
         return dict(self.current_rois)
 
