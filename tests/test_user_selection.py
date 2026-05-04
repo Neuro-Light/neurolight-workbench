@@ -12,10 +12,12 @@ executable tests that validate the current user selection and switching flows.
 from __future__ import annotations
 
 import shutil
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+import numpy as np
 from PySide6.QtCore import QEvent, QPointF, Qt
 from PySide6.QtGui import QEnterEvent, QFocusEvent, QKeyEvent, QMouseEvent
 from PySide6.QtWidgets import QApplication, QDialog, QGridLayout, QMessageBox, QWidget
@@ -512,6 +514,135 @@ def test_main_window_switch_user_then_switch_back_updates_button_correctly(app, 
         mock_detection_widget.set_image_processor.assert_called()
         mock_detection_widget.set_trajectory_plot_callback.assert_called()
         mock_detection_widget.set_save_experiment_callback.assert_called_with(window._save_neuron_detection)
+
+
+def test_main_window_aligned_output_dir_uses_user_profile_not_source_stack(app, sample_experiment, users_root):
+    user_dir = users_root / "test" / "experiments"
+    user_dir.mkdir(parents=True)
+    source_dir = users_root.parent / "source_stack"
+    source_dir.mkdir(parents=True)
+
+    mock_viewer = QWidget()
+    mock_viewer.index = 0
+    mock_viewer.cache = Mock()
+    mock_viewer.current_roi = None
+    mock_viewer.image_label = Mock()
+    mock_viewer.filename_label = Mock()
+    mock_viewer.slider = Mock()
+    mock_viewer.set_stack = Mock()
+    mock_viewer.set_roi = Mock()
+    mock_viewer.reset = Mock()
+    mock_viewer.image_processor = Mock()
+    mock_viewer.get_current_roi = Mock(return_value=None)
+    mock_viewer.get_exposure = Mock(return_value=0)
+    mock_viewer.get_contrast = Mock(return_value=0)
+    mock_viewer.stackLoaded = Mock()
+    mock_viewer.stackLoaded.connect = Mock()
+    mock_viewer.roiSelected = Mock()
+    mock_viewer.roiSelected.connect = Mock()
+    mock_viewer.roiDeleted = Mock()
+    mock_viewer.roiDeleted.connect = Mock()
+    mock_viewer.displaySettingsChanged = Mock()
+    mock_viewer.displaySettingsChanged.connect = Mock()
+
+    mock_analysis = QWidget()
+    mock_roi_plot_widget = Mock()
+    mock_analysis.roi_plot_widget = mock_roi_plot_widget
+    mock_analysis.get_roi_plot_widget = Mock(return_value=mock_roi_plot_widget)
+    mock_analysis.get_neuron_detection_widget = Mock(return_value=Mock())
+    mock_analysis.get_neuron_trajectory_plot_widget = Mock(return_value=Mock())
+
+    mock_stack_handler = Mock()
+    mock_stack_handler.files = [str(source_dir / "frame_0001.tif")]
+    mock_stack_handler.associate_with_experiment = Mock()
+
+    with (
+        patch("ui.main_window.ImageViewer", return_value=mock_viewer),
+        patch("ui.main_window.AnalysisPanel", return_value=mock_analysis),
+        patch("ui.main_window.ImageStackHandler", return_value=mock_stack_handler),
+        patch("ui.main_window.DataAnalyzer", return_value=Mock()),
+        patch("ui.main_window.QTimer.singleShot"),
+        patch("ui.main_window.datetime") as mock_datetime,
+    ):
+        mock_datetime.now.return_value = datetime(2026, 5, 3, 12, 34, 56)
+        window = MainWindow(sample_experiment, user_experiments_dir=user_dir)
+        output_dir = window._build_aligned_output_dir()
+
+    assert output_dir == users_root / "test" / "aligned_images" / "source_stack_aligned_20260503_123456"
+    assert output_dir.parent.parent == users_root / "test"
+
+
+def test_alignment_finished_saves_into_user_profile_without_directory_picker(app, sample_experiment, users_root):
+    user_dir = users_root / "test" / "experiments"
+    user_dir.mkdir(parents=True)
+    source_dir = users_root.parent / "source_stack"
+    source_dir.mkdir(parents=True)
+
+    mock_viewer = QWidget()
+    mock_viewer.index = 0
+    mock_viewer.cache = Mock()
+    mock_viewer.current_roi = None
+    mock_viewer.image_label = Mock()
+    mock_viewer.filename_label = Mock()
+    mock_viewer.slider = Mock()
+    mock_viewer.set_stack = Mock()
+    mock_viewer.set_roi = Mock()
+    mock_viewer.reset = Mock()
+    mock_viewer.image_processor = Mock()
+    mock_viewer.get_current_roi = Mock(return_value=None)
+    mock_viewer.get_exposure = Mock(return_value=0)
+    mock_viewer.get_contrast = Mock(return_value=0)
+    mock_viewer.stackLoaded = Mock()
+    mock_viewer.stackLoaded.connect = Mock()
+    mock_viewer.roiSelected = Mock()
+    mock_viewer.roiSelected.connect = Mock()
+    mock_viewer.roiDeleted = Mock()
+    mock_viewer.roiDeleted.connect = Mock()
+    mock_viewer.displaySettingsChanged = Mock()
+    mock_viewer.displaySettingsChanged.connect = Mock()
+
+    mock_analysis = QWidget()
+    mock_roi_plot_widget = Mock()
+    mock_analysis.roi_plot_widget = mock_roi_plot_widget
+    mock_analysis.get_roi_plot_widget = Mock(return_value=mock_roi_plot_widget)
+    mock_analysis.get_neuron_detection_widget = Mock(return_value=Mock())
+    mock_analysis.get_neuron_trajectory_plot_widget = Mock(return_value=Mock())
+
+    mock_stack_handler = Mock()
+    mock_stack_handler.files = [str(source_dir / "frame_0001.tif")]
+    mock_stack_handler.associate_with_experiment = Mock()
+
+    with (
+        patch("ui.main_window.ImageViewer", return_value=mock_viewer),
+        patch("ui.main_window.AnalysisPanel", return_value=mock_analysis),
+        patch("ui.main_window.ImageStackHandler", return_value=mock_stack_handler),
+        patch("ui.main_window.DataAnalyzer", return_value=Mock()),
+        patch("ui.main_window.QTimer.singleShot"),
+        patch("ui.main_window.datetime") as mock_datetime,
+    ):
+        mock_datetime.now.return_value = datetime(2026, 5, 3, 12, 34, 56)
+        window = MainWindow(sample_experiment, user_experiments_dir=user_dir)
+
+    window._alignment_progress = Mock()
+    window._alignment_params = {"transform_type": "rigid_body", "reference": "first", "reference_index": 0}
+
+    aligned_stack = np.zeros((2, 4, 4), dtype=np.uint16)
+    tmats = np.zeros((2, 3, 3), dtype=np.float32)
+
+    with (
+        patch("ui.main_window.QMessageBox.question", side_effect=[QMessageBox.Yes, QMessageBox.No]),
+        patch("ui.main_window.QFileDialog.getExistingDirectory") as mock_get_dir,
+        patch("ui.main_window.datetime") as mock_datetime,
+        patch.object(window, "_save_aligned_stack") as mock_save,
+    ):
+        mock_datetime.now.return_value = datetime(2026, 5, 3, 12, 34, 56)
+        window._on_alignment_finished(aligned_stack, tmats, [0.8, 0.9])
+
+    mock_get_dir.assert_not_called()
+    mock_save.assert_called_once()
+    assert mock_save.call_args.args[3] == str(
+        users_root / "test" / "aligned_images" / "source_stack_aligned_20260503_123456"
+    )
 
 
 def test_user_selection_delete_user_success_refreshes_cards(users_root, app):

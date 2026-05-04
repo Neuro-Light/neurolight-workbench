@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -1608,19 +1609,20 @@ class MainWindow(QMainWindow):
         )
 
         if reply == QMessageBox.Yes:
-            output_dir = QFileDialog.getExistingDirectory(
-                self,
-                "Select Output Directory for Aligned Stack",
-                "",
-            )
-            if not output_dir:
+            output_dir = self._build_aligned_output_dir()
+            if output_dir is None:
+                QMessageBox.warning(
+                    self,
+                    "No Active User",
+                    "Aligned images can only be saved to the active user's profile, but no user profile is loaded.",
+                )
                 return
 
             self._save_aligned_stack(
                 aligned_stack,
                 tmats,
                 confidence_scores,
-                output_dir,
+                str(output_dir),
                 self._alignment_params,
             )
 
@@ -1633,7 +1635,7 @@ class MainWindow(QMainWindow):
             )
 
             if load_reply == QMessageBox.Yes:
-                self.viewer.set_stack(output_dir)
+                self.viewer.set_stack(str(output_dir))
 
         # Alignment finishing satisfies the alignment workflow step
         self.workflow_manager.complete_step_if_current(WorkflowStep.ALIGN_IMAGES)
@@ -1700,6 +1702,33 @@ class MainWindow(QMainWindow):
         new_arr = np.clip(new_arr, 0, 1)
 
         return new_arr
+
+    def _build_aligned_output_dir(self) -> Optional[Path]:
+        """Return a user-profile-owned output directory for aligned image stacks."""
+        if self.user_experiments_dir is None:
+            return None
+
+        user_root = self.user_experiments_dir.parent
+        aligned_root = user_root / "aligned_images"
+        source_name = self._aligned_stack_source_name()
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        return aligned_root / f"{source_name}_aligned_{timestamp}"
+
+    def _aligned_stack_source_name(self) -> str:
+        """Build a stable folder name for aligned output based on the loaded stack or experiment."""
+        if self.stack_handler.files:
+            source_dir = Path(self.stack_handler.files[0]).parent
+            if source_dir.name:
+                return source_dir.name
+
+        image_stack_path = getattr(self.experiment, "image_stack_path", None)
+        if image_stack_path:
+            image_stack_dir = Path(image_stack_path)
+            if image_stack_dir.name:
+                return image_stack_dir.name
+
+        experiment_name = self.experiment.name.strip().replace(" ", "_")
+        return experiment_name or "image_stack"
 
     def _apply_exposure_contrast_global(
         self,
