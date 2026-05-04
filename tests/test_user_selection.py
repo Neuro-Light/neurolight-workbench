@@ -16,8 +16,8 @@ from datetime import datetime
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-import pytest
 import numpy as np
+import pytest
 from PySide6.QtCore import QEvent, QPointF, Qt
 from PySide6.QtGui import QEnterEvent, QFocusEvent, QKeyEvent, QMouseEvent
 from PySide6.QtWidgets import QApplication, QDialog, QGridLayout, QMessageBox, QWidget
