@@ -15,6 +15,7 @@ from PySide6.QtCore import Qt, QTime
 from PySide6.QtWidgets import (
     QAbstractSpinBox,
     QComboBox,
+    QFileDialog,
     QFormLayout,
     QFrame,
     QGroupBox,
@@ -31,6 +32,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.circular_stats import rao_spacing_test, rayleigh_test
+from core.rayleigh_cycles import RayleighCycleData, compute_cycle_rayleigh_data
 from ui.app_settings import get_theme
 from ui.constants import DEFAULT_FRAME_INTERVAL_MINUTES
 from ui.help_content import get_help_text
@@ -53,6 +55,8 @@ class RayLeighPlotWidget(QWidget):
         self._motion_cid: Optional[int] = None
         self._last_hover_text: str = ""
         self._last_pick_text: str = ""
+        self._cycle_data: list[RayleighCycleData] = []
+        self._current_cycle: Optional[RayleighCycleData] = None
 
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -119,6 +123,22 @@ class RayLeighPlotWidget(QWidget):
         controls_group.setLayout(controls_layout)
         sidebar_layout.addWidget(controls_group, alignment=Qt.AlignHCenter)
 
+        cycle_group = QGroupBox("Cycle Selection")
+        cycle_group.setMaximumWidth(340)
+        cycle_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        cycle_layout = QFormLayout()
+        self.cycle_combo = QComboBox()
+        self.cycle_combo.setEnabled(False)
+        self.cycle_combo.currentIndexChanged.connect(self._plot_selected_cycle)
+        self.cycle_combo.setToolTip("Select a trough-to-trough cycle for per-cycle Rayleigh analysis.")
+        cycle_layout.addRow("Cycle:", self.cycle_combo)
+        self.cycle_info_label = QLabel("No complete trough-to-trough cycles available.")
+        self.cycle_info_label.setWordWrap(True)
+        self.cycle_info_label.setAlignment(Qt.AlignCenter)
+        cycle_layout.addRow(self.cycle_info_label)
+        cycle_group.setLayout(cycle_layout)
+        sidebar_layout.addWidget(cycle_group, alignment=Qt.AlignHCenter)
+
         # Cursor / selection readout (separate from the status banner at top)
         self.cursor_group = QGroupBox("Cursor / Selection")
         self.cursor_group.setMaximumWidth(340)
@@ -178,6 +198,20 @@ class RayLeighPlotWidget(QWidget):
         stats_container.addWidget(self.rao_stats_label)
 
         sidebar_layout.addLayout(stats_container)
+
+        export_group = QGroupBox("Export")
+        export_group.setMaximumWidth(340)
+        export_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        export_layout = QVBoxLayout(export_group)
+        self.export_png_btn = QPushButton("Export Cycle PNG...")
+        self.export_png_btn.setEnabled(False)
+        self.export_png_btn.clicked.connect(self._export_current_cycle_png)
+        export_layout.addWidget(self.export_png_btn)
+        self.export_csv_btn = QPushButton("Export Cycle CSV...")
+        self.export_csv_btn.setEnabled(False)
+        self.export_csv_btn.clicked.connect(self._export_current_cycle_csv)
+        export_layout.addWidget(self.export_csv_btn)
+        sidebar_layout.addWidget(export_group, alignment=Qt.AlignHCenter)
         sidebar_layout.addStretch()
 
         scroll = QScrollArea()
@@ -297,8 +331,6 @@ class RayLeighPlotWidget(QWidget):
             QMessageBox.warning(self, "No Data", "No neuron trajectories available.")
             return
 
-        start_time = self.start_time_edit.time()
-        start_minutes = start_time.hour() * 60 + start_time.minute()
         interval_minutes = self._get_interval_minutes()
 
         # Build mask of neurons to include based on ROI selector and quality mask
@@ -325,17 +357,77 @@ class RayLeighPlotWidget(QWidget):
                 "No Neurons",
                 "No neurons match the current ROI / quality filters.",
             )
-            self.figure.clear()
-            self.canvas.draw_idle()
+            self._cycle_data = []
+            self._set_cycle_controls_enabled(False)
+            self._clear_plot("No neurons match the current ROI / quality filters.")
             return
 
-        peak_frames = np.argmax(self.neuron_trajectories[indices], axis=1)
-        peak_minutes = (start_minutes + peak_frames * interval_minutes) % (24 * 60)
-        theta = (peak_minutes / (24 * 60)) * (2 * np.pi)
+        filtered_trajectories = self.neuron_trajectories[indices]
+        cycle_signal = np.mean(filtered_trajectories, axis=0)
+        self._cycle_data = compute_cycle_rayleigh_data(
+            signal=cycle_signal,
+            neuron_trajectories=filtered_trajectories,
+            interval_minutes=interval_minutes,
+            neuron_indices=indices,
+        )
+
+        if not self._cycle_data:
+            self._set_cycle_controls_enabled(False)
+            self._clear_plot("No complete trough-to-trough cycles were detected.")
+            self.status_label.setText("No complete trough-to-trough cycles were detected for the current filters.")
+            return
+
+        previous_cycle_index = self._current_cycle.cycle_index if self._current_cycle is not None else None
+        self._rebuild_cycle_combo(previous_cycle_index)
+        self._set_cycle_controls_enabled(True)
+        self._plot_selected_cycle()
+
+    def _rebuild_cycle_combo(self, preferred_cycle_index: Optional[int] = None) -> None:
+        self.cycle_combo.blockSignals(True)
+        self.cycle_combo.clear()
+        selected_idx = 0
+        for idx, cycle in enumerate(self._cycle_data):
+            label = f"Day {cycle.cycle_index}"
+            self.cycle_combo.addItem(label, cycle.cycle_index)
+            if preferred_cycle_index is not None and cycle.cycle_index == preferred_cycle_index:
+                selected_idx = idx
+        self.cycle_combo.setCurrentIndex(selected_idx)
+        self.cycle_combo.blockSignals(False)
+
+    def _set_cycle_controls_enabled(self, enabled: bool) -> None:
+        self.cycle_combo.setEnabled(enabled)
+        self.export_png_btn.setEnabled(enabled)
+        self.export_csv_btn.setEnabled(enabled)
+
+    def _clear_plot(self, status_text: str) -> None:
+        self.figure.clear()
+        self.canvas.draw_idle()
+        self.rayleigh_stats_label.setText("")
+        self.rao_stats_label.setText("")
+        self.cycle_info_label.setText(status_text)
+        self._current_cycle = None
+        self._last_hover_text = ""
+        self._last_pick_text = ""
+        self._update_cursor_box()
+
+    def _plot_selected_cycle(self) -> None:
+        if not self._cycle_data:
+            self._set_cycle_controls_enabled(False)
+            self._clear_plot("No complete trough-to-trough cycles available.")
+            return
+
+        cycle_idx = self.cycle_combo.currentIndex()
+        if cycle_idx < 0 or cycle_idx >= len(self._cycle_data):
+            cycle_idx = 0
+            self.cycle_combo.setCurrentIndex(cycle_idx)
+        cycle = self._cycle_data[cycle_idx]
+        self._current_cycle = cycle
 
         # Slight radial jitter to reduce overplotting
         # for separation of points that have the same peak time.
         # for visuals clarity, not a data transformation.
+        theta = cycle.theta
+        peak_minutes = cycle.normalized_day_minutes
         jitter = np.array([1.0 - 0.04 * (i % 5) for i in range(len(theta))])
 
         self.figure.clear()
@@ -353,17 +445,18 @@ class RayLeighPlotWidget(QWidget):
         ax.set_xticklabels(even_labels)
 
         theme = get_mpl_theme(get_theme())
+        cycle_roi_origin = self.roi_origin[cycle.neuron_indices] if self.roi_origin is not None else None
 
         # Color points by ROI when possible so Rayleigh plot visually matches ROI colours.
         if (
-            self.roi_origin is not None
-            and len(self.roi_origin) == num_neurons
-            and np.any(self.roi_origin[indices] == 0)
-            and np.any(self.roi_origin[indices] == 1)
+            cycle_roi_origin is not None
+            and len(cycle_roi_origin) == len(cycle.neuron_indices)
+            and np.any(cycle_roi_origin == 0)
+            and np.any(cycle_roi_origin == 1)
         ):
             roi_1_color = theme["roi_1_line_color"]
             roi_2_color = theme["roi_2_line_color"]
-            roi_flags = self.roi_origin[indices]
+            roi_flags = cycle_roi_origin
             roi_1_idx = roi_flags == 0
             roi_2_idx = roi_flags == 1
             if np.any(roi_1_idx):
@@ -377,6 +470,7 @@ class RayLeighPlotWidget(QWidget):
                     picker=5,
                 )
                 sc1._rayleigh_peak_minutes = peak_minutes[roi_1_idx]  # type: ignore[attr-defined]
+                sc1._rayleigh_peak_frames = cycle.peak_frames[roi_1_idx]  # type: ignore[attr-defined]
                 sc1._rayleigh_roi = "ROI 1"  # type: ignore[attr-defined]
             if np.any(roi_2_idx):
                 sc2 = ax.scatter(
@@ -389,6 +483,7 @@ class RayLeighPlotWidget(QWidget):
                     picker=5,
                 )
                 sc2._rayleigh_peak_minutes = peak_minutes[roi_2_idx]  # type: ignore[attr-defined]
+                sc2._rayleigh_peak_frames = cycle.peak_frames[roi_2_idx]  # type: ignore[attr-defined]
                 sc2._rayleigh_roi = "ROI 2"  # type: ignore[attr-defined]
         else:
             # Fallback: single-colour points using the theme's good/neutral colour.
@@ -402,11 +497,12 @@ class RayLeighPlotWidget(QWidget):
                 picker=5,
             )
             sc._rayleigh_peak_minutes = peak_minutes  # type: ignore[attr-defined]
+            sc._rayleigh_peak_frames = cycle.peak_frames  # type: ignore[attr-defined]
             sc._rayleigh_roi = None  # type: ignore[attr-defined]
 
-        title_time = start_time.toString("HH:mm")
         ax.set_title(
-            f"Peak Times (Modulo 24h)\nStart {title_time}  |  Interval {self._get_interval_display()}",
+            "Peak Times (Normalized Within Cycle)\n"
+            f"Day {cycle.cycle_index}  |  Interval {self._get_interval_display()}",
             fontsize=12,
         )
         # --- Rayleigh and Rao statistics summary (sidebar only) -------------------
@@ -414,22 +510,24 @@ class RayLeighPlotWidget(QWidget):
         rao_text = ""
         try:
             rayleigh = rayleigh_test(theta)
-            angles_deg = np.degrees(theta) % 360.0
-            rao = rao_spacing_test(angles_deg)
-
-            r = rayleigh["r"]
-            p_rayleigh = rayleigh["p_value"]
-            U = rao["U"]
-            p_rao = rao["p_value"]
-
-            rayleigh_text = f"r = {r:.3f}, p ≈ {p_rayleigh:.3g}"
-            rao_text = f"U = {U:.1f}, p {p_rao}"
+            rayleigh_text = f"r = {rayleigh['r']:.3f}, p ≈ {rayleigh['p_value']:.3g}"
         except Exception:
             rayleigh_text = ""
+
+        try:
+            angles_deg = np.degrees(theta) % 360.0
+            rao = rao_spacing_test(angles_deg)
+            rao_text = f"U = {rao['U']:.1f}, p {rao['p_value']}"
+        except Exception:
             rao_text = ""
 
         self.rayleigh_stats_label.setText(rayleigh_text)
         self.rao_stats_label.setText(rao_text)
+        self.cycle_info_label.setText(
+            f"Day {cycle.cycle_index}: {cycle.cycle_length_frames} frames"
+            f" ({cycle.cycle_length_minutes:.1f} min)\n"
+            f"First peak frame = {cycle.first_peak_frame}; {len(cycle.peak_frames)} neuron peaks plotted."
+        )
 
         ax.legend(loc="lower left", bbox_to_anchor=(1.05, 0.1))
         self._apply_theme(ax)
@@ -473,12 +571,14 @@ class RayLeighPlotWidget(QWidget):
             return
 
         mins = getattr(artist, "_rayleigh_peak_minutes", None)
+        frames = getattr(artist, "_rayleigh_peak_frames", None)
         roi_label = getattr(artist, "_rayleigh_roi", None)
         if mins is None:
             return
 
         indices = np.atleast_1d(event.ind)
         mins_arr = np.asarray(mins, dtype=float)[indices]
+        frames_arr = np.asarray(frames, dtype=float)[indices] if frames is not None else None
 
         # Use the first selected point as the representative for theta / r.
         offsets = artist.get_offsets()
@@ -493,7 +593,75 @@ class RayLeighPlotWidget(QWidget):
 
         count = len(indices)
         roi_part = f" ({roi_label})" if roi_label else ""
-        message = f"Selected{roi_part}: {count} neuron(s)\ntime = {t_str}, θ = {theta_deg:.1f}°, r = {r_sel:.3f}"
+        frame_part = ""
+        if frames_arr is not None:
+            frame_part = f", frame = {int(frames_arr[0])}"
+        message = (
+            f"Selected{roi_part}: {count} neuron(s)\n"
+            f"normalized time = {t_str}{frame_part}, θ = {theta_deg:.1f}°, r = {r_sel:.3f}"
+        )
 
         self._last_pick_text = message
         self._update_cursor_box()
+
+    def _export_current_cycle_png(self) -> None:
+        """Export the currently displayed cycle plot as a PNG image."""
+        if self._current_cycle is None:
+            QMessageBox.information(self, "No Cycle", "There is no cycle plot to export.")
+            return
+
+        cycle = self._current_cycle
+        default_name = f"rayleigh_cycle_{cycle.cycle_index}.png"
+        file_path, _ = QFileDialog.getSaveFileName(self, "Export Cycle PNG", default_name, "PNG Files (*.png)")
+        if not file_path:
+            return
+        self.figure.savefig(file_path, dpi=300, bbox_inches="tight")
+
+    def _export_current_cycle_csv(self) -> None:
+        """Export the currently displayed cycle's normalized peak data to CSV."""
+        if self._current_cycle is None:
+            QMessageBox.information(self, "No Cycle", "There is no cycle dataset to export.")
+            return
+
+        cycle = self._current_cycle
+        default_name = f"rayleigh_cycle_{cycle.cycle_index}.csv"
+        file_path, _ = QFileDialog.getSaveFileName(self, "Export Cycle CSV", default_name, "CSV Files (*.csv)")
+        if not file_path:
+            return
+
+        roi_labels = np.full(len(cycle.neuron_indices), "", dtype=object)
+        if self.roi_origin is not None and len(self.roi_origin) > int(np.max(cycle.neuron_indices)):
+            roi_values = self.roi_origin[cycle.neuron_indices]
+            roi_labels = np.where(roi_values == 0, "ROI 1", np.where(roi_values == 1, "ROI 2", ""))
+
+        theta_deg = (np.degrees(cycle.theta) % 360.0 + 360.0) % 360.0
+        normalized_hours = cycle.normalized_day_minutes / 60.0
+        rows = np.column_stack(
+            [
+                np.full(len(cycle.neuron_indices), cycle.cycle_index, dtype=int),
+                np.full(len(cycle.neuron_indices), cycle.trough_start_frame, dtype=int),
+                np.full(len(cycle.neuron_indices), cycle.trough_end_frame, dtype=int),
+                np.full(len(cycle.neuron_indices), cycle.cycle_length_frames, dtype=int),
+                np.full(len(cycle.neuron_indices), cycle.cycle_length_minutes, dtype=float),
+                np.full(len(cycle.neuron_indices), cycle.first_peak_frame, dtype=int),
+                cycle.neuron_indices,
+                roi_labels,
+                cycle.peak_frames,
+                cycle.normalized_day_minutes,
+                normalized_hours,
+                cycle.theta,
+                theta_deg,
+            ]
+        )
+        np.savetxt(
+            file_path,
+            rows,
+            delimiter=",",
+            fmt="%s",
+            header=(
+                "cycle_index,trough_start_frame,trough_end_frame,cycle_length_frames,"
+                "cycle_length_minutes,first_peak_frame,neuron_index,roi_label,peak_frame,"
+                "normalized_day_minutes,normalized_day_hours,theta_radians,theta_degrees"
+            ),
+            comments="",
+        )
