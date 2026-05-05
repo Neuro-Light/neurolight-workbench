@@ -54,7 +54,7 @@ class RayLeighPlotWidget(QWidget):
         self._last_hover_text: str = ""
         self._last_pick_text: str = ""
         self._cycle_data: list[RayleighCycleData] = []
-        self._current_cycle: Optional[RayleighCycleData] = None
+        self._current_cycle: RayleighCycleData | None = None
 
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
@@ -378,7 +378,7 @@ class RayLeighPlotWidget(QWidget):
         self._set_cycle_controls_enabled(True)
         self._plot_selected_cycle()
 
-    def _rebuild_cycle_combo(self, preferred_cycle_index: Optional[int] = None) -> None:
+    def _rebuild_cycle_combo(self, preferred_cycle_index: int | None = None) -> None:
         self.cycle_combo.blockSignals(True)
         self.cycle_combo.clear()
         selected_idx = 0
