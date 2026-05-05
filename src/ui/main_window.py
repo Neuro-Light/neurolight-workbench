@@ -973,17 +973,21 @@ class MainWindow(QMainWindow):
         self.workflow_manager.mark_step_ready(WorkflowStep.CULL_FRAMES)
 
     def _confirm_start_time_from_loaded_stack(self) -> None:
-        """Always prompt to confirm start time immediately after loading a stack."""
+        """Prompt once for start time when the experiment does not already have one saved."""
         if not self.stack_handler.files:
             return
+        acquisition = self.experiment.settings.get("acquisition") or {}
+        existing_time = acquisition.get("experiment_start_time")
+        if _parse_time_string(existing_time) is not None:
+            return
+
         first_file = self.stack_handler.files[0]
         inferred = _get_exif_timestamp(first_file)
         qtime = _parse_time_string(inferred)
 
         if qtime is None:
             # Fall back to currently saved acquisition time, then midnight.
-            acquisition = self.experiment.settings.get("acquisition") or {}
-            qtime = _parse_time_string(acquisition.get("experiment_start_time")) or QTime(0, 0, 0)
+            qtime = _parse_time_string(existing_time) or QTime(0, 0, 0)
 
         uniformity_note = None
         if len(self.stack_handler.files) > 1:
