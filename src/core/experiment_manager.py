@@ -6,7 +6,7 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import numpy as np
 
@@ -27,12 +27,12 @@ class Experiment:
     principal_investigator: str = ""
     created_date: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     modified_date: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    image_stack_path: Optional[str] = None
+    image_stack_path: str | None = None
     image_count: int = 0
-    image_stack_files: List[str] = field(default_factory=list)  # List of selected file paths
-    processing_history: List[Dict[str, Any]] = field(default_factory=list)
-    analysis_results: Dict[str, Any] = field(default_factory=dict)
-    settings: Dict[str, Any] = field(
+    image_stack_files: list[str] = field(default_factory=list)  # List of selected file paths
+    processing_history: list[dict[str, Any]] = field(default_factory=list)
+    analysis_results: dict[str, Any] = field(default_factory=dict)
+    settings: dict[str, Any] = field(
         default_factory=lambda: {
             "display": {
                 "colormap": "gray",
@@ -51,9 +51,9 @@ class Experiment:
     # Each value is an ROI dict with keys x, y, width, height, shape, points.
     # Coordinates are in original image pixels, ensuring ROIs stay fixed to
     # the image region regardless of window size or scaling.
-    rois: Dict[str, Any] = field(default_factory=lambda: {"roi_1": None, "roi_2": None})
+    rois: dict[str, Any] = field(default_factory=lambda: {"roi_1": None, "roi_2": None})
 
-    def to_json(self) -> Dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         return {
             "version": "1.0",
             "experiment": {
@@ -86,7 +86,7 @@ class Experiment:
         }
 
     @staticmethod
-    def from_json(data: Dict[str, Any]) -> "Experiment":
+    def from_json(data: dict[str, Any]) -> Experiment:
         exp = data.get("experiment", {})
         created = exp.get("created_date")
         modified = exp.get("modified_date")
@@ -132,7 +132,7 @@ class Experiment:
     def update_modified_date(self) -> None:
         self.modified_date = datetime.now(timezone.utc)
 
-    def _serialize_neuron_detection(self) -> Optional[Dict[str, Any]]:
+    def _serialize_neuron_detection(self) -> dict[str, Any] | None:
         """Serialize neuron detection data to JSON-serializable format."""
         # Check if data exists
         if not hasattr(self, "_neuron_detection_data"):
@@ -201,7 +201,7 @@ class Experiment:
 
         return result if result else None
 
-    def _deserialize_neuron_detection(self, data: Dict[str, Any]) -> None:
+    def _deserialize_neuron_detection(self, data: dict[str, Any]) -> None:
         """Deserialize neuron detection data from JSON format."""
         if not hasattr(self, "_neuron_detection_data"):
             self._neuron_detection_data = {}
@@ -243,12 +243,12 @@ class Experiment:
 
     def set_neuron_detection_data(
         self,
-        neuron_locations: Optional[np.ndarray] = None,
-        neuron_trajectories: Optional[np.ndarray] = None,
-        quality_mask: Optional[np.ndarray] = None,
-        mean_frame: Optional[np.ndarray] = None,
-        detection_params: Optional[Dict[str, Any]] = None,
-        roi_origin: Optional[np.ndarray] = None,
+        neuron_locations: np.ndarray | None = None,
+        neuron_trajectories: np.ndarray | None = None,
+        quality_mask: np.ndarray | None = None,
+        mean_frame: np.ndarray | None = None,
+        detection_params: dict[str, Any] | None = None,
+        roi_origin: np.ndarray | None = None,
     ) -> None:
         """Store neuron detection data in the experiment."""
         # Always initialize the dict if it doesn't exist
@@ -271,7 +271,7 @@ class Experiment:
         if roi_origin is not None:
             self._neuron_detection_data["roi_origin"] = roi_origin
 
-    def get_neuron_detection_data(self) -> Optional[Dict[str, Any]]:
+    def get_neuron_detection_data(self) -> dict[str, Any] | None:
         """Get stored neuron detection data."""
         if hasattr(self, "_neuron_detection_data"):
             return self._neuron_detection_data
@@ -279,7 +279,7 @@ class Experiment:
 
 
 class ExperimentManager:
-    def __init__(self, recent_file: Optional[Path] = None) -> None:
+    def __init__(self, recent_file: Path | None = None) -> None:
         self.recent_file = recent_file or RECENT_FILE
         try:
             self.recent_file.parent.mkdir(parents=True, exist_ok=True)
@@ -290,7 +290,7 @@ class ExperimentManager:
             # Recent experiments list is best-effort; ignore filesystem restrictions.
             pass
 
-    def create_new_experiment(self, metadata: Dict[str, Any]) -> Experiment:
+    def create_new_experiment(self, metadata: dict[str, Any]) -> Experiment:
         name = metadata.get("name", "").strip()
         if not name:
             raise ValueError("Experiment name cannot be empty")
@@ -318,13 +318,13 @@ class ExperimentManager:
     def load_experiment(self, file_path: str) -> Experiment:
         if not self.validate_experiment_file(file_path):
             raise ValueError("Invalid experiment file")
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             data = json.load(f)
         experiment = Experiment.from_json(data)
         self.add_to_recent(file_path, experiment.name)
         return experiment
 
-    def save_experiment(self, experiment: Experiment, file_path: Optional[str] = None) -> bool:
+    def save_experiment(self, experiment: Experiment, file_path: str | None = None) -> bool:
         if not file_path:
             raise ValueError("file_path is required for saving experiment")
         experiment.update_modified_date()
@@ -339,7 +339,7 @@ class ExperimentManager:
         try:
             if not os.path.isfile(file_path):
                 return False
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 data = json.load(f)
             if not isinstance(data, dict):
                 return False
@@ -350,9 +350,9 @@ class ExperimentManager:
         except Exception:
             return False
 
-    def get_recent_experiments(self) -> List[Dict[str, Any]]:
+    def get_recent_experiments(self) -> list[dict[str, Any]]:
         try:
-            with open(self.recent_file, "r", encoding="utf-8") as f:
+            with open(self.recent_file, encoding="utf-8") as f:
                 data = json.load(f) or {"recent": []}
             items = data.get("recent", [])
 
@@ -381,7 +381,7 @@ class ExperimentManager:
         except Exception:
             return []
 
-    def add_to_recent(self, file_path: str, name: Optional[str] = None) -> None:
+    def add_to_recent(self, file_path: str, name: str | None = None) -> None:
         file_path = str(Path(file_path).resolve())
         entry = {
             "path": file_path,
@@ -389,7 +389,7 @@ class ExperimentManager:
             "last_opened": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         }
         try:
-            with open(self.recent_file, "r", encoding="utf-8") as f:
+            with open(self.recent_file, encoding="utf-8") as f:
                 data = json.load(f) or {"recent": []}
         except Exception:
             data = {"recent": []}
@@ -407,7 +407,7 @@ class ExperimentManager:
         """Remove an experiment from the recent experiments list."""
         file_path = str(Path(file_path).resolve())
         try:
-            with open(self.recent_file, "r", encoding="utf-8") as f:
+            with open(self.recent_file, encoding="utf-8") as f:
                 data = json.load(f) or {"recent": []}
         except Exception:
             data = {"recent": []}

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 from PySide6.QtCore import Qt, QTime, QTimer, QUrl
@@ -81,7 +80,7 @@ if not logger.handlers:
 class _ExperimentSettingsDialog(QDialog):
     """Dialog to edit experiment metadata and acquisition time settings."""
 
-    def __init__(self, experiment: Experiment, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, experiment: Experiment, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Experiment Settings")
         self.setModal(True)
@@ -150,8 +149,8 @@ class _ConfirmStartTimeDialog(QDialog):
         self,
         suggested_time: QTime,
         metadata_source: str,
-        timestamp_uniformity_note: Optional[str],
-        parent: Optional[QWidget] = None,
+        timestamp_uniformity_note: str | None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Confirm Experiment Start Time")
@@ -189,7 +188,7 @@ class _ConfirmStartTimeDialog(QDialog):
         return self.start_time_edit.time().toString("HH:mm:ss")
 
 
-def _parse_time_string(value: object) -> Optional[QTime]:
+def _parse_time_string(value: object) -> QTime | None:
     """Parse time strings like HH:MM[:SS] into QTime."""
     if not isinstance(value, str):
         return None
@@ -205,7 +204,7 @@ def _parse_time_string(value: object) -> Optional[QTime]:
     return None
 
 
-def _time_string_to_minutes(value: object) -> Optional[int]:
+def _time_string_to_minutes(value: object) -> int | None:
     """Convert HH:MM[:SS] time strings to minutes since midnight."""
     qtime = _parse_time_string(value)
     if qtime is None:
@@ -217,31 +216,31 @@ class MainWindow(QMainWindow):
     def __init__(
         self,
         experiment: Experiment,
-        recent_file: Optional[Path] = None,
+        recent_file: Path | None = None,
         *,
-        user_experiments_dir: Optional[Path] = None,
+        user_experiments_dir: Path | None = None,
     ) -> None:
         super().__init__()
         self.experiment = experiment
         self.manager = ExperimentManager(recent_file)
-        self.current_experiment_path: Optional[str] = None
+        self.current_experiment_path: str | None = None
         # Set by the launcher (main.py). Used when returning to the experiment manager.
         self.user_experiments_dir = user_experiments_dir
-        self.user_recent_file: Optional[Path] = recent_file
-        self._current_user_btn: Optional[QPushButton] = None
+        self.user_recent_file: Path | None = recent_file
+        self._current_user_btn: QPushButton | None = None
         self.image_processor = ImageProcessor(experiment)
-        self._alignment_worker: Optional[AlignmentWorker] = None
+        self._alignment_worker: AlignmentWorker | None = None
 
         # Cached references to controls affected by workflow gating
-        self._action_open_stack: Optional[QAction] = None
-        self._action_align_images: Optional[QAction] = None
+        self._action_open_stack: QAction | None = None
+        self._action_align_images: QAction | None = None
 
         # Initialize debounced save timer for display settings
         self._display_settings_timer = QTimer()
         self._display_settings_timer.setSingleShot(True)
         self._display_settings_timer.timeout.connect(self._persist_display_settings)
-        self._pending_exposure: Optional[int] = None
-        self._pending_contrast: Optional[int] = None
+        self._pending_exposure: int | None = None
+        self._pending_contrast: int | None = None
 
         self.setWindowTitle(f"Neurolight - {self.experiment.name}")
         self.resize(1200, 800)
@@ -352,7 +351,7 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
-    def set_current_experiment_path(self, path: Optional[str], *, persist_workflow: bool = True) -> None:
+    def set_current_experiment_path(self, path: str | None, *, persist_workflow: bool = True) -> None:
         self.current_experiment_path = path
         if persist_workflow and path:
             self._save_workflow_progress()
@@ -726,7 +725,7 @@ class MainWindow(QMainWindow):
 
         display_settings = self.experiment.settings.get("display") or {}
 
-        def _normalize(value: Optional[int]) -> int:
+        def _normalize(value: int | None) -> int:
             try:
                 return max(-100, min(100, int(value)))  # type: ignore[arg-type]
             except (TypeError, ValueError):
@@ -1523,7 +1522,7 @@ class MainWindow(QMainWindow):
             return
 
         # Check if images are loaded
-        num_frames = self.stack_handler.get_image_count()
+        num_frames = len(self.stack_handler.get_included_files())
         if num_frames == 0:
             QMessageBox.warning(
                 self,

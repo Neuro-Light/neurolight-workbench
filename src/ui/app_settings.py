@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 CONFIG_DIR = Path.home() / ".neurolight"
 SETTINGS_FILE = CONFIG_DIR / "settings.json"
 
-DEFAULTS: Dict[str, Any] = {
+DEFAULTS: dict[str, Any] = {
     "theme": "dark",
     "roi_1_color": "#0077BB",
     "roi_2_color": "#EE7733",
@@ -22,12 +22,12 @@ DEFAULTS: Dict[str, Any] = {
 }
 
 
-def load_settings() -> Dict[str, Any]:
+def load_settings() -> dict[str, Any]:
     """Load application settings from disk."""
     settings = DEFAULTS.copy()
     try:
         if SETTINGS_FILE.exists():
-            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+            with open(SETTINGS_FILE, encoding="utf-8") as f:
                 data = json.load(f)
                 if isinstance(data, dict):
                     settings.update(data)
@@ -36,7 +36,7 @@ def load_settings() -> Dict[str, Any]:
     return settings
 
 
-def save_settings(settings: Dict[str, Any]) -> None:
+def save_settings(settings: dict[str, Any]) -> None:
     """Save application settings to disk."""
     try:
         CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -76,7 +76,7 @@ def set_theme(theme: str) -> None:
     save_settings(settings)
 
 
-def get_roi_colors() -> Dict[str, str]:
+def get_roi_colors() -> dict[str, str]:
     """Return ROI colors as ``{"roi_1": "#hex", "roi_2": "#hex"}``."""
     settings = load_settings()
     return {
@@ -110,7 +110,7 @@ def set_avg_trajectory_color(hex_color: str) -> None:
     save_settings(settings)
 
 
-def get_avg_trajectory_roi_colors() -> Dict[str, str]:
+def get_avg_trajectory_roi_colors() -> dict[str, str]:
     """Return average trajectory colours per ROI for Graphs tab: ``{"roi_1": "#hex", "roi_2": "#hex"}``."""
     settings = load_settings()
     return {

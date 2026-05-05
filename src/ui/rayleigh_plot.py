@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 import numpy as np
 from matplotlib.backends.backend_qtagg import (
     FigureCanvasQTAgg as FigureCanvas,
@@ -46,13 +44,13 @@ class RayLeighPlotWidget(QWidget):
     # This plot is useful for visualizing the distribution of peak activity times across neurons,
     # especially in circadian rhythm studies. Each point on the circle represents a neuron, and
     # its angle corresponds to the time of day when that neuron is most active.
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.neuron_trajectories: Optional[np.ndarray] = None
-        self.quality_mask: Optional[np.ndarray] = None
-        self.roi_origin: Optional[np.ndarray] = None  # 0 = ROI 1, 1 = ROI 2 per neuron
-        self._pick_cid: Optional[int] = None
-        self._motion_cid: Optional[int] = None
+        self.neuron_trajectories: np.ndarray | None = None
+        self.quality_mask: np.ndarray | None = None
+        self.roi_origin: np.ndarray | None = None  # 0 = ROI 1, 1 = ROI 2 per neuron
+        self._pick_cid: int | None = None
+        self._motion_cid: int | None = None
         self._last_hover_text: str = ""
         self._last_pick_text: str = ""
         self._cycle_data: list[RayleighCycleData] = []
@@ -279,8 +277,8 @@ class RayLeighPlotWidget(QWidget):
     def set_trajectory_data(
         self,
         neuron_trajectories: np.ndarray,
-        quality_mask: Optional[np.ndarray] = None,
-        roi_origin: Optional[np.ndarray] = None,
+        quality_mask: np.ndarray | None = None,
+        roi_origin: np.ndarray | None = None,
     ) -> None:
         self.neuron_trajectories = neuron_trajectories
         self.quality_mask = quality_mask

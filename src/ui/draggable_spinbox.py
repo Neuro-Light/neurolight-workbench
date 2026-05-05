@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QMouseEvent
 from PySide6.QtWidgets import QDoubleSpinBox, QSpinBox, QWidget
@@ -17,10 +15,10 @@ class DraggableSpinBox(QSpinBox):
 
     _DRAG_HINT = " Drag horizontally to adjust."
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._drag_start_x: Optional[int] = None
-        self._drag_start_value: Optional[int] = None
+        self._drag_start_x: int | None = None
+        self._drag_start_value: int | None = None
         self.setCursor(Qt.CursorShape.SizeHorCursor)
 
     def setToolTip(self, text: str) -> None:
@@ -60,10 +58,10 @@ class DraggableDoubleSpinBox(QDoubleSpinBox):
 
     _DRAG_HINT = " Drag horizontally to adjust."
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._drag_start_x: Optional[int] = None
-        self._drag_start_value: Optional[float] = None
+        self._drag_start_x: int | None = None
+        self._drag_start_value: float | None = None
         self.setCursor(Qt.CursorShape.SizeHorCursor)
 
     def setToolTip(self, text: str) -> None:

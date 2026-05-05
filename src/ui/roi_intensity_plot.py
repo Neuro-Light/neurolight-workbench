@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Dict, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.experiment_manager import Experiment
@@ -38,14 +38,14 @@ from ui.styles import get_mpl_theme
 class ROIIntensityPlotWidget(QWidget):
     """Widget for plotting ROI intensity over time for up to two ROIs."""
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._intensity: Dict[str, Optional[np.ndarray]] = {
+        self._intensity: dict[str, np.ndarray | None] = {
             "roi_1": None,
             "roi_2": None,
         }
-        self._rois: Dict[str, Optional[ROI]] = {"roi_1": None, "roi_2": None}
-        self.experiment: Optional["Experiment"] = None
+        self._rois: dict[str, ROI | None] = {"roi_1": None, "roi_2": None}
+        self.experiment: Experiment | None = None
         self._frame_interval_minutes: float = DEFAULT_FRAME_INTERVAL_MINUTES
         self._hover_cid = None
         self._pick_cid = None
@@ -75,7 +75,7 @@ class ROIIntensityPlotWidget(QWidget):
 
         # Toggle checkboxes for each ROI (with colour indicators)
         toggle_row = QHBoxLayout()
-        self._checkboxes: Dict[str, QCheckBox] = {}
+        self._checkboxes: dict[str, QCheckBox] = {}
         colors = get_roi_colors()
         for key in ROI_KEYS:
             cb = QCheckBox(ROI_DISPLAY_NAMES[key])
@@ -213,7 +213,7 @@ class ROIIntensityPlotWidget(QWidget):
         """Redraw the graph based on available data and checkbox state."""
         self.figure.clear()
 
-        visible: Dict[str, np.ndarray] = {}
+        visible: dict[str, np.ndarray] = {}
         for key in ROI_KEYS:
             data = self._intensity.get(key)
             if data is not None and self._checkboxes[key].isChecked():
@@ -249,7 +249,7 @@ class ROIIntensityPlotWidget(QWidget):
         # Overlay peak/trough markers if enabled
         self._peak_data = []
         self._trough_data = []
-        roi_counts: Dict[str, tuple[int, int]] = {}  # Cache peak/trough counts per ROI
+        roi_counts: dict[str, tuple[int, int]] = {}  # Cache peak/trough counts per ROI
         if self.show_peaks_checkbox.isChecked():
             peak_color = theme.get("peak_marker_color", "#f97316")
             trough_color = theme.get("trough_marker_color", "#06b6d4")
@@ -462,7 +462,7 @@ class ROIIntensityPlotWidget(QWidget):
         else:
             self.hover_label.setText("Hover over plot for time and intensity.")
 
-    def _get_previous_marker_time(self, current_time: float, marker_type: str) -> Optional[float]:
+    def _get_previous_marker_time(self, current_time: float, marker_type: str) -> float | None:
         """Get the time of the previous marker of the same type."""
         markers = self._peak_data if marker_type == "peak" else self._trough_data
         prev_time = None
@@ -473,7 +473,7 @@ class ROIIntensityPlotWidget(QWidget):
                 break
         return prev_time
 
-    def _get_previous_marker_frame(self, current_frame: int, marker_type: str) -> Optional[int]:
+    def _get_previous_marker_frame(self, current_frame: int, marker_type: str) -> int | None:
         """
         Backward-compatible wrapper for frame-based callers/tests.
 

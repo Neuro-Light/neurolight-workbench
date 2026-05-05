@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 import numpy as np
 from matplotlib.backends.backend_qtagg import (
     FigureCanvasQTAgg as FigureCanvas,
@@ -46,12 +44,12 @@ class NeuronTrajectoryPlotWidget(QWidget):
     VIEW_ROI1 = "roi_1"
     VIEW_ROI2 = "roi_2"
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.neuron_trajectories: Optional[np.ndarray] = None
-        self.quality_mask: Optional[np.ndarray] = None
-        self.neuron_locations: Optional[np.ndarray] = None
-        self.roi_origin: Optional[np.ndarray] = None  # 0 = ROI 1, 1 = ROI 2 per neuron
+        self.neuron_trajectories: np.ndarray | None = None
+        self.quality_mask: np.ndarray | None = None
+        self.neuron_locations: np.ndarray | None = None
+        self.roi_origin: np.ndarray | None = None  # 0 = ROI 1, 1 = ROI 2 per neuron
         self._hover_cid = None
         self._pick_cid = None
         self._marker_annotation = None
@@ -59,7 +57,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
         self._trough_data: list[tuple[float, float, str, int]] = []
         # Time axis settings
         self._frame_interval_minutes: float = 30.0
-        self._experiment_start_time: Optional[str] = None
+        self._experiment_start_time: str | None = None
 
         layout = QVBoxLayout(self)
 
@@ -228,9 +226,9 @@ class NeuronTrajectoryPlotWidget(QWidget):
     def plot_trajectories(
         self,
         neuron_trajectories: np.ndarray,
-        quality_mask: Optional[np.ndarray] = None,
-        neuron_locations: Optional[np.ndarray] = None,
-        roi_origin: Optional[np.ndarray] = None,
+        quality_mask: np.ndarray | None = None,
+        neuron_locations: np.ndarray | None = None,
+        roi_origin: np.ndarray | None = None,
     ) -> None:
         """
         Plot intensity trajectories for each detected neuron.
@@ -271,7 +269,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
         # Update plot
         self._update_plot()
 
-    def set_time_settings(self, interval_minutes: float, start_time: Optional[str] = None) -> None:
+    def set_time_settings(self, interval_minutes: float, start_time: str | None = None) -> None:
         """
         Configure the time axis for the trajectory plot.
 
@@ -397,7 +395,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
                     fontweight="bold",
                 )
 
-    def _get_previous_marker_frame(self, current_frame: float, marker_type: str) -> Optional[float]:
+    def _get_previous_marker_frame(self, current_frame: float, marker_type: str) -> float | None:
         """Get the time (in minutes) of the previous marker of the same type."""
         markers = self._peak_data if marker_type == "peak" else self._trough_data
         prev_frame = None

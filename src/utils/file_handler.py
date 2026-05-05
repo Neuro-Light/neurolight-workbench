@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import List, Optional
 
 import numpy as np
 from PIL import Image
@@ -12,7 +11,7 @@ from core.experiment_manager import Experiment
 _TIME_RE = re.compile(r"^(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$")
 
 
-def _extract_valid_time(raw: object) -> Optional[str]:
+def _extract_valid_time(raw: object) -> str | None:
     """
     Normalize metadata time values and return only valid HH:MM or HH:MM:SS strings.
     """
@@ -33,7 +32,7 @@ def _extract_valid_time(raw: object) -> Optional[str]:
     return None
 
 
-def _get_exif_timestamp(file_path: str) -> Optional[str]:
+def _get_exif_timestamp(file_path: str) -> str | None:
     """
     Try to extract a DateTimeOriginal (or DateTime) timestamp from TIFF/image EXIF.
 
@@ -70,8 +69,8 @@ def _get_exif_timestamp(file_path: str) -> Optional[str]:
 
 class ImageStackHandler:
     def __init__(self) -> None:
-        self.files: List[str] = []
-        self._experiment: Optional[Experiment] = None
+        self.files: list[str] = []
+        self._experiment: Experiment | None = None
         self._included_start: int = 0
         self._included_end: int = -1  # -1 means "all frames"
 
@@ -88,7 +87,7 @@ class ImageStackHandler:
         """Return total number of files regardless of the included range."""
         return len(self.files)
 
-    def get_included_files(self) -> List[str]:
+    def get_included_files(self) -> list[str]:
         """Return the file list trimmed to the included range, in original order."""
         if not self.files:
             return []
@@ -100,8 +99,8 @@ class ImageStackHandler:
             return []
         return self.files[start : end + 1]
 
-    def load_image_stack(self, directory_or_files) -> List[str]:
-        paths: List[str] = []
+    def load_image_stack(self, directory_or_files) -> list[str]:
+        paths: list[str] = []
         if isinstance(directory_or_files, (list, tuple)):
             for p in directory_or_files:
                 if str(p).lower().endswith((".tif", ".tiff")):
@@ -118,7 +117,7 @@ class ImageStackHandler:
         self._included_end = -1
         return self.files
 
-    def validate_tif_files(self, file_paths: List[str]) -> bool:
+    def validate_tif_files(self, file_paths: list[str]) -> bool:
         return all(str(p).lower().endswith((".tif", ".tiff")) for p in file_paths)
 
     def get_image_count(self) -> int:
@@ -144,7 +143,7 @@ class ImageStackHandler:
         with Image.open(path) as img:
             return np.asarray(img)
 
-    def get_all_frames_as_array(self) -> Optional[np.ndarray]:
+    def get_all_frames_as_array(self) -> np.ndarray | None:
         """Load all included-range frames as a 3D numpy array (frames, height, width).
         Preserves original image dtype to avoid precision loss (consistent with get_image_at_index).
         """

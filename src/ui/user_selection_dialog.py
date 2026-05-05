@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import shutil
 from pathlib import Path
-from typing import Optional
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -98,7 +97,7 @@ def _avatar_color(name: str) -> str:
 class _DeleteConfirmDialog(QDialog):
     """Requires the user to type the username before deletion is allowed."""
 
-    def __init__(self, user_name: str, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, user_name: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Delete User")
         self.setModal(True)
@@ -164,7 +163,7 @@ class _UserCard(QFrame):
     delete_requested: Signal = Signal(str)
 
     def __init__(
-        self, user_name: str, grid_row: int, grid_col: int, grid_cols: int, parent: Optional[QWidget] = None
+        self, user_name: str, grid_row: int, grid_col: int, grid_cols: int, parent: QWidget | None = None
     ) -> None:
         super().__init__(parent)
         self._user_name = user_name
@@ -281,7 +280,7 @@ class _UserCard(QFrame):
 class UserAccountActionsDialog(QDialog):
     """Clean modal: shows signed-in user, offers Switch User or Cancel."""
 
-    def __init__(self, user_name: str, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, user_name: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Account")
         self.setModal(True)
@@ -341,8 +340,8 @@ class UserSelectionDialog(QDialog):
         self.setMinimumSize(680, 500)
         self.setModal(True)
 
-        self.selected_user: Optional[str] = None
-        self.selected_user_experiments_dir: Optional[Path] = None
+        self.selected_user: str | None = None
+        self.selected_user_experiments_dir: Path | None = None
 
         self._build_ui()
 

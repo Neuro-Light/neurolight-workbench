@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import os
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Callable, Optional
 
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
@@ -51,8 +51,8 @@ class RecentExperimentRow(QWidget):
         name: str,
         path: str,
         on_open: Callable[[], None],
-        on_click: Optional[Callable[[], None]] = None,
-        parent: Optional[QWidget] = None,
+        on_click: Callable[[], None] | None = None,
+        parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("recentExperimentRow")
@@ -91,7 +91,7 @@ class RecentExperimentRow(QWidget):
 
 
 class NewExperimentDialog(QDialog):
-    def __init__(self, experiments_dir: Path, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, experiments_dir: Path, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Neurolight - New Experiment")
         self.setModal(True)
@@ -149,7 +149,7 @@ class NewExperimentDialog(QDialog):
 
         self.setLayout(container)
 
-        self.output_path: Optional[str] = None
+        self.output_path: str | None = None
         self.metadata: dict = {}
 
     def _accept(self) -> None:
@@ -198,8 +198,8 @@ class StartupDialog(QDialog):
         self.setMinimumWidth(520)
         self.experiments_dir = experiments_dir
         self._current_user_name = experiments_dir.parent.name
-        self.experiment: Optional[Experiment] = None
-        self.experiment_path: Optional[str] = None
+        self.experiment: Experiment | None = None
+        self.experiment_path: str | None = None
         # Store recent experiments per user (in the user's folder, not globally in ~/.neurolight).
         self.manager = ExperimentManager(self.experiments_dir.parent / "recent_experiments.json")
 
@@ -328,7 +328,7 @@ class StartupDialog(QDialog):
         if item is not None:
             self._open_recent(item)
 
-    def _show_options_for_path(self, path: str, options_button: Optional[QPushButton]) -> None:
+    def _show_options_for_path(self, path: str, options_button: QPushButton | None) -> None:
         menu = QMenu(self)
         menu.addAction("Delete", lambda: self._remove_from_list_for_path(path))
         menu.addAction("Export", lambda: self._export_for_path(path))

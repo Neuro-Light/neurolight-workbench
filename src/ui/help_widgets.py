@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QFontMetrics
 from PySide6.QtWidgets import QToolButton, QToolTip, QWidget
@@ -16,9 +14,9 @@ class HelpIconButton(QToolButton):
         self,
         help_id: str,
         *,
-        tooltip: Optional[str] = None,
-        parent: Optional[QWidget] = None,
-        accessible_name: Optional[str] = None,
+        tooltip: str | None = None,
+        parent: QWidget | None = None,
+        accessible_name: str | None = None,
     ) -> None:
         super().__init__(parent)
         self._help_id = help_id

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -51,7 +51,7 @@ def _rao_table_row_index(n: int) -> int:
     return 43
 
 
-def _rao_critical_values(row: int) -> Tuple[float, float, float, float]:
+def _rao_critical_values(row: int) -> tuple[float, float, float, float]:
     """
     Return the Rao spacing test critical values for a given row index.
 
@@ -118,7 +118,7 @@ def _rao_critical_values(row: int) -> Tuple[float, float, float, float]:
     return table[row]
 
 
-def rao_spacing_test(angles_deg: np.ndarray) -> Dict[str, Any]:
+def rao_spacing_test(angles_deg: np.ndarray) -> dict[str, Any]:
     """
     Rao's Spacing Test for circular uniformity.
 
@@ -176,7 +176,7 @@ def rao_spacing_test(angles_deg: np.ndarray) -> Dict[str, Any]:
     }
 
 
-def rayleigh_test(theta_rad: np.ndarray) -> Dict[str, Any]:
+def rayleigh_test(theta_rad: np.ndarray) -> dict[str, Any]:
     """
     Rayleigh test for non-uniformity (unimodal clustering) on the circle.
 

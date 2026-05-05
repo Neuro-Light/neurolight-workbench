@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum, auto
-from typing import Dict, List, Optional, Set
 
 from PySide6.QtCore import QObject, Qt, Signal
 from PySide6.QtWidgets import (
@@ -43,7 +42,7 @@ class StepMeta:
     description: str
 
 
-STEP_DEFINITIONS: Dict[WorkflowStep, StepMeta] = {
+STEP_DEFINITIONS: dict[WorkflowStep, StepMeta] = {
     WorkflowStep.LOAD_IMAGES: StepMeta(
         index=1,
         short_label="Load Image Stack",
@@ -118,14 +117,14 @@ class WorkflowManager(QObject):
     step_changed = Signal(WorkflowStep)
     state_changed = Signal()
 
-    def __init__(self, experiment: Experiment, parent: Optional[QObject] = None) -> None:
+    def __init__(self, experiment: Experiment, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._experiment = experiment
-        self._steps: List[WorkflowStep] = list(WorkflowStep)
+        self._steps: list[WorkflowStep] = list(WorkflowStep)
 
         self.current_step: WorkflowStep = WorkflowStep.LOAD_IMAGES
-        self.completed_steps: Set[WorkflowStep] = set()
-        self._ready_steps: Set[WorkflowStep] = set()
+        self.completed_steps: set[WorkflowStep] = set()
+        self._ready_steps: set[WorkflowStep] = set()
 
         self._load_or_initialize_state()
 
@@ -217,7 +216,7 @@ class WorkflowManager(QObject):
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _get_next_step(self, step: WorkflowStep) -> Optional[WorkflowStep]:
+    def _get_next_step(self, step: WorkflowStep) -> WorkflowStep | None:
         try:
             idx = self._steps.index(step)
         except ValueError:
@@ -321,10 +320,10 @@ class WorkflowStepper(QFrame):
     requestAlignImages = Signal()
     requestSkipAlignment = Signal()
 
-    def __init__(self, manager: WorkflowManager, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, manager: WorkflowManager, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._manager = manager
-        self._step_buttons: Dict[WorkflowStep, QToolButton] = {}
+        self._step_buttons: dict[WorkflowStep, QToolButton] = {}
 
         self.setFrameShape(QFrame.NoFrame)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -498,13 +497,13 @@ class WorkflowStepper(QFrame):
             border_w = 2
 
         style = (
-            "QToolButton {{"
+            "QToolButton {"
             "border-radius: 10px;"
             "padding: 8px 6px;"
-            "background-color: {bg};"
-            "color: {fg};"
-            "border: {bw}px solid {border};"
-            "font-weight: {weight};"
-            "}}"
-        ).format(bg=bg, fg=text, border=border, weight=weight, bw=border_w)
+            f"background-color: {bg};"
+            f"color: {text};"
+            f"border: {border_w}px solid {border};"
+            f"font-weight: {weight};"
+            "}"
+        )
         button.setStyleSheet(style)

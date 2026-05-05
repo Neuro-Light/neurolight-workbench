@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from typing import Optional
-
 from PySide6.QtGui import QColor, QPixmap
 from PySide6.QtWidgets import (
     QColorDialog,
@@ -48,7 +46,7 @@ ROI_LABELS = {"roi_1": "ROI 1", "roi_2": "ROI 2"}
 class SettingsDialog(QDialog):
     """Application settings dialog (theme, ROI colors, etc.)."""
 
-    def __init__(self, parent: Optional[QWidget] = None) -> None:
+    def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Preferences")
         self.setModal(True)
