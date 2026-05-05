@@ -1,7 +1,7 @@
 """Tests for neuron_trajectory_plot module."""
 
 import csv
-import io
+
 import matplotlib
 
 matplotlib.use("Agg")
