@@ -63,10 +63,11 @@ class RayLeighPlotWidget(QWidget):
 
         # Left sidebar: options (fixed width)
         sidebar = QFrame()
+        sidebar.setMinimumWidth(260)
         sidebar.setMaximumWidth(380)
-        sidebar.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        sidebar.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         sidebar_layout = QVBoxLayout(sidebar)
-        sidebar_layout.setContentsMargins(8, 8, 8, 8)
+        sidebar_layout.setContentsMargins(12, 8, 12, 8)
 
         self.status_label = QLabel("No neuron trajectories available. Run detection first.")
         self.status_label.setAlignment(Qt.AlignCenter)
@@ -86,11 +87,10 @@ class RayLeighPlotWidget(QWidget):
         self.roi_view_combo.setToolTip("Filter Rayleigh plot to neurons from ROI 1, ROI 2, or both.")
         self.roi_view_combo.currentIndexChanged.connect(self._plot)
         roi_row.addWidget(self.roi_view_combo, 1)
-        sidebar_layout.addWidget(roi_row_widget, alignment=Qt.AlignHCenter)
+        sidebar_layout.addWidget(roi_row_widget)
 
         controls_group = QGroupBox("Time Settings")
-        controls_group.setMaximumWidth(340)
-        controls_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        controls_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         controls_layout = QFormLayout()
         self.start_time_edit = QTimeEdit()
         self.start_time_edit.setDisplayFormat("HH:mm")
@@ -121,11 +121,10 @@ class RayLeighPlotWidget(QWidget):
         controls_layout.addRow(self.plot_btn)
 
         controls_group.setLayout(controls_layout)
-        sidebar_layout.addWidget(controls_group, alignment=Qt.AlignHCenter)
+        sidebar_layout.addWidget(controls_group)
 
         cycle_group = QGroupBox("Cycle Selection")
-        cycle_group.setMaximumWidth(340)
-        cycle_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        cycle_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         cycle_layout = QFormLayout()
         self.cycle_combo = QComboBox()
         self.cycle_combo.setEnabled(False)
@@ -137,19 +136,18 @@ class RayLeighPlotWidget(QWidget):
         self.cycle_info_label.setAlignment(Qt.AlignCenter)
         cycle_layout.addRow(self.cycle_info_label)
         cycle_group.setLayout(cycle_layout)
-        sidebar_layout.addWidget(cycle_group, alignment=Qt.AlignHCenter)
+        sidebar_layout.addWidget(cycle_group)
 
         # Cursor / selection readout (separate from the status banner at top)
         self.cursor_group = QGroupBox("Cursor / Selection")
-        self.cursor_group.setMaximumWidth(340)
-        self.cursor_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.cursor_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         cursor_layout = QVBoxLayout(self.cursor_group)
         self.cursor_label = QLabel("Hover over the plot to see θ and r.\nClick a dot to pin its peak time.")
         self.cursor_label.setAlignment(Qt.AlignCenter)
         self.cursor_label.setWordWrap(True)
         self.cursor_label.setStyleSheet("font-size: 13px; font-weight: 500;")
         cursor_layout.addWidget(self.cursor_label)
-        sidebar_layout.addWidget(self.cursor_group, alignment=Qt.AlignHCenter)
+        sidebar_layout.addWidget(self.cursor_group)
 
         # Text summary of Rayleigh / Rao statistics (left panel, larger font, below options)
         stats_container = QVBoxLayout()
@@ -200,8 +198,7 @@ class RayLeighPlotWidget(QWidget):
         sidebar_layout.addLayout(stats_container)
 
         export_group = QGroupBox("Export")
-        export_group.setMaximumWidth(340)
-        export_group.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        export_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         export_layout = QVBoxLayout(export_group)
         self.export_png_btn = QPushButton("Export Cycle PNG...")
         self.export_png_btn.setEnabled(False)
@@ -211,7 +208,7 @@ class RayLeighPlotWidget(QWidget):
         self.export_csv_btn.setEnabled(False)
         self.export_csv_btn.clicked.connect(self._export_current_cycle_csv)
         export_layout.addWidget(self.export_csv_btn)
-        sidebar_layout.addWidget(export_group, alignment=Qt.AlignHCenter)
+        sidebar_layout.addWidget(export_group)
         sidebar_layout.addStretch()
 
         scroll = QScrollArea()
@@ -219,6 +216,7 @@ class RayLeighPlotWidget(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setMinimumWidth(260)
         main_layout.addWidget(scroll)
 
         # Right: plot (takes remaining space)
@@ -529,7 +527,14 @@ class RayLeighPlotWidget(QWidget):
             f"First peak frame = {cycle.first_peak_frame}; {len(cycle.peak_frames)} neuron peaks plotted."
         )
 
-        ax.legend(loc="lower left", bbox_to_anchor=(1.05, 0.1))
+        ax.legend(
+            loc="upper right",
+            fontsize=11,
+            markerscale=1.5,
+            framealpha=0.85,
+            edgecolor="gray",
+            borderpad=0.6,
+        )
         self._apply_theme(ax)
         self.canvas.draw_idle()
 
