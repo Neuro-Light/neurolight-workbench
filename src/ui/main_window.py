@@ -1522,7 +1522,7 @@ class MainWindow(QMainWindow):
             return
 
         # Check if images are loaded
-        num_frames = self.stack_handler.get_image_count()
+        num_frames = len(self.stack_handler.get_included_files())
         if num_frames == 0:
             QMessageBox.warning(
                 self,
