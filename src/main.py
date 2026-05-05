@@ -29,8 +29,11 @@ from ui.user_selection_dialog import UserSelectionDialog
 # multiprocessing issues when the app is packaged.
 multiprocessing.freeze_support()
 
-# Application icon (project root / logo.png)
-_LOGO_PATH = Path(__file__).resolve().parent.parent / "logo.png"
+# Application icon: use bundled copy when frozen, repo root otherwise.
+if getattr(sys, "frozen", False):
+    _LOGO_PATH = Path(sys._MEIPASS) / "logo.png"  # type: ignore[attr-defined]
+else:
+    _LOGO_PATH = Path(__file__).resolve().parent.parent / "logo.png"
 
 
 def main() -> int:
