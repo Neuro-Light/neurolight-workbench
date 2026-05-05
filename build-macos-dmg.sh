@@ -28,7 +28,9 @@ cp -R "$APP" "$DMG_STAGE/"
 ln -s /Applications "$DMG_STAGE/Applications"
 
 echo "Creating DMG..."
-hdiutil detach "/Volumes/$VOL_NAME" 2>/dev/null || true
+# Force-detach any leftover mount from a previous run (common on CI runners).
+hdiutil detach "/Volumes/$VOL_NAME" -force 2>/dev/null || true
+diskutil unmount force "/Volumes/$VOL_NAME" 2>/dev/null || true
 hdiutil create \
   -volname "$VOL_NAME" \
   -srcfolder "$DMG_STAGE" \
