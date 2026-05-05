@@ -7,7 +7,7 @@
 
 import sys
 from pathlib import Path
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 
 # Repo root (PyInstaller runs with cwd = directory containing this spec)
 REPO_ROOT = Path.cwd()
@@ -26,6 +26,14 @@ if assets_dir.is_dir():
             rel = item.relative_to(REPO_ROOT)
             datas.append((str(item), str(rel.parent)))
 
+# Bundle logo for the app window icon (used by main.py at runtime)
+logo = REPO_ROOT / 'logo.png'
+if logo.is_file():
+    datas.append((str(logo), '.'))
+
+# imageio needs its plugin registry files at runtime
+datas += collect_data_files('imageio')
+
 a = Analysis(
     [str(script)],
     pathex=[str(REPO_ROOT / 'src')],
@@ -36,16 +44,33 @@ a = Analysis(
             'PySide6.QtCore',
             'PySide6.QtGui',
             'PySide6.QtWidgets',
+            'PySide6.QtOpenGL',
+            'PySide6.QtOpenGLWidgets',
+            # Matplotlib Qt backend used by roi_intensity_plot.py
+            'matplotlib.backends.backend_qtagg',
+            'matplotlib.backends.backend_agg',
             # Pillow plugins are imported dynamically; ensure they're bundled so
-            # TIFF/GIF loading works in frozen macOS apps.
+            # TIFF/GIF loading works in frozen apps.
             'PIL.TiffImagePlugin',
             'PIL.GifImagePlugin',
             'PIL.ImageSequence',
             'PIL.ImageQt',
             # Some stacks are loaded via tifffile elsewhere in the app.
             'tifffile',
+            # imageio plugins
+            'imageio.plugins',
+            # scipy submodules used across the app
+            'scipy.signal',
+            'scipy.ndimage',
+            'scipy.optimize',
+            'scipy.special',
+            # pystackreg uses scipy internally
+            'pystackreg',
         ]
         + collect_submodules("PIL")
+        + collect_submodules("cv2")
+        + collect_submodules("skimage")
+        + collect_submodules("statsmodels")
     ),
     hookspath=[],
     hooksconfig={},

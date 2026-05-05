@@ -96,7 +96,7 @@ jobs:
       matrix:
         include:
           - runner: windows-latest
-            exe_name: NeuroLight-windows-x86_64.exe
+            zip_name: NeuroLight-windows-x86_64.zip
             artifact_name: exe-windows
     runs-on: ${{ matrix.runner }}
     permissions:
@@ -125,10 +125,10 @@ jobs:
 
       - name: Prepare release asset (Windows)
         if: matrix.runner == 'windows-latest'
-        shell: bash
+        shell: pwsh
         run: |
-          mkdir -p release-asset
-          cp dist/Neurolight/Neurolight.exe "release-asset/${{ matrix.exe_name }}"
+          New-Item -ItemType Directory -Force -Path release-asset
+          Compress-Archive -Path dist\Neurolight\* -DestinationPath "release-asset\${{ matrix.zip_name }}"
 
       - name: Upload executable artifact
         uses: actions/upload-artifact@v4
