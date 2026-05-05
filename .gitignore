@@ -26,6 +26,7 @@ dist/
 
 # App data
 experiments/*
+users/*
 !experiments/.gitkeep
 ~/.neurolight/
 
