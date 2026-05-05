@@ -1,5 +1,7 @@
 """Tests for neuron_trajectory_plot module."""
 
+import csv
+
 import matplotlib
 
 matplotlib.use("Agg")
@@ -83,6 +85,7 @@ class TestNeuronTrajectoryPlotWidgetInit:
         w = NeuronTrajectoryPlotWidget()
         assert w.export_btn.isEnabled() is False
         assert w.export_png_btn.isEnabled() is False
+        assert w.export_peaks_btn.isEnabled() is False
 
     def test_status_label_shows_initial_message(self, app):
         w = NeuronTrajectoryPlotWidget()
@@ -139,6 +142,7 @@ class TestNeuronTrajectoryPlotWidgetPlotTrajectories:
         w.plot_trajectories(trajectories)
         assert w.export_btn.isEnabled() is True
         assert w.export_png_btn.isEnabled() is True
+        assert w.export_peaks_btn.isEnabled() is True
 
     def test_plot_trajectories_with_quality_mask(self, app):
         w = NeuronTrajectoryPlotWidget()
@@ -181,6 +185,7 @@ class TestNeuronTrajectoryPlotWidgetClearPlot:
         assert w.quality_mask is None
         assert w.export_btn.isEnabled() is False
         assert w.export_png_btn.isEnabled() is False
+        assert w.export_peaks_btn.isEnabled() is False
 
     def test_clear_plot_resets_status_label(self, app):
         w = NeuronTrajectoryPlotWidget()
@@ -321,3 +326,155 @@ class TestNeuronTrajectoryPlotWidgetExport:
         w = NeuronTrajectoryPlotWidget()
         with patch("ui.neuron_trajectory_plot.QFileDialog.getSaveFileName", return_value=("", "")):
             w._export_to_csv()
+
+
+class TestExportPeaksTroughsCsv:
+    """Tests for _export_peaks_troughs_csv."""
+
+    def test_warns_when_no_data(self, app):
+        w = NeuronTrajectoryPlotWidget()
+        with patch("ui.neuron_trajectory_plot.QMessageBox.warning") as mock_warn:
+            w._export_peaks_troughs_csv()
+        mock_warn.assert_called_once()
+
+    def test_returns_early_when_dialog_cancelled(self, app):
+        w = NeuronTrajectoryPlotWidget()
+        w.neuron_trajectories = np.random.rand(3, 50)
+        with patch("ui.neuron_trajectory_plot.QFileDialog.getSaveFileName", return_value=("", "")):
+            w._export_peaks_troughs_csv()  # should not raise
+
+    def test_writes_correct_columns(self, app, tmp_path):
+        w = NeuronTrajectoryPlotWidget()
+        # Signal with a clear peak so detection finds something
+        t = np.linspace(0, 4 * np.pi, 200)
+        traj = np.sin(t).astype(np.float32)
+        w.neuron_trajectories = traj.reshape(1, -1)
+        w._frame_interval_minutes = 0.5
+
+        out = tmp_path / "out.csv"
+        with patch("ui.neuron_trajectory_plot.QFileDialog.getSaveFileName", return_value=(str(out), "")):
+            w._export_peaks_troughs_csv()
+
+        with open(out, newline="") as f:
+            reader = csv.DictReader(f)
+            assert reader.fieldnames == ["roi", "neuron_id", "type", "frame", "time", "value"]
+
+    def test_rows_contain_peaks_and_troughs(self, app, tmp_path):
+        w = NeuronTrajectoryPlotWidget()
+        t = np.linspace(0, 4 * np.pi, 200)
+        traj = np.sin(t).astype(np.float32)
+        w.neuron_trajectories = traj.reshape(1, -1)
+        w._frame_interval_minutes = 0.5
+
+        out = tmp_path / "out.csv"
+        with patch("ui.neuron_trajectory_plot.QFileDialog.getSaveFileName", return_value=(str(out), "")):
+            w._export_peaks_troughs_csv()
+
+        with open(out, newline="") as f:
+            rows = list(csv.DictReader(f))
+
+        types = {r["type"] for r in rows}
+        assert "peak" in types
+        assert "trough" in types
+
+    def test_time_column_uses_frame_interval(self, app, tmp_path):
+        w = NeuronTrajectoryPlotWidget()
+        t = np.linspace(0, 4 * np.pi, 200)
+        traj = np.sin(t).astype(np.float32)
+        w.neuron_trajectories = traj.reshape(1, -1)
+        w._frame_interval_minutes = 2.0
+
+        out = tmp_path / "out.csv"
+        with patch("ui.neuron_trajectory_plot.QFileDialog.getSaveFileName", return_value=(str(out), "")):
+            w._export_peaks_troughs_csv()
+
+        with open(out, newline="") as f:
+            rows = list(csv.DictReader(f))
+
+        for row in rows:
+            expected_time = int(row["frame"]) * 2.0
+            assert float(row["time"]) == pytest.approx(expected_time)
+
+    def test_roi_label_uses_roi_origin(self, app, tmp_path):
+        w = NeuronTrajectoryPlotWidget()
+        t = np.linspace(0, 4 * np.pi, 200)
+        traj = np.sin(t).astype(np.float32)
+        w.neuron_trajectories = np.vstack([traj, traj])
+        w.roi_origin = np.array([0, 1])
+        w._frame_interval_minutes = 0.5
+
+        out = tmp_path / "out.csv"
+        with patch("ui.neuron_trajectory_plot.QFileDialog.getSaveFileName", return_value=(str(out), "")):
+            w._export_peaks_troughs_csv()
+
+        with open(out, newline="") as f:
+            rows = list(csv.DictReader(f))
+
+        roi_labels = {r["roi"] for r in rows}
+        assert "ROI 1" in roi_labels
+        assert "ROI 2" in roi_labels
+
+    def test_roi_label_defaults_to_roi_1_when_no_origin(self, app, tmp_path):
+        w = NeuronTrajectoryPlotWidget()
+        t = np.linspace(0, 4 * np.pi, 200)
+        traj = np.sin(t).astype(np.float32)
+        w.neuron_trajectories = traj.reshape(1, -1)
+        w.roi_origin = None
+        w._frame_interval_minutes = 0.5
+
+        out = tmp_path / "out.csv"
+        with patch("ui.neuron_trajectory_plot.QFileDialog.getSaveFileName", return_value=(str(out), "")):
+            w._export_peaks_troughs_csv()
+
+        with open(out, newline="") as f:
+            rows = list(csv.DictReader(f))
+
+        assert all(r["roi"] == "ROI 1" for r in rows)
+
+    def test_shows_success_message_on_export(self, app, tmp_path):
+        w = NeuronTrajectoryPlotWidget()
+        t = np.linspace(0, 4 * np.pi, 200)
+        w.neuron_trajectories = np.sin(t).reshape(1, -1).astype(np.float32)
+        w._frame_interval_minutes = 0.5
+
+        out = tmp_path / "out.csv"
+        with (
+            patch("ui.neuron_trajectory_plot.QFileDialog.getSaveFileName", return_value=(str(out), "")),
+            patch("ui.neuron_trajectory_plot.QMessageBox.information") as mock_info,
+        ):
+            w._export_peaks_troughs_csv()
+
+        mock_info.assert_called_once()
+
+    def test_shows_error_message_on_write_failure(self, app):
+        w = NeuronTrajectoryPlotWidget()
+        t = np.linspace(0, 4 * np.pi, 200)
+        w.neuron_trajectories = np.sin(t).reshape(1, -1).astype(np.float32)
+        w._frame_interval_minutes = 0.5
+
+        with (
+            patch("ui.neuron_trajectory_plot.QFileDialog.getSaveFileName", return_value=("/bad/path/out.csv", "")),
+            patch("builtins.open", side_effect=OSError("disk full")),
+            patch("ui.neuron_trajectory_plot.QMessageBox.critical") as mock_crit,
+        ):
+            w._export_peaks_troughs_csv()
+
+        mock_crit.assert_called_once()
+
+    def test_output_sorted_by_roi_neuron_frame(self, app, tmp_path):
+        w = NeuronTrajectoryPlotWidget()
+        t = np.linspace(0, 4 * np.pi, 200)
+        traj = np.sin(t).astype(np.float32)
+        w.neuron_trajectories = np.vstack([traj, traj])
+        w.roi_origin = np.array([0, 0])
+        w._frame_interval_minutes = 0.5
+
+        out = tmp_path / "out.csv"
+        with patch("ui.neuron_trajectory_plot.QFileDialog.getSaveFileName", return_value=(str(out), "")):
+            w._export_peaks_troughs_csv()
+
+        with open(out, newline="") as f:
+            rows = list(csv.DictReader(f))
+
+        keys = [(r["roi"], int(r["neuron_id"]), int(r["frame"])) for r in rows]
+        assert keys == sorted(keys)

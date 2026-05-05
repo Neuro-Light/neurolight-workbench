@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+
 import numpy as np
 from matplotlib.backends.backend_qtagg import (
     FigureCanvasQTAgg as FigureCanvas,
@@ -212,6 +214,12 @@ class NeuronTrajectoryPlotWidget(QWidget):
         self.export_btn.setEnabled(False)
         buttons_layout.addWidget(self.export_btn)
 
+        self.export_peaks_btn = QPushButton("Export Peaks & Troughs (CSV)")
+        self.export_peaks_btn.clicked.connect(self._export_peaks_troughs_csv)
+        self.export_peaks_btn.setEnabled(False)
+        self.export_peaks_btn.setToolTip("Export peaks and troughs for each neuron as a CSV.")
+        buttons_layout.addWidget(self.export_peaks_btn)
+
         layout.addLayout(buttons_layout)
 
     def _on_show_peaks_toggled(self, state: int) -> None:
@@ -265,6 +273,7 @@ class NeuronTrajectoryPlotWidget(QWidget):
         # Enable export buttons
         self.export_btn.setEnabled(True)
         self.export_png_btn.setEnabled(True)
+        self.export_peaks_btn.setEnabled(True)
 
         # Update plot
         self._update_plot()
@@ -936,6 +945,67 @@ class NeuronTrajectoryPlotWidget(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Export Failed", f"Failed to export data:\n{str(e)}")
 
+    def _export_peaks_troughs_csv(self) -> None:
+        """Export peaks and troughs per neuron to a CSV file."""
+        if self.neuron_trajectories is None or len(self.neuron_trajectories) == 0:
+            QMessageBox.warning(self, "No Data", "No trajectory data to export.")
+            return
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self, "Export Peaks & Troughs", "peaks_troughs_export.csv", "CSV Files (*.csv)"
+        )
+        if not file_path:
+            return
+
+        try:
+            num_neurons = self.neuron_trajectories.shape[0]
+            rows = []
+
+            for neuron_idx in range(num_neurons):
+                trajectory = self.neuron_trajectories[neuron_idx]
+
+                if self.roi_origin is not None:
+                    roi_label = f"ROI {int(self.roi_origin[neuron_idx]) + 1}"
+                else:
+                    roi_label = "ROI 1"
+
+                peaks, troughs = self._find_peaks_and_troughs(trajectory)
+
+                for frame_idx in peaks:
+                    rows.append(
+                        {
+                            "roi": roi_label,
+                            "neuron_id": neuron_idx,
+                            "type": "peak",
+                            "frame": int(frame_idx),
+                            "time": round(int(frame_idx) * self._frame_interval_minutes, 6),
+                            "value": float(trajectory[frame_idx]),
+                        }
+                    )
+                for frame_idx in troughs:
+                    rows.append(
+                        {
+                            "roi": roi_label,
+                            "neuron_id": neuron_idx,
+                            "type": "trough",
+                            "frame": int(frame_idx),
+                            "time": round(int(frame_idx) * self._frame_interval_minutes, 6),
+                            "value": float(trajectory[frame_idx]),
+                        }
+                    )
+
+            rows.sort(key=lambda r: (r["roi"], r["neuron_id"], r["frame"]))
+
+            fieldnames = ["roi", "neuron_id", "type", "frame", "time", "value"]
+            with open(file_path, "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(rows)
+
+            QMessageBox.information(self, "Export Successful", f"Peaks & troughs exported to:\n{file_path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Export Failed", f"Failed to export peaks & troughs:\n{str(e)}")
+
     def refresh_theme(self) -> None:
         """Redraw the plot with the current app theme (e.g. after theme change)."""
         if self.neuron_trajectories is not None and len(self.neuron_trajectories) > 0:
@@ -959,3 +1029,4 @@ class NeuronTrajectoryPlotWidget(QWidget):
         self.hover_label.setText("Hover over plot for frame and intensity.")
         self.export_btn.setEnabled(False)
         self.export_png_btn.setEnabled(False)
+        self.export_peaks_btn.setEnabled(False)
