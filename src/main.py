@@ -21,6 +21,7 @@ if get_enable_alignment_multiprocessing() or os.environ.get("NEUROLIGHT_ENABLE_M
 
 from ui.app_settings import get_theme
 from ui.main_window import MainWindow
+from ui.public_user_dialog import ensure_public_user_exists, is_public_user, sync_public_experiments
 from ui.startup_dialog import StartupDialog
 from ui.styles import get_stylesheet
 from ui.user_selection_dialog import UserSelectionDialog
@@ -43,10 +44,19 @@ def main() -> int:
     theme = get_theme()
     app.setStyleSheet(get_stylesheet(theme))
 
+    # Ensure the permanent Public User account directory exists before the
+    # user-selection screen is shown (so it always appears in the user list).
+    ensure_public_user_exists()
+
     # User selection first, then experiment manager
     user_dialog = UserSelectionDialog()
     if user_dialog.exec() != QDialog.Accepted:
         return 0
+
+    # When the Public User logs in, rebuild their experiment list by scanning
+    # all other users' folders for experiments marked is_public=True.
+    if is_public_user(user_dialog.selected_user_experiments_dir.parent.name):
+        sync_public_experiments()
 
     startup = StartupDialog(user_dialog.selected_user_experiments_dir)
     result = startup.exec()

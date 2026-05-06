@@ -431,6 +431,15 @@ class WorkflowStepper(QFrame):
             self._manager.mark_step_ready(WorkflowStep.ALIGN_IMAGES)
             self._manager.complete_current_step()
 
+    def set_read_only(self, enabled: bool) -> None:
+        """Lock all workflow navigation buttons (used by Public User mode)."""
+        if not enabled:
+            return
+        from ui.public_user_dialog import ReadOnlyGuard
+        for btn in self._step_buttons.values():
+            ReadOnlyGuard.lock(btn)
+        ReadOnlyGuard.lock(self._next_button)
+
     # ------------------------------------------------------------------
     # UI refresh helpers
     # ------------------------------------------------------------------

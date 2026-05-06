@@ -16,6 +16,8 @@ import shutil
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
+
+from ui.public_user_dialog import PUBLIC_USER_NAME
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
@@ -199,7 +201,7 @@ class _UserCard(QFrame):
         name_lbl.setAttribute(Qt.WA_TransparentForMouseEvents, True)
         name_lbl.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
-        # Delete button overlaid at top-right
+        # Delete button overlaid at top-right (hidden for the Public User — it is permanent)
         self._del_btn = QToolButton(self)
         self._del_btn.setText("✕")
         self._del_btn.setFixedSize(22, 22)
@@ -207,6 +209,8 @@ class _UserCard(QFrame):
         self._del_btn.setToolButtonStyle(Qt.ToolButtonTextOnly)
         self._del_btn.move(_CARD_W - 26, 4)
         self._del_btn.clicked.connect(lambda: self.delete_requested.emit(self._user_name))
+        if user_name == PUBLIC_USER_NAME:
+            self._del_btn.setVisible(False)
 
         inner = QVBoxLayout(self)
         inner.setContentsMargins(8, 16, 8, 12)

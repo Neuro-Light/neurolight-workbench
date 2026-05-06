@@ -52,6 +52,8 @@ class Experiment:
     # Coordinates are in original image pixels, ensuring ROIs stay fixed to
     # the image region regardless of window size or scaling.
     rois: dict[str, Any] = field(default_factory=lambda: {"roi_1": None, "roi_2": None})
+    # When True the experiment is visible to the Public User (read-only viewer).
+    is_public: bool = False
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -80,6 +82,8 @@ class Experiment:
                 },
                 # Backward compat: write roi_1 as legacy "roi" so older versions can read it
                 "roi": self.rois.get("roi_1"),
+                # Public-visibility flag (False = private, True = viewable by Public User)
+                "is_public": self.is_public,
                 # Save neuron detection data if available
                 "neuron_detection": self._serialize_neuron_detection(),
             },
@@ -122,6 +126,7 @@ class Experiment:
             analysis_results=exp.get("analysis", {}).get("results", {}),
             settings=exp.get("settings", {}),
             rois=rois,
+            is_public=bool(exp.get("is_public", False)),
         )
         # Load neuron detection data if available
         neuron_detection = exp.get("neuron_detection")
