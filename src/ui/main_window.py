@@ -8,8 +8,6 @@ from PySide6.QtCore import Qt, QTime, QTimer, QUrl
 from PySide6.QtGui import QAction, QCloseEvent, QDesktopServices
 from PySide6.QtWidgets import (
     QApplication,
-    QCheckBox,
-    QComboBox,
     QDialog,
     QDialogButtonBox,
     QDoubleSpinBox,
@@ -38,13 +36,11 @@ from ui.analysis_panel import AnalysisPanel
 from ui.app_settings import get_enable_alignment_multiprocessing
 from ui.image_viewer import ImageViewer
 from ui.loading_dialog import LoadingDialog
-from ui.settings_dialog import SettingsDialog
-from ui.startup_dialog import StartupDialog
 from ui.public_user_dialog import (
     is_public_user,
-    register_public_experiment,
-    unregister_public_experiment,
 )
+from ui.settings_dialog import SettingsDialog
+from ui.startup_dialog import StartupDialog
 from ui.user_selection_dialog import UserAccountActionsDialog, UserSelectionDialog, current_user_button_text
 from ui.workflow import STEP_DEFINITIONS, WorkflowManager, WorkflowStep, WorkflowStepper
 from utils.file_handler import ImageStackHandler, _get_exif_timestamp
@@ -236,6 +232,12 @@ class MainWindow(QMainWindow):
         self.user_recent_file: Path | None = recent_file
         self._current_user_btn: QPushButton | None = None
         self._visibility_btn: QPushButton | None = None
+        self._action_save: QAction | None = None
+        self._action_save_as: QAction | None = None
+        self._action_experiment_settings: QAction | None = None
+        self._action_crop: QAction | None = None
+        # (widget, guard, was_enabled) so we can restore state when switching away from Public User.
+        self._public_user_guards: list[tuple[QWidget, object, bool]] = []
         self.image_processor = ImageProcessor(experiment)
         self._alignment_worker: AlignmentWorker | None = None
 
@@ -374,6 +376,29 @@ class MainWindow(QMainWindow):
 
         from ui.public_user_dialog import ReadOnlyGuard
 
+        def _lock_widget(w: QWidget) -> None:
+            try:
+                was_enabled = bool(w.isEnabled())
+                guard = ReadOnlyGuard.lock(w)
+                self._public_user_guards.append((w, guard, was_enabled))
+            except Exception:
+                pass
+
+        # Disable global write actions (saving/settings/tools).
+        for act in (
+            self._action_save,
+            self._action_save_as,
+            self._action_open_stack,
+            self._action_align_images,
+            self._action_crop,
+            self._action_experiment_settings,
+        ):
+            try:
+                if act is not None:
+                    act.setEnabled(False)
+            except Exception:
+                pass
+
         # Workflow navigation locked — Public User stays on Analysis
         self.workflow_stepper.set_read_only(True)
 
@@ -386,41 +411,29 @@ class MainWindow(QMainWindow):
         try:
             d = self.analysis.get_neuron_detection_widget()
             for w in (
-                d.detect_mode_combo, d.cell_size_spin, d.num_peaks_spin,
-                d.correlation_threshold_spin, d.max_absent_frames_spin,
-                d.threshold_rel_spin, d.max_projection_checkbox,
-                d.preprocess_sigma_spin, d.detrending_checkbox,
+                d.detect_mode_combo,
+                d.cell_size_spin,
+                d.num_peaks_spin,
+                d.correlation_threshold_spin,
+                d.max_absent_frames_spin,
+                d.threshold_rel_spin,
+                d.max_projection_checkbox,
+                d.preprocess_sigma_spin,
+                d.detrending_checkbox,
                 d.detect_btn,
             ):
-                ReadOnlyGuard.lock(w)
+                _lock_widget(w)
         except Exception:
             pass
 
-        # ROI Intensity tab: lock all display toggles; export buttons stay free.
-        try:
-            r = self.analysis.get_roi_plot_widget()
-            for cb in r.findChildren(QCheckBox):
-                ReadOnlyGuard.lock(cb)
-        except Exception:
-            pass
-
-        # Trajectories tab: lock display toggles and ROI selector; exports stay free.
-        try:
-            t = self.analysis.get_neuron_trajectory_plot_widget()
-            for cb in t.findChildren(QCheckBox):
-                ReadOnlyGuard.lock(cb)
-            ReadOnlyGuard.lock(t.roi_view_combo)
-        except Exception:
-            pass
-
-        # Lomb-Scargle tab: lock ROI checkboxes, axis mode, and interval spinbox;
-        # exports stay free.
+        # View-only tabs (ROI Intensity, Trajectories, Lomb–Scargle) are intentionally
+        # left fully interactive for the Public User. These controls only affect
+        # visualization, not persisted experiment data.
+        #
+        # Exception: Lomb–Scargle sampling interval is restricted for the Public User.
         try:
             ls = self.analysis.get_lomb_scargle_widget()
-            for cb in ls.findChildren(QCheckBox):
-                ReadOnlyGuard.lock(cb)
-            ReadOnlyGuard.lock(ls.axis_mode_combo)
-            ReadOnlyGuard.lock(ls.sampling_interval_spin)
+            _lock_widget(ls.sampling_interval_spin)
         except Exception:
             pass
 
@@ -430,12 +443,66 @@ class MainWindow(QMainWindow):
         try:
             rp = self.analysis.get_rayleigh_plot_widget()
             for w in (
-                rp.start_time_edit, rp.interval_spin,
-                rp.interval_unit_combo, rp.plot_btn,
+                rp.start_time_edit,
+                rp.interval_spin,
+                rp.interval_unit_combo,
+                rp.plot_btn,
             ):
-                ReadOnlyGuard.lock(w)
+                _lock_widget(w)
         except Exception:
             pass
+
+    def _clear_public_user_restrictions(self) -> None:
+        """Remove read-only guards and re-enable normal-user actions."""
+        # Remove event filters installed by ReadOnlyGuard
+        for widget, guard, was_enabled in self._public_user_guards:
+            try:
+                widget.removeEventFilter(guard)  # type: ignore[arg-type]
+            except Exception:
+                pass
+            try:
+                widget.setEnabled(was_enabled)
+            except Exception:
+                pass
+        self._public_user_guards.clear()
+
+        # Re-enable actions; workflow gating will re-disable as needed.
+        for act in (
+            self._action_save,
+            self._action_save_as,
+            self._action_open_stack,
+            self._action_align_images,
+            self._action_crop,
+            self._action_experiment_settings,
+        ):
+            try:
+                if act is not None:
+                    act.setEnabled(True)
+            except Exception:
+                pass
+
+        try:
+            self.workflow_stepper.set_read_only(False)
+        except Exception:
+            pass
+
+        # Re-apply workflow enable/disable rules after unlocking.
+        try:
+            self.workflow_manager.refresh_state()
+        except Exception:
+            pass
+        try:
+            # Some UI elements (especially inside graph widgets) are toggled via the state_changed signal.
+            self.workflow_manager.state_changed.emit()
+        except Exception:
+            pass
+
+    def _sync_public_user_mode(self) -> None:
+        """Ensure restrictions match the currently active user."""
+        if self._is_public_user_mode():
+            self._apply_public_user_restrictions()
+        else:
+            self._clear_public_user_restrictions()
 
     def _save_workflow_progress(self) -> None:
         if not self.current_experiment_path:
@@ -465,6 +532,8 @@ class MainWindow(QMainWindow):
         export_results_action = QAction("Export Results", self)
 
         # Keep references to actions we will control via workflow
+        self._action_save = save_action
+        self._action_save_as = save_as_action
         self._action_open_stack = open_stack_action
 
         save_action.setShortcut("Ctrl+S")
@@ -492,12 +561,14 @@ class MainWindow(QMainWindow):
         self._edit_menu.addAction(settings_action)
         experiment_settings_action = QAction("Experiment Settings...", self)
         experiment_settings_action.triggered.connect(self._open_experiment_settings)
+        self._action_experiment_settings = experiment_settings_action
         self._edit_menu.addAction(experiment_settings_action)
         self._tools_menu = menubar.addMenu("Tools")
 
         # Add crop action
         crop_action = QAction("Crop Stack to ROI", self)
         crop_action.triggered.connect(self._crop_stack_to_roi)
+        self._action_crop = crop_action
         self._tools_menu.addAction(crop_action)
 
         # Add alignment action
@@ -528,11 +599,31 @@ class MainWindow(QMainWindow):
             self._visibility_btn.setProperty("class", "tab-action")
             self._visibility_btn.setEnabled(False)
             self._visibility_btn.setToolTip(
-                "Make this experiment visible to the Public User.\n"
-                "Available once the Analysis step is reached."
+                "Make this experiment visible to the Public User.\nAvailable once the Analysis step is reached."
             )
             self._visibility_btn.clicked.connect(self._toggle_experiment_visibility)
             self.menuBar().setCornerWidget(self._visibility_btn, Qt.Corner.TopRightCorner)
+        else:
+            # Ensure any prior session's visibility button is removed when switching into Public mode.
+            self._visibility_btn = None
+            try:
+                self.menuBar().setCornerWidget(None, Qt.Corner.TopRightCorner)
+            except Exception:
+                pass
+
+    def _rebuild_menu_corners(self) -> None:
+        """Recreate menu corner widgets (needed after switching users)."""
+        try:
+            self.menuBar().setCornerWidget(None, Qt.Corner.TopLeftCorner)
+        except Exception:
+            pass
+        try:
+            self.menuBar().setCornerWidget(None, Qt.Corner.TopRightCorner)
+        except Exception:
+            pass
+        self._current_user_btn = None
+        self._visibility_btn = None
+        self._init_current_user_menu_corner()
 
     def _is_public_user_mode(self) -> bool:
         """Return True when the current session belongs to the Public User."""
@@ -565,7 +656,6 @@ class MainWindow(QMainWindow):
             # Revert to private without a confirmation prompt
             self.experiment.is_public = False
             if self.current_experiment_path:
-                unregister_public_experiment(self.current_experiment_path)
                 try:
                     self.manager.save_experiment(self.experiment, self.current_experiment_path)
                 except Exception:
@@ -574,8 +664,7 @@ class MainWindow(QMainWindow):
             reply = QMessageBox.question(
                 self,
                 "Make Experiment Public",
-                "This will make the experiment viewable by the Public User.\n\n"
-                "Do you wish to proceed?",
+                "This will make the experiment viewable by the Public User.\n\nDo you wish to proceed?",
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No,
             )
@@ -583,11 +672,18 @@ class MainWindow(QMainWindow):
                 return
             self.experiment.is_public = True
             if self.current_experiment_path:
-                register_public_experiment(self.current_experiment_path, self.experiment.name)
                 try:
                     self.manager.save_experiment(self.experiment, self.current_experiment_path)
                 except Exception:
                     pass
+
+        # Rebuild the Public user's view immediately (copy-based sync).
+        try:
+            from ui.public_user_dialog import sync_public_experiments
+
+            sync_public_experiments()
+        except Exception:
+            pass
         self._update_visibility_button()
 
     def _reload_workbench_after_startup_choice(self, startup: StartupDialog) -> None:
@@ -596,7 +692,7 @@ class MainWindow(QMainWindow):
         self.user_experiments_dir = startup.experiments_dir
         self.user_recent_file = startup.experiments_dir.parent / "recent_experiments.json"
         self.manager = ExperimentManager(self.user_recent_file)
-        self._update_current_user_button_text()
+        self._rebuild_menu_corners()
 
         self.experiment = startup.experiment  # type: ignore[assignment]
         self.set_current_experiment_path(startup.experiment_path, persist_workflow=False)
@@ -604,6 +700,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(f"Neurolight - {self.experiment.name}")
         self.image_processor = ImageProcessor(self.experiment)
         self._update_visibility_button()
+        self._sync_public_user_mode()
 
         self.viewer.reset()
 
@@ -701,10 +798,11 @@ class MainWindow(QMainWindow):
         self.user_experiments_dir = user_dialog.selected_user_experiments_dir
         self.user_recent_file = self.user_experiments_dir.parent / "recent_experiments.json"
         self.manager = ExperimentManager(self.user_recent_file)
-        self._update_current_user_button_text()
+        self._rebuild_menu_corners()
 
         if self._is_public_user_mode():
             from ui.public_user_dialog import sync_public_experiments
+
             sync_public_experiments()
 
         startup = StartupDialog(self.user_experiments_dir)
@@ -741,6 +839,9 @@ class MainWindow(QMainWindow):
             self.viewer._show_current()  # redraw ROI overlays with new colours
 
     def _open_experiment_settings(self) -> None:
+        if self._is_public_user_mode():
+            QMessageBox.information(self, "Public User", "This experiment is read-only for the Public User.")
+            return
         # Open the Experiment Settings dialog to edit metadata and acquisition timing.
         if self.experiment is None or not self.current_experiment_path:
             QMessageBox.information(
@@ -790,7 +891,7 @@ class MainWindow(QMainWindow):
             self._sync_rois_to_experiment()
             self._capture_display_settings()
             self._capture_experiment_time_settings()
-            if self.current_experiment_path:
+            if self.current_experiment_path and not self._is_public_user_mode():
                 try:
                     self.manager.save_experiment(self.experiment, self.current_experiment_path)
                 except Exception as e:
@@ -1111,6 +1212,9 @@ class MainWindow(QMainWindow):
             pass
 
     def _open_image_stack(self) -> None:
+        if self._is_public_user_mode():
+            QMessageBox.information(self, "Public User", "This experiment is read-only for the Public User.")
+            return
         directory = QFileDialog.getExistingDirectory(self, "Select Image Stack Folder", "")
         if not directory:
             return
@@ -1130,7 +1234,7 @@ class MainWindow(QMainWindow):
         detection_widget.set_frame_data(frame_data)
 
         # Persist immediately if we know the path to the .nexp
-        if self.current_experiment_path:
+        if self.current_experiment_path and not self._is_public_user_mode():
             try:
                 self.manager.save_experiment(self.experiment, self.current_experiment_path)
             except Exception:
@@ -1228,7 +1332,7 @@ class MainWindow(QMainWindow):
 
     def _save_neuron_detection(self) -> None:
         """Save experiment when neuron detection completes."""
-        if self.current_experiment_path:
+        if self.current_experiment_path and not self._is_public_user_mode():
             try:
                 self._sync_rois_to_experiment()
                 self._capture_display_settings()
@@ -1239,6 +1343,9 @@ class MainWindow(QMainWindow):
                 logger.error(f"Failed to save neuron detection data: {e}", exc_info=True)
 
     def _save(self) -> None:
+        if self._is_public_user_mode():
+            QMessageBox.information(self, "Public User", "This experiment is read-only for the Public User.")
+            return
         if not self.current_experiment_path:
             self._save_as()
             return
@@ -1253,6 +1360,9 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "Error", str(e))
 
     def _save_as(self) -> None:
+        if self._is_public_user_mode():
+            QMessageBox.information(self, "Public User", "This experiment is read-only for the Public User.")
+            return
         default_dir = ""
         if self.current_experiment_path:
             try:
@@ -1300,7 +1410,7 @@ class MainWindow(QMainWindow):
         self._flush_pending_display_settings()
         self._sync_rois_to_experiment()
         self._capture_display_settings()
-        if self.current_experiment_path:
+        if self.current_experiment_path and not self._is_public_user_mode():
             try:
                 self.manager.save_experiment(self.experiment, self.current_experiment_path)
             except Exception:
@@ -1318,6 +1428,7 @@ class MainWindow(QMainWindow):
 
         if self._is_public_user_mode():
             from ui.public_user_dialog import sync_public_experiments
+
             sync_public_experiments()
 
         startup = StartupDialog(experiments_root)
@@ -1589,7 +1700,7 @@ class MainWindow(QMainWindow):
             self._pending_contrast = None
 
             # Persist to file if we have a path
-            if self.current_experiment_path:
+            if self.current_experiment_path and not self._is_public_user_mode():
                 try:
                     self.manager.save_experiment(self.experiment, self.current_experiment_path)
                 except Exception:
@@ -1597,6 +1708,8 @@ class MainWindow(QMainWindow):
 
     def _save_roi_to_experiment(self, roi_key: str, roi: ROI) -> None:
         """Save a specific ROI to experiment and persist to .nexp file."""
+        if self._is_public_user_mode():
+            return
         self.experiment.rois[roi_key] = roi.to_dict()
         if self.current_experiment_path:
             try:
@@ -1606,6 +1719,8 @@ class MainWindow(QMainWindow):
                 pass
 
     def autosave_experiment(self) -> None:
+        if self._is_public_user_mode():
+            return
         if not self.experiment.settings.get("processing", {}).get("auto_save", True):
             return
         if not self.current_experiment_path:
@@ -1621,6 +1736,9 @@ class MainWindow(QMainWindow):
 
     def _crop_stack_to_roi(self) -> None:
         """Crop the image stack to the active ROI and save as new stack."""
+        if self._is_public_user_mode():
+            QMessageBox.information(self, "Public User", "This experiment is read-only for the Public User.")
+            return
         current_roi = self.viewer.get_current_roi()
         if current_roi is None:
             QMessageBox.warning(self, "No ROI Selected", "Please select an ROI before cropping.")
@@ -1690,6 +1808,9 @@ class MainWindow(QMainWindow):
 
     def _align_images(self) -> None:
         """Align images in the stack using a background worker thread."""
+        if self._is_public_user_mode():
+            QMessageBox.information(self, "Public User", "This experiment is read-only for the Public User.")
+            return
         # Guard: prevent re-entry while a worker is already running
         if self._alignment_worker is not None and self._alignment_worker.isRunning():
             QMessageBox.warning(

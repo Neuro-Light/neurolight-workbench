@@ -36,6 +36,7 @@ from ui.app_settings import (
     get_enable_alignment_multiprocessing,
     set_enable_alignment_multiprocessing,
 )
+from ui.public_user_dialog import is_public_user
 from ui.settings_dialog import SettingsDialog
 from ui.user_selection_dialog import UserAccountActionsDialog, UserSelectionDialog, current_user_button_text
 
@@ -198,6 +199,7 @@ class StartupDialog(QDialog):
         self.setMinimumWidth(520)
         self.experiments_dir = experiments_dir
         self._current_user_name = experiments_dir.parent.name
+        self._public_mode = is_public_user(self._current_user_name)
         self.experiment: Experiment | None = None
         self.experiment_path: str | None = None
         # Store recent experiments per user (in the user's folder, not globally in ~/.neurolight).
@@ -218,6 +220,12 @@ class StartupDialog(QDialog):
         new_btn.setProperty("class", "tab-action")
         load_btn = QPushButton("Load Existing Experiment")
         load_btn.setProperty("class", "tab-action")
+
+        if self._public_mode:
+            new_btn.setEnabled(False)
+            new_btn.setToolTip("The Public User cannot create experiments.")
+            load_btn.setEnabled(False)
+            load_btn.setToolTip("The Public User cannot load arbitrary experiment files.")
 
         new_btn.clicked.connect(self._start_new)
         load_btn.clicked.connect(self._load_existing)
@@ -272,6 +280,7 @@ class StartupDialog(QDialog):
             return
         self.experiments_dir = picker.selected_user_experiments_dir
         self._current_user_name = picker.selected_user
+        self._public_mode = is_public_user(self._current_user_name)
         self._current_user_btn.setText(current_user_button_text(self._current_user_name))
         self.manager = ExperimentManager(self.experiments_dir.parent / "recent_experiments.json")
         self._refresh_recent()
@@ -330,7 +339,8 @@ class StartupDialog(QDialog):
 
     def _show_options_for_path(self, path: str, options_button: QPushButton | None) -> None:
         menu = QMenu(self)
-        menu.addAction("Delete", lambda: self._remove_from_list_for_path(path))
+        if not self._public_mode:
+            menu.addAction("Delete", lambda: self._remove_from_list_for_path(path))
         menu.addAction("Export", lambda: self._export_for_path(path))
         menu.addAction("Show file location", lambda: self._show_file_location(path))
 
@@ -361,6 +371,9 @@ class StartupDialog(QDialog):
         QDesktopServices.openUrl(QUrl.fromLocalFile(parent_dir))
 
     def _start_new(self) -> None:
+        if self._public_mode:
+            QMessageBox.information(self, "Public User", "The Public User cannot create experiments.")
+            return
         dlg = NewExperimentDialog(self.experiments_dir, self)
         if dlg.exec() == QDialog.Accepted and dlg.output_path:
             exp = self.manager.create_new_experiment(dlg.metadata)
@@ -375,6 +388,9 @@ class StartupDialog(QDialog):
             self.accept()
 
     def _load_existing(self) -> None:
+        if self._public_mode:
+            QMessageBox.information(self, "Public User", "The Public User cannot load arbitrary experiment files.")
+            return
         file_path, _ = QFileDialog.getOpenFileName(
             self,
             "Open Experiment",
@@ -429,17 +445,20 @@ class StartupDialog(QDialog):
 
         menu = QMenu(self)
         open_action = menu.addAction("Open")
-        delete_action = menu.addAction("Delete from List")
-        delete_file_action = menu.addAction("Delete File and Remove from List")
+        delete_action = None
+        delete_file_action = None
+        if not self._public_mode:
+            delete_action = menu.addAction("Delete from List")
+            delete_file_action = menu.addAction("Delete File and Remove from List")
         export_action = menu.addAction("Export")
 
         action = menu.exec(self.recent_list.mapToGlobal(position))
 
         if action == open_action:
             self._open_recent(item)
-        elif action == delete_action:
+        elif delete_action is not None and action == delete_action:
             self._delete_experiment(item, delete_file=False)
-        elif action == delete_file_action:
+        elif delete_file_action is not None and action == delete_file_action:
             self._delete_experiment(item, delete_file=True)
         elif action == export_action:
             self._export_experiment(item)

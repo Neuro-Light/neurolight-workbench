@@ -16,8 +16,6 @@ import shutil
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
-
-from ui.public_user_dialog import PUBLIC_USER_NAME
 from PySide6.QtWidgets import (
     QDialog,
     QFrame,
@@ -33,6 +31,8 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+
+from ui.public_user_dialog import PUBLIC_USER_NAME
 
 # ---------------------------------------------------------------------------
 # Public helper (used by StartupDialog and MainWindow for the badge label)

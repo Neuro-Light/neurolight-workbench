@@ -324,6 +324,8 @@ class WorkflowStepper(QFrame):
         super().__init__(parent)
         self._manager = manager
         self._step_buttons: dict[WorkflowStep, QToolButton] = {}
+        self._read_only_enabled = False
+        self._read_only_guards: list[tuple[QWidget, object]] = []
 
         self.setFrameShape(QFrame.NoFrame)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
@@ -432,13 +434,34 @@ class WorkflowStepper(QFrame):
             self._manager.complete_current_step()
 
     def set_read_only(self, enabled: bool) -> None:
-        """Lock all workflow navigation buttons (used by Public User mode)."""
-        if not enabled:
+        """Lock/unlock workflow navigation buttons (used by Public User mode)."""
+        if enabled == self._read_only_enabled:
             return
+
+        if not enabled:
+            for widget, guard in self._read_only_guards:
+                try:
+                    widget.removeEventFilter(guard)  # type: ignore[arg-type]
+                except Exception:
+                    pass
+            self._read_only_guards.clear()
+            self._read_only_enabled = False
+            self._refresh()
+            return
+
         from ui.public_user_dialog import ReadOnlyGuard
+
+        def _lock(w: QWidget) -> None:
+            try:
+                guard = ReadOnlyGuard.lock(w)
+                self._read_only_guards.append((w, guard))
+            except Exception:
+                pass
+
         for btn in self._step_buttons.values():
-            ReadOnlyGuard.lock(btn)
-        ReadOnlyGuard.lock(self._next_button)
+            _lock(btn)
+        _lock(self._next_button)
+        self._read_only_enabled = True
 
     # ------------------------------------------------------------------
     # UI refresh helpers

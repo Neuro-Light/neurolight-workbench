@@ -24,7 +24,6 @@ from pathlib import Path
 from PySide6.QtCore import QEvent, QObject
 from PySide6.QtWidgets import QWidget
 
-
 PUBLIC_USER_NAME = "Public"
 
 
@@ -43,7 +42,7 @@ class ReadOnlyGuard(QObject):
         return False
 
     @classmethod
-    def lock(cls, widget: QWidget) -> "ReadOnlyGuard":
+    def lock(cls, widget: QWidget) -> ReadOnlyGuard:
         """Disable *widget* and install the guard.  Returns the guard instance."""
         guard = cls(widget)
         widget.installEventFilter(guard)
@@ -129,7 +128,10 @@ def sync_public_experiments() -> None:
                     data = json.load(fh)
             except Exception:
                 continue
-            if not data.get("is_public", False):
+            exp = data.get("experiment") or {}
+            if not isinstance(exp, dict):
+                exp = {}
+            if not exp.get("is_public", False):
                 continue
 
             # Collision-free filename: <owner>__<original stem>.nexp
@@ -141,11 +143,13 @@ def sync_public_experiments() -> None:
                 continue
 
             keep_names.add(dest_name)
-            recent_entries.append({
-                "path": str(dest.resolve()),
-                "name": data.get("name", nexp_file.stem),
-                "last_opened": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            })
+            recent_entries.append(
+                {
+                    "path": str(dest.resolve()),
+                    "name": exp.get("name", nexp_file.stem),
+                    "last_opened": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                }
+            )
 
     # Rewrite the recent list with exactly the current public set
     try:
