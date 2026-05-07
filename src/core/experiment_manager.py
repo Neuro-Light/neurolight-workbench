@@ -10,6 +10,16 @@ from typing import Any
 
 import numpy as np
 
+
+def _repo_root() -> Path:
+    # This file lives at src/core/experiment_manager.py
+    return Path(__file__).resolve().parents[2]
+
+
+def _public_experiments_dir() -> Path:
+    return _repo_root() / "users" / "Public" / "experiments"
+
+
 CONFIG_DIR = Path.home() / ".neurolight"
 try:
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -52,6 +62,8 @@ class Experiment:
     # Coordinates are in original image pixels, ensuring ROIs stay fixed to
     # the image region regardless of window size or scaling.
     rois: dict[str, Any] = field(default_factory=lambda: {"roi_1": None, "roi_2": None})
+    # When True the experiment is visible to the Public User (read-only viewer).
+    is_public: bool = False
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -80,6 +92,8 @@ class Experiment:
                 },
                 # Backward compat: write roi_1 as legacy "roi" so older versions can read it
                 "roi": self.rois.get("roi_1"),
+                # Public-visibility flag (False = private, True = viewable by Public User)
+                "is_public": self.is_public,
                 # Save neuron detection data if available
                 "neuron_detection": self._serialize_neuron_detection(),
             },
@@ -122,6 +136,7 @@ class Experiment:
             analysis_results=exp.get("analysis", {}).get("results", {}),
             settings=exp.get("settings", {}),
             rois=rois,
+            is_public=bool(exp.get("is_public", False)),
         )
         # Load neuron detection data if available
         neuron_detection = exp.get("neuron_detection")
@@ -327,6 +342,16 @@ class ExperimentManager:
     def save_experiment(self, experiment: Experiment, file_path: str | None = None) -> bool:
         if not file_path:
             raise ValueError("file_path is required for saving experiment")
+        # Backstop: the Public User's copies are read-only and must never be modified.
+        # (UI code should prevent this, but this ensures correctness if a save is attempted anyway.)
+        try:
+            target = Path(file_path).resolve()
+            pub_dir = _public_experiments_dir().resolve()
+            if pub_dir in target.parents:
+                return False
+        except Exception:
+            # If path resolution fails, fall through to best-effort save behavior.
+            pass
         experiment.update_modified_date()
         payload = experiment.to_json()
         os.makedirs(os.path.dirname(file_path), exist_ok=True)

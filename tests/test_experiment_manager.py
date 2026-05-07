@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 import json
 from pathlib import Path
 
@@ -149,3 +150,119 @@ def test_remove_from_recent_removes_entry(tmp_path: Path, recent_file: Path) -> 
     mgr.remove_from_recent(path)
     payload = json.loads(recent_file.read_text(encoding="utf-8"))
     assert payload["recent"] == []
+
+
+def test_delete_experiment_removes_disk_file_when_requested(tmp_path: Path, recent_file: Path) -> None:
+    mgr = ExperimentManager()
+    path = tmp_path / "gone.nexp"
+    path.write_text("{}", encoding="utf-8")
+    resolved = str(path.resolve())
+    mgr.add_to_recent(resolved, "Gone")
+    assert mgr.delete_experiment(resolved, delete_file=True) is True
+    assert not path.is_file()
+    assert json.loads(recent_file.read_text(encoding="utf-8"))["recent"] == []
+
+
+def test_delete_experiment_returns_false_when_recent_update_fails(
+    tmp_path: Path, recent_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mgr = ExperimentManager()
+    path = tmp_path / "x.nexp"
+    path.write_text("{}", encoding="utf-8")
+
+    def _boom(_p: str) -> None:
+        raise OSError("recent unavailable")
+
+    monkeypatch.setattr(mgr, "remove_from_recent", _boom)
+    assert mgr.delete_experiment(str(path.resolve()), delete_file=False) is False
+
+
+def test_add_to_recent_swallows_oserror_on_write(
+    tmp_path: Path, recent_file: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mgr = ExperimentManager()
+    phantom = tmp_path / "phantom.nexp"
+    phantom.write_text("{}", encoding="utf-8")
+    real_open = builtins.open
+    recent_resolved = recent_file.resolve()
+
+    def _open(path, *args, **kwargs):
+        mode = args[0] if args else kwargs.get("mode", "r")
+        if mode == "w" and Path(path).resolve() == recent_resolved:
+            raise OSError("disk full")
+        return real_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "open", _open)
+    mgr.add_to_recent(str(phantom.resolve()), "P")
+
+
+def test_from_json_adds_utc_to_naive_timestamps() -> None:
+    data = {
+        "version": "1.0",
+        "experiment": {
+            "name": "T",
+            "created_date": "2020-01-01T00:00:00",
+            "modified_date": "2020-01-02T12:00:00",
+            "image_stack": {"path": "", "file_list": [], "count": 0},
+        },
+    }
+    exp = Experiment.from_json(data)
+    assert exp.created_date.tzinfo is not None
+    assert exp.modified_date.tzinfo is not None
+
+
+def test_serialize_neuron_detection_missing_or_invalid_payload() -> None:
+    exp = Experiment(name="x")
+    assert exp._serialize_neuron_detection() is None
+    exp._neuron_detection_data = None  # type: ignore[assignment]
+    assert exp._serialize_neuron_detection() is None
+    exp._neuron_detection_data = "not-a-dict"  # type: ignore[assignment]
+    assert exp._serialize_neuron_detection() is None
+
+
+def test_serialize_neuron_detection_empty_inner_dict() -> None:
+    exp = Experiment(name="x")
+    exp._neuron_detection_data = {}
+    assert exp._serialize_neuron_detection() is None
+
+
+def test_serialize_neuron_detection_locations_non_ndarray_branch() -> None:
+    exp = Experiment(name="x")
+    exp._neuron_detection_data = {"neuron_locations": [[1, 2], [3, 4]]}
+    out = exp._serialize_neuron_detection()
+    assert out is not None
+    assert out["neuron_locations"] == [[1, 2], [3, 4]]
+
+
+def test_serialize_neuron_detection_skips_empty_numpy_arrays() -> None:
+    exp = Experiment(name="x")
+    exp._neuron_detection_data = {
+        "neuron_locations": np.array([], dtype=np.int32).reshape(0, 2),
+        "neuron_trajectories": np.array([], dtype=np.float32).reshape(0, 3),
+        "quality_mask": np.array([], dtype=bool),
+    }
+    assert exp._serialize_neuron_detection() is None
+
+
+def test_serialize_neuron_detection_trajectories_list_fallback() -> None:
+    exp = Experiment(name="x")
+    exp._neuron_detection_data = {"neuron_trajectories": [[1.0, 2.0]]}
+    out = exp._serialize_neuron_detection()
+    assert out is not None
+    assert out["neuron_trajectories"] == [[1.0, 2.0]]
+
+
+def test_serialize_neuron_detection_quality_mask_list() -> None:
+    exp = Experiment(name="x")
+    exp._neuron_detection_data = {"quality_mask": [True, False]}
+    out = exp._serialize_neuron_detection()
+    assert out is not None
+    assert out["quality_mask"] == [True, False]
+
+
+def test_serialize_neuron_detection_roi_origin_tuple() -> None:
+    exp = Experiment(name="x")
+    exp._neuron_detection_data = {"roi_origin": (0, 1, 1)}
+    out = exp._serialize_neuron_detection()
+    assert out is not None
+    assert out["roi_origin"] == [0, 1, 1]

@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 import tifffile
+from PIL import Image
 
 from core.experiment_manager import Experiment
-from utils.file_handler import ImageStackHandler, _extract_valid_time
+from utils.file_handler import ImageStackHandler, _extract_valid_time, _get_exif_timestamp
 
 
 def test_load_stack_from_list_filters_non_tiff(tmp_path: Path) -> None:
@@ -190,3 +193,122 @@ def test_get_all_frames_as_array_empty_range(tmp_path: Path) -> None:
 )
 def test_extract_valid_time_normalizes_and_validates(raw, expected) -> None:
     assert _extract_valid_time(raw) == expected
+
+
+def test_extract_valid_time_bytes_decode_error_returns_none() -> None:
+    raw = MagicMock(spec=bytes)
+    raw.decode.side_effect = UnicodeDecodeError("utf-8", b"", 0, 1, "x")
+    assert _extract_valid_time(raw) is None
+
+
+def test_get_included_files_invalid_range_returns_empty() -> None:
+    h = ImageStackHandler()
+    h.files = ["/a.tif", "/b.tif"]
+    h.set_included_range(2, 0)
+    assert h.get_included_files() == []
+
+
+def test_get_image_at_index_tiff_fallback_pillow(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = tmp_path / "x.tif"
+    tifffile.imwrite(path, np.ones((2, 2), dtype=np.uint8))
+    h = ImageStackHandler()
+    h.files = [str(path)]
+
+    def _boom(*_a, **_k):
+        raise OSError("tifffile read failed")
+
+    monkeypatch.setattr(tifffile, "imread", _boom)
+    img = h.get_image_at_index(0)
+    assert img.shape == (2, 2)
+
+
+def test_get_all_frames_uses_thread_pool_for_multiple_files(tmp_path: Path) -> None:
+    paths = []
+    for i in range(3):
+        p = tmp_path / f"{i}.tif"
+        tifffile.imwrite(p, np.full((2, 2), i, dtype=np.uint8))
+        paths.append(str(p))
+    h = ImageStackHandler()
+    h.load_image_stack(paths)
+    stack = h.get_all_frames_as_array()
+    assert stack is not None
+    assert stack.shape[0] == 3
+
+
+def test_associate_with_experiment_sets_start_time_from_exif(tmp_path: Path) -> None:
+    path = tmp_path / "m.tif"
+    Image.fromarray(np.zeros((4, 4), dtype=np.uint8)).save(path, format="TIFF")
+    h = ImageStackHandler()
+    h.files = [str(path)]
+    exp = Experiment(name="E")
+    with patch("utils.file_handler._get_exif_timestamp", return_value="12:34:56"):
+        h.associate_with_experiment(exp)
+    assert exp.settings["acquisition"]["experiment_start_time"] == "12:34:56"
+
+
+def test_associate_skips_exif_when_start_time_already_set(tmp_path: Path) -> None:
+    path = tmp_path / "m.tif"
+    Image.fromarray(np.zeros((4, 4), dtype=np.uint8)).save(path, format="TIFF")
+    h = ImageStackHandler()
+    h.files = [str(path)]
+    exp = Experiment(name="E")
+    exp.settings["acquisition"] = {"experiment_start_time": "01:02:03"}
+    with patch("utils.file_handler._get_exif_timestamp", return_value="99:99:99"):
+        h.associate_with_experiment(exp)
+    assert exp.settings["acquisition"]["experiment_start_time"] == "01:02:03"
+
+
+def test_associate_creates_acquisition_when_non_dict(tmp_path: Path) -> None:
+    path = tmp_path / "m.tif"
+    Image.fromarray(np.zeros((4, 4), dtype=np.uint8)).save(path, format="TIFF")
+    h = ImageStackHandler()
+    h.files = [str(path)]
+    exp = Experiment(name="E")
+    exp.settings["acquisition"] = "broken"  # type: ignore[assignment]
+    with patch("utils.file_handler._get_exif_timestamp", return_value="08:00:00"):
+        h.associate_with_experiment(exp)
+    assert isinstance(exp.settings["acquisition"], dict)
+    assert exp.settings["acquisition"]["experiment_start_time"] == "08:00:00"
+
+
+def test_get_exif_timestamp_handles_pil_and_tifffile_errors(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = tmp_path / "empty.tif"
+    path.write_bytes(b"not a real tif")
+    assert _get_exif_timestamp(str(path)) is None
+
+
+def test_get_all_frames_single_file_sequential_load(tmp_path: Path) -> None:
+    p = tmp_path / "one.tif"
+    tifffile.imwrite(p, np.zeros((2, 2), dtype=np.uint8))
+    h = ImageStackHandler()
+    h.load_image_stack([str(p)])
+    stack = h.get_all_frames_as_array()
+    assert stack is not None and stack.shape == (1, 2, 2)
+
+
+def test_get_exif_timestamp_reads_datetimeoriginal_from_pil_exif(tmp_path: Path) -> None:
+    path = tmp_path / "meta.tif"
+    path.write_bytes(b"x")
+    mock_img = MagicMock()
+    mock_img.__enter__.return_value = mock_img
+    mock_img.__exit__.return_value = None
+    mock_img._getexif.return_value = {36867: "2024:03:15 09:08:07"}
+    with patch("utils.file_handler.Image.open", return_value=mock_img):
+        assert _get_exif_timestamp(str(path)) == "09:08:07"
+
+
+def test_get_all_frames_falls_back_when_thread_pool_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    paths = []
+    for i in range(2):
+        p = tmp_path / f"{i}.tif"
+        tifffile.imwrite(p, np.full((2, 2), i, dtype=np.uint8))
+        paths.append(str(p))
+    monkeypatch.setattr(
+        concurrent.futures,
+        "ThreadPoolExecutor",
+        MagicMock(side_effect=RuntimeError("executor unavailable")),
+    )
+    h = ImageStackHandler()
+    h.load_image_stack(paths)
+    stack = h.get_all_frames_as_array()
+    assert stack is not None and stack.shape == (2, 2, 2)

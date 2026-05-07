@@ -17,7 +17,8 @@ from unittest.mock import Mock, patch
 
 import pytest
 from PySide6.QtCore import QEvent, QPointF, Qt
-from PySide6.QtGui import QEnterEvent, QFocusEvent, QKeyEvent, QMouseEvent
+from PySide6.QtGui import QEnterEvent, QFocusEvent, QKeyEvent
+from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QDialog, QGridLayout, QMessageBox, QWidget
 
 from core.experiment_manager import Experiment  # pyright: ignore[reportMissingImports]
@@ -671,14 +672,12 @@ def test_user_card_mouse_click_emits_login_requested(app):
     card = _UserCard("Alice", grid_row=0, grid_col=0, grid_cols=1, parent=parent)
     called = []
     card.login_requested.connect(lambda user: called.append(user))
-    event = QMouseEvent(
-        QMouseEvent.Type.MouseButtonPress,
+    QTest.mouseClick(
+        card,
+        Qt.MouseButton.LeftButton,
+        Qt.KeyboardModifier.NoModifier,
         card.rect().center(),
-        Qt.LeftButton,
-        Qt.LeftButton,
-        Qt.NoModifier,
     )
-    card.mousePressEvent(event)
     assert called == ["Alice"]
 
 

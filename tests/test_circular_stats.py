@@ -14,6 +14,9 @@ from core.circular_stats import (
     rayleigh_test,
 )
 
+# En dash (U+2013), same as ``p_value`` strings in ``rao_spacing_test``.
+_EN = "\u2013"
+
 
 class TestRaoTableHelpers:
     def test_row_index_too_small_raises(self) -> None:
@@ -29,7 +32,37 @@ class TestRaoTableHelpers:
             (31, 27),
             (32, 27),
             (33, 28),
+            (37, 28),
+            (38, 29),
+            (42, 29),
+            (43, 30),
+            (47, 30),
+            (48, 31),
+            (62, 31),
+            (63, 32),
+            (87, 32),
+            (88, 33),
             (100, 33),
+            (125, 33),
+            (126, 34),
+            (175, 34),
+            (176, 35),
+            (250, 35),
+            (251, 36),
+            (350, 36),
+            (351, 37),
+            (450, 37),
+            (451, 38),
+            (550, 38),
+            (551, 39),
+            (650, 39),
+            (651, 40),
+            (750, 40),
+            (751, 41),
+            (850, 41),
+            (851, 42),
+            (950, 42),
+            (951, 43),
             (2000, 43),
         ],
     )
@@ -68,6 +101,57 @@ class TestRaoSpacingTest:
         out = rao_spacing_test(np.array([-10.0, 350.0, 90.0, 170.0]))
         assert out["n"] == 4
         assert "U" in out and "p_value" in out
+
+    @pytest.mark.parametrize(
+        ("angles", "expected_p"),
+        [
+            (
+                np.array([80.05400156, 83.93890403, 85.61343119, 70.89509776]),
+                f"0.001{_EN}0.01",
+            ),
+            (
+                np.array([335.94132899, 308.50075145, 299.17665529, 312.64366824]),
+                f"0.01{_EN}0.05",
+            ),
+            (
+                np.array([212.29210324, 241.03198121, 240.88589861, 188.29791919]),
+                f"0.05{_EN}0.10",
+            ),
+            (
+                np.array(
+                    [
+                        72.04410608,
+                        102.97287205,
+                        69.37785702,
+                        66.13046044,
+                        84.41640955,
+                        67.14665021,
+                        57.45546007,
+                        95.5375559,
+                    ]
+                ),
+                f"0.001{_EN}0.01",
+            ),
+            (
+                np.array(
+                    [
+                        322.56824591,
+                        117.79625267,
+                        342.09789341,
+                        322.48479507,
+                        350.66220465,
+                        346.05477035,
+                        114.08056131,
+                        337.76591354,
+                    ]
+                ),
+                f"0.05{_EN}0.10",
+            ),
+        ],
+    )
+    def test_p_value_brackets(self, angles: np.ndarray, expected_p: str) -> None:
+        out = rao_spacing_test(angles)
+        assert out["p_value"] == expected_p
 
 
 class TestRayleighTest:

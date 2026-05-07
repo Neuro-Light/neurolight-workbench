@@ -667,7 +667,9 @@ class ImageProcessor:
         present_indices = np.flatnonzero(absent_frame_mask)
 
         if len(present_indices) > 1:
-            correlation_matrix = np.corrcoef(neuron_trajectories[present_indices])
+            # Constant or near-constant trajectories yield zero std; corrcoef divides by std → NaNs + RuntimeWarning.
+            with np.errstate(divide="ignore", invalid="ignore"):
+                correlation_matrix = np.corrcoef(neuron_trajectories[present_indices])
 
             mean_correlations = np.zeros(len(present_indices), dtype=np.float32)
             for i in range(len(present_indices)):
