@@ -90,6 +90,8 @@ def ensure_public_user_exists() -> Path:
         if not recent.exists():
             recent.write_text(json.dumps({"recent": []}, indent=2), encoding="utf-8")
     except OSError:
+        # Best-effort setup: ignore filesystem errors and let callers continue.
+        # Public mode may be unavailable if the directory cannot be created.
         pass
     return exp_dir
 
