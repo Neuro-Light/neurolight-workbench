@@ -435,7 +435,7 @@ class MainWindow(QMainWindow):
             ls = self.analysis.get_lomb_scargle_widget()
             _lock_widget(ls.sampling_interval_spin)
         except Exception:
-            pass
+            logger.exception("Failed to apply Public User restriction to Lomb–Scargle sampling interval.")
 
         # Rayleigh/Rao tab: lock time-setting inputs and the plot button
         # (these drive re-computation that writes back to the experiment).
