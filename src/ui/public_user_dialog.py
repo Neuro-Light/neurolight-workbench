@@ -168,6 +168,8 @@ def sync_public_experiments() -> None:
             try:
                 f.unlink()
             except OSError:
+                # Best-effort cleanup: ignore deletion failures (e.g., file in use/permissions)
+                # so public experiment sync can continue.
                 pass
 
 
