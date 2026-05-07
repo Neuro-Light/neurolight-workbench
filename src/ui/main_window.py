@@ -620,11 +620,11 @@ class MainWindow(QMainWindow):
         try:
             self.menuBar().setCornerWidget(None, Qt.Corner.TopLeftCorner)
         except Exception:
-            pass
+            logger.debug("Ignoring failure while clearing top-left menu corner widget.", exc_info=True)
         try:
             self.menuBar().setCornerWidget(None, Qt.Corner.TopRightCorner)
         except Exception:
-            pass
+            logger.debug("Ignoring failure while clearing top-right menu corner widget.", exc_info=True)
         self._current_user_btn = None
         self._visibility_btn = None
         self._init_current_user_menu_corner()
