@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -90,6 +91,8 @@ def ensure_public_user_exists() -> Path:
         if not recent.exists():
             recent.write_text(json.dumps({"recent": []}, indent=2), encoding="utf-8")
     except OSError:
+        # Best-effort setup: ignore filesystem errors and let callers continue.
+        # Public mode may be unavailable if the directory cannot be created.
         pass
     return exp_dir
 
@@ -156,8 +159,8 @@ def sync_public_experiments() -> None:
     try:
         with open(_public_recent_file(), "w", encoding="utf-8") as fh:
             json.dump({"recent": recent_entries}, fh, indent=2)
-    except OSError:
-        pass
+    except OSError as exc:
+        print(f"Failed to write public recent experiments file: {exc}", file=sys.stderr)
 
     # Remove stale copies that are no longer public
     for f in pub_exp_dir.iterdir():
@@ -165,6 +168,8 @@ def sync_public_experiments() -> None:
             try:
                 f.unlink()
             except OSError:
+                # Best-effort cleanup: ignore deletion failures (e.g., file in use/permissions)
+                # so public experiment sync can continue.
                 pass
 
 

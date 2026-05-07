@@ -498,7 +498,10 @@ class MainWindow(QMainWindow):
             # Some UI elements (especially inside graph widgets) are toggled via the state_changed signal.
             self.workflow_manager.state_changed.emit()
         except Exception:
-            pass
+            logger.debug(
+                "Non-fatal: failed to emit workflow_manager.state_changed while clearing public-user restrictions.",
+                exc_info=True,
+            )
 
     def _sync_public_user_mode(self) -> None:
         """Ensure restrictions match the currently active user."""
@@ -611,19 +614,19 @@ class MainWindow(QMainWindow):
             self._visibility_btn = None
             try:
                 self.menuBar().setCornerWidget(None, Qt.Corner.TopRightCorner)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Ignoring failure while clearing top-right corner widget: %s", exc)
 
     def _rebuild_menu_corners(self) -> None:
         """Recreate menu corner widgets (needed after switching users)."""
         try:
             self.menuBar().setCornerWidget(None, Qt.Corner.TopLeftCorner)
         except Exception:
-            pass
+            logger.debug("Ignoring failure while clearing top-left menu corner widget.", exc_info=True)
         try:
             self.menuBar().setCornerWidget(None, Qt.Corner.TopRightCorner)
         except Exception:
-            pass
+            logger.debug("Ignoring failure while clearing top-right menu corner widget.", exc_info=True)
         self._current_user_btn = None
         self._visibility_btn = None
         self._init_current_user_menu_corner()
@@ -662,7 +665,7 @@ class MainWindow(QMainWindow):
                 try:
                     self.manager.save_experiment(self.experiment, self.current_experiment_path)
                 except Exception:
-                    pass
+                    logger.exception("Failed to save experiment after setting visibility to private.")
         else:
             reply = QMessageBox.question(
                 self,
@@ -678,7 +681,7 @@ class MainWindow(QMainWindow):
                 try:
                     self.manager.save_experiment(self.experiment, self.current_experiment_path)
                 except Exception:
-                    pass
+                    logger.exception("Failed to save experiment after setting visibility to public.")
 
         # Rebuild the Public user's view immediately (copy-based sync).
         try:
@@ -686,7 +689,7 @@ class MainWindow(QMainWindow):
 
             sync_public_experiments()
         except Exception:
-            pass
+            logger.exception("Failed to sync public experiments after visibility change.")
         self._update_visibility_button()
 
     def _reload_workbench_after_startup_choice(self, startup: StartupDialog) -> None:
