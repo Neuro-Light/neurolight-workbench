@@ -485,7 +485,7 @@ class MainWindow(QMainWindow):
         try:
             self.workflow_stepper.set_read_only(False)
         except Exception:
-            pass
+            logger.debug("Failed to clear read-only mode on workflow_stepper.", exc_info=True)
 
         # Re-apply workflow enable/disable rules after unlocking.
         try:
