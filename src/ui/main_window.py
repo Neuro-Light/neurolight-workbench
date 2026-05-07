@@ -491,7 +491,7 @@ class MainWindow(QMainWindow):
         try:
             self.workflow_manager.refresh_state()
         except Exception:
-            pass
+            logger.exception("Failed to refresh workflow state while clearing public-user restrictions.")
         try:
             # Some UI elements (especially inside graph widgets) are toggled via the state_changed signal.
             self.workflow_manager.state_changed.emit()
