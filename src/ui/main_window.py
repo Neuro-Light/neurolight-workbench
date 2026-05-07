@@ -463,7 +463,8 @@ class MainWindow(QMainWindow):
             try:
                 widget.setEnabled(was_enabled)
             except Exception:
-                pass
+                # Best-effort restore: widget may already be deleted or in an invalid Qt state.
+                logger.debug("Failed to restore widget enabled state while clearing public user restrictions.", exc_info=True)
         self._public_user_guards.clear()
 
         # Re-enable actions; workflow gating will re-disable as needed.
