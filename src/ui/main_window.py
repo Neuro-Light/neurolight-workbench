@@ -382,7 +382,7 @@ class MainWindow(QMainWindow):
                 guard = ReadOnlyGuard.lock(w)
                 self._public_user_guards.append((w, guard, was_enabled))
             except Exception:
-                pass
+                logger.exception("Failed to apply public-user lock to widget %r", w)
 
         # Disable global write actions (saving/settings/tools).
         for act in (
