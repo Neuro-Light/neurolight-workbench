@@ -480,7 +480,7 @@ class MainWindow(QMainWindow):
                 if act is not None:
                     act.setEnabled(True)
             except Exception:
-                pass
+                logger.debug("Failed to re-enable action during public-user restriction clear.", exc_info=True)
 
         try:
             self.workflow_stepper.set_read_only(False)
