@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import json
 import shutil
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -158,8 +159,8 @@ def sync_public_experiments() -> None:
     try:
         with open(_public_recent_file(), "w", encoding="utf-8") as fh:
             json.dump({"recent": recent_entries}, fh, indent=2)
-    except OSError:
-        pass
+    except OSError as exc:
+        print(f"Failed to write public recent experiments file: {exc}", file=sys.stderr)
 
     # Remove stale copies that are no longer public
     for f in pub_exp_dir.iterdir():
