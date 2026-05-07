@@ -663,7 +663,7 @@ class MainWindow(QMainWindow):
                 try:
                     self.manager.save_experiment(self.experiment, self.current_experiment_path)
                 except Exception:
-                    pass
+                    logger.exception("Failed to save experiment after setting visibility to private.")
         else:
             reply = QMessageBox.question(
                 self,
@@ -679,7 +679,7 @@ class MainWindow(QMainWindow):
                 try:
                     self.manager.save_experiment(self.experiment, self.current_experiment_path)
                 except Exception:
-                    pass
+                    logger.exception("Failed to save experiment after setting visibility to public.")
 
         # Rebuild the Public user's view immediately (copy-based sync).
         try:
@@ -687,7 +687,7 @@ class MainWindow(QMainWindow):
 
             sync_public_experiments()
         except Exception:
-            pass
+            logger.exception("Failed to sync public experiments after visibility change.")
         self._update_visibility_button()
 
     def _reload_workbench_after_startup_choice(self, startup: StartupDialog) -> None:
