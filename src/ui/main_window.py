@@ -424,7 +424,7 @@ class MainWindow(QMainWindow):
             ):
                 _lock_widget(w)
         except Exception:
-            pass
+            logger.exception("Failed to lock neuron detection controls for public user mode.")
 
         # View-only tabs (ROI Intensity, Trajectories, Lomb–Scargle) are intentionally
         # left fully interactive for the Public User. These controls only affect
