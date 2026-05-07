@@ -61,10 +61,11 @@ def fake_users_root(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Path:
 # ── public_user_dialog helpers ─────────────────────────────────────────────
 
 
-def test_is_public_user_exact_string_only() -> None:
+def test_is_public_user_tolerates_casing_and_whitespace() -> None:
     assert is_public_user(PUBLIC_USER_NAME) is True
-    assert is_public_user("public") is False
-    assert is_public_user("PUBLIC") is False
+    assert is_public_user("public") is True
+    assert is_public_user("PUBLIC") is True
+    assert is_public_user(" Public ") is True
     assert is_public_user("alice") is False
 
 

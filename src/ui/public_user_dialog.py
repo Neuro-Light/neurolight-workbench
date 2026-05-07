@@ -98,8 +98,13 @@ def ensure_public_user_exists() -> Path:
 
 
 def is_public_user(name: str) -> bool:
-    """Return True when *name* is the Public User account."""
-    return name == PUBLIC_USER_NAME
+    """Return True when *name* refers to the Public User account.
+
+    This intentionally tolerates casing/whitespace differences so that
+    cross-platform folder naming quirks (e.g. "public", "Public ") don't
+    break read-only behavior or syncing.
+    """
+    return name.strip().casefold() == PUBLIC_USER_NAME.casefold()
 
 
 def sync_public_experiments() -> None:
