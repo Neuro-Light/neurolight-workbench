@@ -450,7 +450,7 @@ class MainWindow(QMainWindow):
             ):
                 _lock_widget(w)
         except Exception:
-            pass
+            logger.exception("Failed to apply Public User restrictions to Rayleigh/Rao controls")
 
     def _clear_public_user_restrictions(self) -> None:
         """Remove read-only guards and re-enable normal-user actions."""
