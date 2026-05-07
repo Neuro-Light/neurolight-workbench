@@ -86,3 +86,15 @@ def test_compute_lomb_scargle_discards_nonfinite_samples():
 
     assert out["n_samples"] == int(mask.sum())
     assert out["frequency"].size == 100
+
+
+def test_compute_lomb_scargle_nonfinite_power_raises(monkeypatch):
+    t = np.linspace(0.0, 10.0, 50)
+    y = np.sin(2.0 * np.pi * 0.5 * t)
+
+    def _bad_lomb(_t, _y, angular_freq, **kwargs):
+        return np.full(angular_freq.shape[0], np.nan, dtype=float)
+
+    monkeypatch.setattr("core.lomb_scargle.lombscargle", _bad_lomb)
+    with pytest.raises(RuntimeError, match="non-finite power"):
+        compute_lomb_scargle(t, y, min_freq=0.01, max_freq=1.0, num_freqs=20)

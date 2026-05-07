@@ -67,3 +67,38 @@ def test_extract_roi_intensity_time_series_validates_dimensions():
     analyzer = _make_analyzer()
     with pytest.raises(ValueError, match="must be a 3D array"):
         analyzer.extract_roi_intensity_time_series(np.zeros((4, 4)))
+
+
+def test_generate_plots_hist_and_line():
+    analyzer = _make_analyzer()
+    data = np.array([1.0, 2.0, 3.0])
+    fig1 = analyzer.generate_plots(data, plot_type="hist")
+    fig2 = analyzer.generate_plots(data, plot_type="line")
+    assert fig1 is not None and fig2 is not None
+
+
+def test_save_results_to_experiment_appends_run():
+    analyzer = _make_analyzer()
+    exp = Experiment(name="x")
+    analyzer.save_results_to_experiment(exp)
+    assert exp.analysis_results["runs"]
+
+
+def test_time_series_and_correlation_stubs():
+    analyzer = _make_analyzer()
+    assert analyzer.time_series_analysis(np.array([1.0])) == {}
+    assert analyzer.correlation_analysis(np.array([1.0]), np.array([2.0])) == {}
+
+
+def test_extract_roi_intensity_legacy_missing_rect_returns_zeros():
+    analyzer = _make_analyzer()
+    frames = np.zeros((2, 4, 4), dtype=np.float32)
+    out = analyzer.extract_roi_intensity_time_series(frames, roi=None)
+    assert out.tolist() == [0.0, 0.0]
+
+
+def test_extract_roi_intensity_legacy_empty_rect_returns_zeros():
+    analyzer = _make_analyzer()
+    frames = np.zeros((2, 4, 4), dtype=np.float32)
+    out = analyzer.extract_roi_intensity_time_series(frames, roi=None, roi_x=2, roi_y=2, roi_width=0, roi_height=2)
+    assert out.tolist() == [0.0, 0.0]

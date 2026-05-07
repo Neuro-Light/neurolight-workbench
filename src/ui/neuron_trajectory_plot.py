@@ -792,7 +792,9 @@ class NeuronTrajectoryPlotWidget(QWidget):
                 fontsize=9,
                 alpha=0.7,
             )
-        ax.legend(loc="best")
+        _handles, legend_labels = ax.get_legend_handles_labels()
+        if legend_labels:
+            ax.legend(loc="best")
         self._apply_theme(ax)
 
         # Update status label with peak/trough info if enabled

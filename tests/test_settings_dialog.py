@@ -7,7 +7,8 @@ matplotlib.use("Agg")
 from unittest.mock import patch
 
 import pytest
-from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QColor
+from PySide6.QtWidgets import QApplication, QColorDialog
 
 from ui.settings_dialog import ROI_LABELS, THEME_VALUES, SettingsDialog
 
@@ -165,3 +166,34 @@ class TestSettingsDialogApply:
                                 dialog._apply_and_accept()
                                 mock_peak.assert_called_once_with("#112233")
                                 mock_trough.assert_called_once_with("#445566")
+
+
+class TestSettingsDialogColorPickers:
+    """Cover QColorDialog branches that update swatches and stored hex values."""
+
+    def test_pick_roi_color_applies_valid_choice(self, app):
+        with patch.object(QColorDialog, "getColor", return_value=QColor("#abcdef")):
+            d = SettingsDialog()
+            d._pick_roi_color("roi_1")
+            assert d._roi_colors["roi_1"] == "#abcdef"
+
+    def test_pick_avg_traj_color_applies_valid_choice(self, app):
+        with patch.object(QColorDialog, "getColor", return_value=QColor("#112233")):
+            d = SettingsDialog()
+            d._pick_avg_traj_color()
+            assert d._avg_traj_color == "#112233"
+
+    def test_pick_avg_roi_color_applies_valid_choice(self, app):
+        with patch.object(QColorDialog, "getColor", return_value=QColor("#445566")):
+            d = SettingsDialog()
+            d._pick_avg_roi_color("roi_1")
+            assert d._avg_traj_roi_colors["roi_1"] == "#445566"
+
+    def test_pick_peak_and_trough_colors_apply(self, app):
+        with patch.object(QColorDialog, "getColor", return_value=QColor("#778899")):
+            d = SettingsDialog()
+            d._pick_peak_color()
+            assert d._peak_marker_color == "#778899"
+        with patch.object(QColorDialog, "getColor", return_value=QColor("#aabbcc")):
+            d._pick_trough_color()
+            assert d._trough_marker_color == "#aabbcc"

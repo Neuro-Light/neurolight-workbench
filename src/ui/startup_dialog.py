@@ -44,6 +44,24 @@ from ui.user_selection_dialog import UserAccountActionsDialog, UserSelectionDial
 OPTIONS_LABEL = "..."
 
 
+def _public_recent_row_label(rec: dict, path: str) -> str:
+    """Label for Public User recent rows: experiment name — by owner.
+
+    *owner* is shown with the same casing as the user folder name (or the
+    ``owner`` field in recent JSON) — never normalized, so it matches the
+    profile name users see elsewhere.
+    """
+    name = (rec.get("name") or Path(path).stem if path else "").strip() or "Unnamed"
+    owner = rec.get("owner")
+    if not owner and path:
+        stem = Path(path).stem
+        if "__" in stem:
+            owner = stem.split("__", 1)[0]
+    if owner:
+        return f"{name} - by {owner}"
+    return name
+
+
 class RecentExperimentRow(QWidget):
     """Single row in the recent experiments list: centered name + options button (...)."""
 
@@ -296,7 +314,11 @@ class StartupDialog(QDialog):
                         continue
                 except Exception:
                     continue
-            name = rec.get("name") or Path(path).stem if path else ""
+            name = (
+                _public_recent_row_label(rec, path)
+                if self._public_mode
+                else (rec.get("name") or Path(path).stem if path else "")
+            )
             list_item = QListWidgetItem()
             list_item.setData(Qt.UserRole, path)
             list_item.setSizeHint(self._row_size_hint())

@@ -316,3 +316,62 @@ def test_stepper_description_shows_current_step(app) -> None:
     stepper = WorkflowStepper(wm)
     desc_text = stepper._description_label.text()
     assert len(desc_text) > 0
+
+
+def _advance_workflow_to(wm: WorkflowManager, target: WorkflowStep) -> None:
+    while wm.current_step != target:
+        wm.mark_step_ready(wm.current_step)
+        assert wm.complete_current_step() is True
+
+
+def test_stepper_set_read_only_installs_and_removes_guards(app) -> None:
+    wm = WorkflowManager(_fresh_experiment())
+    stepper = WorkflowStepper(wm)
+    stepper.set_read_only(True)
+    assert stepper._read_only_enabled is True
+    assert len(stepper._read_only_guards) > 0
+    stepper.set_read_only(False)
+    assert stepper._read_only_enabled is False
+    assert stepper._read_only_guards == []
+
+
+def test_stepper_set_read_only_idempotent(app) -> None:
+    wm = WorkflowManager(_fresh_experiment())
+    stepper = WorkflowStepper(wm)
+    stepper.set_read_only(True)
+    n = len(stepper._read_only_guards)
+    stepper.set_read_only(True)
+    assert len(stepper._read_only_guards) == n
+
+
+def test_stepper_skip_alignment_advances_from_align_step(app) -> None:
+    wm = WorkflowManager(_fresh_experiment())
+    stepper = WorkflowStepper(wm)
+    _advance_workflow_to(wm, WorkflowStep.ALIGN_IMAGES)
+    assert wm.current_step == WorkflowStep.ALIGN_IMAGES
+    stepper._on_skip_alignment_clicked()
+    assert wm.current_step == WorkflowStep.SELECT_ROI
+
+
+def test_stepper_step_click_navigates_to_completed_step(app) -> None:
+    wm = WorkflowManager(_fresh_experiment())
+    wm.mark_step_ready(WorkflowStep.LOAD_IMAGES)
+    wm.complete_current_step()
+    assert wm.current_step == WorkflowStep.EDIT_IMAGES
+    stepper = WorkflowStepper(wm)
+    stepper._make_step_clicked_handler(WorkflowStep.LOAD_IMAGES)()
+    assert wm.current_step == WorkflowStep.LOAD_IMAGES
+
+
+def test_stepper_step_click_ignored_for_locked_step(app) -> None:
+    wm = WorkflowManager(_fresh_experiment())
+    stepper = WorkflowStepper(wm)
+    stepper._make_step_clicked_handler(WorkflowStep.ANALYZE_GRAPHS)()
+    assert wm.current_step == WorkflowStep.LOAD_IMAGES
+
+
+def test_stepper_step_click_noop_when_already_current(app) -> None:
+    wm = WorkflowManager(_fresh_experiment())
+    stepper = WorkflowStepper(wm)
+    stepper._make_step_clicked_handler(WorkflowStep.LOAD_IMAGES)()
+    assert wm.current_step == WorkflowStep.LOAD_IMAGES

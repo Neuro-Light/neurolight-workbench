@@ -147,6 +147,7 @@ def sync_public_experiments() -> None:
                 {
                     "path": str(dest.resolve()),
                     "name": exp.get("name", nexp_file.stem),
+                    "owner": user_dir.name,
                     "last_opened": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                 }
             )

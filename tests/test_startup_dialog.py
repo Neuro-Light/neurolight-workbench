@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
 import pytest
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtWidgets import QApplication, QDialog, QMessageBox
 
-from ui.startup_dialog import NewExperimentDialog, RecentExperimentRow, StartupDialog
+from ui.startup_dialog import NewExperimentDialog, RecentExperimentRow, StartupDialog, _public_recent_row_label
 
 
 @pytest.fixture
@@ -28,6 +28,34 @@ def experiments_dir(tmp_path):
 
 
 # ── RecentExperimentRow ──────────────────────────────────────────────────
+
+
+class TestPublicRecentRowLabel:
+    def test_uses_owner_field(self) -> None:
+        assert _public_recent_row_label({"name": "My Study", "owner": "alice"}, "/x/y.nexp") == "My Study - by alice"
+
+    def test_owner_field_preserves_exact_casing(self) -> None:
+        assert (
+            _public_recent_row_label({"name": "My Study", "owner": "SoMeUsEr"}, "/x/y.nexp") == "My Study - by SoMeUsEr"
+        )
+
+    def test_parses_owner_from_public_copy_filename(self) -> None:
+        assert (
+            _public_recent_row_label({"name": "My Study"}, r"C:\users\Public\experiments\bob__MyStudy.nexp")
+            == "My Study - by bob"
+        )
+
+    def test_parses_owner_casing_from_filename(self) -> None:
+        assert (
+            _public_recent_row_label(
+                {"name": "My Study"},
+                r"C:\users\Public\experiments\MiXeD__MyStudy.nexp",
+            )
+            == "My Study - by MiXeD"
+        )
+
+    def test_fallback_without_owner(self) -> None:
+        assert _public_recent_row_label({"name": "Solo"}, "/no/underscore.nexp") == "Solo"
 
 
 class TestRecentExperimentRow:
@@ -71,7 +99,7 @@ class TestNewExperimentDialog:
         assert dlg.isModal() is True
 
     def test_default_date_is_today(self, app, experiments_dir) -> None:
-        expected = datetime.utcnow().strftime("%Y-%m-%d")
+        expected = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         dlg = NewExperimentDialog(experiments_dir)
         assert expected in dlg.date_edit.text()
 

@@ -506,6 +506,8 @@ class UserSelectionDialog(QDialog):
         self.accept()
 
     def _on_delete_user(self, user_name: str) -> None:
+        if user_name == PUBLIC_USER_NAME:
+            return
         dlg = _DeleteConfirmDialog(user_name, self)
         if dlg.exec() != QDialog.Accepted:
             return

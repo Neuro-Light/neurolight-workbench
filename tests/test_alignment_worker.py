@@ -8,6 +8,7 @@ import numpy as np
 import pytest
 from PySide6.QtWidgets import QApplication
 
+import ui.alignment_worker as alignment_worker
 from ui.alignment_worker import AlignmentWorker
 
 
@@ -334,3 +335,271 @@ def test_run_emits_progress_signals(mock_sr_cls: MagicMock, qapp: QApplication) 
     w.run()
 
     assert progress_hits  # At least one progress signal emitted
+
+
+@patch("ui.alignment_worker.ProcessPoolExecutor")
+@patch("pystackreg.StackReg")
+def test_run_parallel_register_and_transform(
+    mock_sr_cls: MagicMock, mock_pool_cls: MagicMock, monkeypatch: pytest.MonkeyPatch, qapp: QApplication
+) -> None:
+    """Large stacks use the process pool when not frozen (mocked executor)."""
+    monkeypatch.setattr(alignment_worker, "_FROZEN", False)
+    monkeypatch.setattr(alignment_worker, "as_completed", lambda pending: list(pending))
+
+    mock_sr = MagicMock()
+    mock_sr_cls.return_value = mock_sr
+
+    exec_inst = MagicMock()
+    mock_pool_cls.return_value = exec_inst
+
+    reg_futures: list[MagicMock] = []
+    xform_futures: list[MagicMock] = []
+    for _ in range(11):
+        f = MagicMock()
+        f.result.return_value = np.eye(3, dtype=np.float64)
+        reg_futures.append(f)
+    for _ in range(12):
+        f = MagicMock()
+        f.result.return_value = np.zeros((4, 4), dtype=np.float64)
+        xform_futures.append(f)
+
+    def _submit(fn, *args, **kwargs):
+        if fn is alignment_worker._register_pair:
+            return reg_futures.pop(0)
+        if fn is alignment_worker._transform_frame:
+            return xform_futures.pop(0)
+        raise AssertionError(f"unexpected fn {fn!r}")
+
+    exec_inst.submit.side_effect = _submit
+
+    stack = np.ones((12, 4, 4), dtype=np.uint16) * 90
+    w = AlignmentWorker(stack, reference="first", enable_multiprocessing=False)
+
+    finished_args: list[tuple] = []
+    error_args: list[str] = []
+    w.finished.connect(lambda a, b, c: finished_args.append((a, b, c)))
+    w.error.connect(lambda e: error_args.append(e))
+
+    w.run()
+
+    assert not error_args
+    assert len(finished_args) == 1
+    exec_inst.shutdown.assert_called()
+
+
+@patch("ui.alignment_worker.ProcessPoolExecutor")
+@patch("pystackreg.StackReg")
+def test_run_parallel_mean_reference(
+    mock_sr_cls: MagicMock, mock_pool_cls: MagicMock, monkeypatch: pytest.MonkeyPatch, qapp: QApplication
+) -> None:
+    """Parallel registration supports ``reference='mean'`` (mean stack projection)."""
+    monkeypatch.setattr(alignment_worker, "_FROZEN", False)
+    monkeypatch.setattr(alignment_worker, "as_completed", lambda pending: list(pending))
+
+    mock_sr = MagicMock()
+    mock_sr_cls.return_value = mock_sr
+
+    exec_inst = MagicMock()
+    mock_pool_cls.return_value = exec_inst
+
+    reg_futures: list[MagicMock] = []
+    xform_futures: list[MagicMock] = []
+    for _ in range(11):
+        f = MagicMock()
+        f.result.return_value = np.eye(3, dtype=np.float64)
+        reg_futures.append(f)
+    for _ in range(12):
+        f = MagicMock()
+        f.result.return_value = np.zeros((4, 4), dtype=np.float64)
+        xform_futures.append(f)
+
+    def _submit(fn, *args, **kwargs):
+        if fn is alignment_worker._register_pair:
+            return reg_futures.pop(0)
+        if fn is alignment_worker._transform_frame:
+            return xform_futures.pop(0)
+        raise AssertionError(f"unexpected fn {fn!r}")
+
+    exec_inst.submit.side_effect = _submit
+
+    stack = np.ones((12, 4, 4), dtype=np.uint16) * 40
+    w = AlignmentWorker(stack, reference="mean", enable_multiprocessing=False)
+
+    finished_args: list[tuple] = []
+    w.finished.connect(lambda a, b, c: finished_args.append((a, b, c)))
+    w.run()
+
+    assert len(finished_args) == 1
+
+
+@patch("ui.alignment_worker.ProcessPoolExecutor")
+@patch("pystackreg.StackReg")
+def test_run_parallel_executor_shutdown_without_cancel_futures_kw(
+    mock_sr_cls: MagicMock, mock_pool_cls: MagicMock, monkeypatch: pytest.MonkeyPatch, qapp: QApplication
+) -> None:
+    """``shutdown(..., cancel_futures=True)`` falls back on older executor APIs."""
+    monkeypatch.setattr(alignment_worker, "_FROZEN", False)
+    monkeypatch.setattr(alignment_worker, "as_completed", lambda pending: list(pending))
+
+    mock_sr = MagicMock()
+    mock_sr_cls.return_value = mock_sr
+
+    exec_inst = MagicMock()
+    mock_pool_cls.return_value = exec_inst
+    attempts = {"n": 0}
+
+    def _shutdown(*a, **kwargs):
+        attempts["n"] += 1
+        if attempts["n"] == 1:
+            raise TypeError
+        return None
+
+    exec_inst.shutdown.side_effect = _shutdown
+
+    reg_futures = [MagicMock() for _ in range(11)]
+    for f in reg_futures:
+        f.result.return_value = np.eye(3, dtype=np.float64)
+    xform_futures = [MagicMock() for _ in range(12)]
+    for f in xform_futures:
+        f.result.return_value = np.zeros((4, 4), dtype=np.float64)
+    all_futures = reg_futures + xform_futures
+    idx = {"i": 0}
+
+    def _submit(fn, *args, **kwargs):
+        f = all_futures[idx["i"]]
+        idx["i"] += 1
+        return f
+
+    exec_inst.submit.side_effect = _submit
+
+    stack = np.ones((12, 4, 4), dtype=np.uint16) * 3
+    w = AlignmentWorker(stack, reference="first", enable_multiprocessing=False)
+    w.run()
+
+    assert attempts["n"] == 2
+
+
+@patch("pystackreg.StackReg")
+def test_run_mean_reference_full_pipeline(mock_sr_cls: MagicMock, qapp: QApplication) -> None:
+    mock_sr = MagicMock()
+    mock_sr.register.return_value = np.eye(3, dtype=np.float64)
+    mock_sr.transform.return_value = np.zeros((4, 4), dtype=np.float64)
+    mock_sr_cls.return_value = mock_sr
+
+    stack = np.ones((4, 4, 4), dtype=np.uint16) * 55
+    w = AlignmentWorker(stack, reference="mean", enable_multiprocessing=False)
+
+    finished_args: list[tuple] = []
+    w.finished.connect(lambda a, b, c: finished_args.append((a, b, c)))
+    w.run()
+
+    assert len(finished_args) == 1
+    _, _, scores = finished_args[0]
+    assert len(scores) == 4
+
+
+@patch("pystackreg.StackReg")
+def test_run_custom_reference_uses_register_stack(mock_sr_cls: MagicMock, qapp: QApplication) -> None:
+    mock_sr = MagicMock()
+    mock_sr.register_stack.return_value = np.tile(np.eye(3), (3, 1, 1))
+    mock_sr.transform.return_value = np.zeros((4, 4), dtype=np.float64)
+    mock_sr_cls.return_value = mock_sr
+
+    stack = np.ones((3, 4, 4), dtype=np.uint16) * 12
+    w = AlignmentWorker(stack, reference="third", enable_multiprocessing=False)
+
+    finished_args: list[tuple] = []
+    w.finished.connect(lambda a, b, c: finished_args.append((a, b, c)))
+    w.run()
+
+    assert len(finished_args) == 1
+    mock_sr.register_stack.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "transform_type",
+    ["translation", "scaled_rotation", "affine", "bilinear", "RIGID_BODY", "not_a_mapped_mode"],
+)
+@patch("pystackreg.StackReg")
+def test_run_accepts_transform_type_strings(mock_sr_cls: MagicMock, transform_type: str, qapp: QApplication) -> None:
+    mock_sr = MagicMock()
+    mock_sr.register.return_value = np.eye(3, dtype=np.float64)
+    mock_sr.transform.return_value = np.zeros((4, 4), dtype=np.float64)
+    mock_sr_cls.return_value = mock_sr
+
+    stack = np.ones((2, 4, 4), dtype=np.uint16) * 77
+    w = AlignmentWorker(stack, transform_type=transform_type, reference="first", enable_multiprocessing=False)
+
+    finished_args: list[tuple] = []
+    w.finished.connect(lambda a, b, c: finished_args.append((a, b, c)))
+    w.run()
+
+    assert len(finished_args) == 1
+    mock_sr_cls.assert_called_once()
+
+
+@patch("pystackreg.StackReg")
+def test_run_uint8_stack_denormalizes_to_uint8(mock_sr_cls: MagicMock, qapp: QApplication) -> None:
+    mock_sr = MagicMock()
+    mock_sr.register.return_value = np.eye(3, dtype=np.float64)
+    mock_sr.transform.return_value = np.zeros((4, 4), dtype=np.float64)
+    mock_sr_cls.return_value = mock_sr
+
+    stack = np.array([[[10, 20], [30, 40]], [[50, 60], [70, 80]]], dtype=np.uint8)
+    w = AlignmentWorker(stack, reference="first", enable_multiprocessing=False)
+
+    finished_args: list[tuple] = []
+    w.finished.connect(lambda a, b, c: finished_args.append((a, b, c)))
+    w.run()
+
+    aligned, _, _ = finished_args[0]
+    assert aligned.dtype == np.uint8
+
+
+@patch("pystackreg.StackReg")
+def test_run_float_stack_preserves_float_dtype(mock_sr_cls: MagicMock, qapp: QApplication) -> None:
+    mock_sr = MagicMock()
+    mock_sr.register.return_value = np.eye(3, dtype=np.float64)
+    mock_sr.transform.return_value = np.zeros((4, 4), dtype=np.float64)
+    mock_sr_cls.return_value = mock_sr
+
+    stack = np.ones((2, 4, 4), dtype=np.float32) * 0.25
+    w = AlignmentWorker(stack, reference="first", enable_multiprocessing=False)
+
+    finished_args: list[tuple] = []
+    w.finished.connect(lambda a, b, c: finished_args.append((a, b, c)))
+    w.run()
+
+    aligned, _, _ = finished_args[0]
+    assert aligned.dtype == np.float32
+
+
+def test_register_parallel_cancel_returns_none(qapp: QApplication) -> None:
+    w = AlignmentWorker(np.ones((5, 3, 3), dtype=np.uint16), reference="first")
+    exec_mock = MagicMock()
+    fut = MagicMock()
+
+    def _boom(*a, **k):
+        w.request_cancel()
+        return fut
+
+    exec_mock.submit.side_effect = _boom
+    fut.result.return_value = np.eye(3)
+
+    assert w._register_parallel(exec_mock, np.ones((5, 3, 3), dtype=np.uint16), 0, 5) is None
+
+
+def test_transform_parallel_cancel_returns_none(qapp: QApplication) -> None:
+    w = AlignmentWorker(np.ones((3, 3, 3), dtype=np.uint16))
+    exec_mock = MagicMock()
+    fut = MagicMock()
+
+    def _boom(*a, **k):
+        w.request_cancel()
+        return fut
+
+    exec_mock.submit.side_effect = _boom
+    fut.result.return_value = np.zeros((3, 3), dtype=np.float64)
+    tmats = np.tile(np.eye(3), (3, 1, 1))
+
+    assert w._transform_parallel(exec_mock, np.ones((3, 3, 3), dtype=np.uint16), tmats, 0, 3) is None

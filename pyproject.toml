@@ -56,7 +56,6 @@ source = ["src"]
 branch = true
 omit = [
     "src/__init__.py",
-    "src/main.py",
 ]
 
 [tool.coverage.report]
@@ -69,5 +68,5 @@ exclude_lines = [
 ]
 show_missing = true
 skip_covered = true
-fail_under = 0
+fail_under = 80
 
