@@ -3,7 +3,7 @@ import os
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QDialog
 
@@ -38,6 +38,10 @@ else:
 
 
 def main() -> int:
+    # macOS uses a native menu bar by default; QMenuBar.setCornerWidget() (Current User,
+    # Private/Public toggle) is then unreliable or invisible. Force a Qt-drawn menu bar.
+    if sys.platform == "darwin":
+        QApplication.setAttribute(Qt.ApplicationAttribute.AA_DontUseNativeMenuBar, True)
     app = QApplication(sys.argv)
     if _LOGO_PATH.is_file():
         app.setWindowIcon(QIcon(str(_LOGO_PATH)))

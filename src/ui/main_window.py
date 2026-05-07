@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QMainWindow,
@@ -232,6 +233,7 @@ class MainWindow(QMainWindow):
         self.user_recent_file: Path | None = recent_file
         self._current_user_btn: QPushButton | None = None
         self._visibility_btn: QPushButton | None = None
+        self._header_bar: QWidget | None = None
         self._action_save: QAction | None = None
         self._action_save_as: QAction | None = None
         self._action_experiment_settings: QAction | None = None
@@ -263,7 +265,6 @@ class MainWindow(QMainWindow):
         self.workflow_stepper.requestAlignImages.connect(self._align_images)
 
         self._init_menu()
-        self._init_current_user_menu_corner()
         self._init_layout()
 
     # ------------------------------------------------------------------
@@ -589,17 +590,35 @@ class MainWindow(QMainWindow):
         about_action = help_meun.addAction("About")
         about_action.triggered.connect(self.open_website)
 
-    def _init_current_user_menu_corner(self) -> None:
+    def _init_header_bar(self) -> None:
+        """Create the in-window header bar (cross-platform).
+
+        On macOS, Qt uses the native menu bar by default; native menu bars don't
+        reliably render ``QMenuBar.setCornerWidget``. Keeping these controls
+        inside the window makes the UI consistent across OSes.
+        """
+        # Clear any previous references
+        self._header_bar = None
+        self._current_user_btn = None
+        self._visibility_btn = None
+
         if self.user_experiments_dir is None:
             return
 
-        # User button — left corner, exactly as the original code had it.
+        header = QWidget()
+        header.setObjectName("mainWindowHeaderBar")
+        row = QHBoxLayout(header)
+        row.setContentsMargins(8, 6, 8, 6)
+        row.setSpacing(8)
+
         self._current_user_btn = QPushButton(current_user_button_text(self.user_experiments_dir.parent.name))
         self._current_user_btn.setProperty("class", "tab-action")
         self._current_user_btn.clicked.connect(self._open_user_account_popup)
-        self.menuBar().setCornerWidget(self._current_user_btn, Qt.Corner.TopLeftCorner)
+        row.addWidget(self._current_user_btn, 0, Qt.AlignmentFlag.AlignLeft)
 
-        # Private / Public toggle — right corner, hidden for Public User.
+        row.addStretch(1)
+
+        # Private / Public toggle — hidden for Public User.
         if not self._is_public_user_mode():
             self._visibility_btn = QPushButton("Private")
             self._visibility_btn.setProperty("class", "tab-action")
@@ -608,28 +627,34 @@ class MainWindow(QMainWindow):
                 "Make this experiment visible to the Public User.\nAvailable once the Analysis step is reached."
             )
             self._visibility_btn.clicked.connect(self._toggle_experiment_visibility)
-            self.menuBar().setCornerWidget(self._visibility_btn, Qt.Corner.TopRightCorner)
+            row.addWidget(self._visibility_btn, 0, Qt.AlignmentFlag.AlignRight)
+            self._update_visibility_button()
         else:
-            # Ensure any prior session's visibility button is removed when switching into Public mode.
             self._visibility_btn = None
-            try:
-                self.menuBar().setCornerWidget(None, Qt.Corner.TopRightCorner)
-            except Exception as exc:
-                logger.debug("Ignoring failure while clearing top-right corner widget: %s", exc)
 
-    def _rebuild_menu_corners(self) -> None:
-        """Recreate menu corner widgets (needed after switching users)."""
-        try:
-            self.menuBar().setCornerWidget(None, Qt.Corner.TopLeftCorner)
-        except Exception:
-            logger.debug("Ignoring failure while clearing top-left menu corner widget.", exc_info=True)
-        try:
-            self.menuBar().setCornerWidget(None, Qt.Corner.TopRightCorner)
-        except Exception:
-            logger.debug("Ignoring failure while clearing top-right menu corner widget.", exc_info=True)
-        self._current_user_btn = None
-        self._visibility_btn = None
-        self._init_current_user_menu_corner()
+        self._header_bar = header
+
+    def _rebuild_header_bar(self) -> None:
+        """Recreate header bar widgets (needed after switching users)."""
+        container = self.centralWidget()
+        if container is None:
+            self._init_header_bar()
+            return
+        layout = container.layout()
+        if layout is None:
+            self._init_header_bar()
+            return
+
+        if self._header_bar is not None:
+            try:
+                layout.removeWidget(self._header_bar)
+                self._header_bar.deleteLater()
+            except Exception:
+                logger.debug("Ignoring failure while removing header bar.", exc_info=True)
+
+        self._init_header_bar()
+        if self._header_bar is not None:
+            layout.insertWidget(0, self._header_bar)
 
     def _is_public_user_mode(self) -> bool:
         """Return True when the current session belongs to the Public User."""
@@ -698,7 +723,7 @@ class MainWindow(QMainWindow):
         self.user_experiments_dir = startup.experiments_dir
         self.user_recent_file = startup.experiments_dir.parent / "recent_experiments.json"
         self.manager = ExperimentManager(self.user_recent_file)
-        self._rebuild_menu_corners()
+        self._rebuild_header_bar()
 
         self.experiment = startup.experiment  # type: ignore[assignment]
         self.set_current_experiment_path(startup.experiment_path, persist_workflow=False)
@@ -804,7 +829,7 @@ class MainWindow(QMainWindow):
         self.user_experiments_dir = user_dialog.selected_user_experiments_dir
         self.user_recent_file = self.user_experiments_dir.parent / "recent_experiments.json"
         self.manager = ExperimentManager(self.user_recent_file)
-        self._rebuild_menu_corners()
+        self._rebuild_header_bar()
 
         if self._is_public_user_mode():
             from ui.public_user_dialog import sync_public_experiments
@@ -982,6 +1007,9 @@ class MainWindow(QMainWindow):
         layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
+        self._init_header_bar()
+        if self._header_bar is not None:
+            layout.addWidget(self._header_bar)
         layout.addWidget(self.workflow_stepper)
         layout.addWidget(splitter)
 
