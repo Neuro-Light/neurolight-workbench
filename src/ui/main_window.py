@@ -612,8 +612,8 @@ class MainWindow(QMainWindow):
             self._visibility_btn = None
             try:
                 self.menuBar().setCornerWidget(None, Qt.Corner.TopRightCorner)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug("Ignoring failure while clearing top-right corner widget: %s", exc)
 
     def _rebuild_menu_corners(self) -> None:
         """Recreate menu corner widgets (needed after switching users)."""
