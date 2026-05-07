@@ -397,7 +397,7 @@ class MainWindow(QMainWindow):
                 if act is not None:
                     act.setEnabled(False)
             except Exception:
-                pass
+                logger.exception("Failed to disable action in public user mode: %r", act)
 
         # Workflow navigation locked — Public User stays on Analysis
         self.workflow_stepper.set_read_only(True)
