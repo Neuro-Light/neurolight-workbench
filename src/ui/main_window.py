@@ -459,7 +459,7 @@ class MainWindow(QMainWindow):
             try:
                 widget.removeEventFilter(guard)  # type: ignore[arg-type]
             except Exception:
-                pass
+                logger.debug("Non-fatal: failed to remove public-user event filter from widget.", exc_info=True)
             try:
                 widget.setEnabled(was_enabled)
             except Exception:
