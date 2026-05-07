@@ -496,7 +496,10 @@ class MainWindow(QMainWindow):
             # Some UI elements (especially inside graph widgets) are toggled via the state_changed signal.
             self.workflow_manager.state_changed.emit()
         except Exception:
-            pass
+            logger.debug(
+                "Non-fatal: failed to emit workflow_manager.state_changed while clearing public-user restrictions.",
+                exc_info=True,
+            )
 
     def _sync_public_user_mode(self) -> None:
         """Ensure restrictions match the currently active user."""
