@@ -13,11 +13,16 @@ Sponsored by Dr. Allen (OHSU) and Dr. Doerry (NAU). Developed by team NeuroNauts
 
 ## Key Features
 
+- **Guided 6-Step Workflow** — Step-gated pipeline (Load → Edit → Align → ROI → Detect → Analyze) prevents out-of-order analysis
 - **Dual SCN ROI Selection** — Define two independent regions of interest over SCN tissue for side-by-side circadian analysis
-- **Automated Neuron Detection** — Adaptive thresholding via OpenCV identifies active neurons without manual marking
+- **Image Culling Interface** — Mark and exclude poor-quality frames before alignment using a bracket-selection tool
+- **Contrast & Exposure Editing** — Per-frame brightness/contrast adjustment so structures of interest are clearly visible
 - **Image Alignment** — PyStackReg corrects for drift across image stacks before analysis
+- **Automated Neuron Detection** — Adaptive thresholding via OpenCV identifies active neurons without manual marking
 - **Circadian Period Estimation** — Lomb-Scargle periodogram extracts period from non-uniformly sampled fluorescence data
 - **Rhythm Significance Testing** — Rayleigh and Rao circular statistics assess whether detected rhythms are statistically meaningful
+- **Toggleable Peak/Trough Markers** — Visualize signal extrema across ROI intensity and trajectory plots
+- **Time-Unit X-Axis** — Display plots in frames or real-world minutes based on acquisition start time and interval
 - **EXIF-Based Timestamps** — Automatically extracts capture times from image metadata for accurate time-axis labeling
 - **User Profiles** — Per-user login system for managing separate experiment sessions
 - **CSV Export** — Export neuron peak and trough data for downstream analysis
@@ -32,6 +37,9 @@ NeuroLight follows a **Model-View-Presenter (MVP)** pattern with an **EventBus**
 
 ```
 Load TIF Stack
+     |
+     v
+Image Culling (exclude poor-quality frames)
      |
      v
 Image Alignment (PyStackReg)
@@ -65,23 +73,28 @@ neurolight-workbench/
 ├── src/
 │   ├── main.py                    # Entry point
 │   ├── core/
-│   │   ├── event_bus.py           # Decoupled pub/sub event system
 │   │   ├── image_processor.py     # Alignment + neuron detection pipeline
+│   │   ├── alignment_mp.py        # Multiprocessing-safe alignment workers
+│   │   ├── lomb_scargle.py        # Lomb-Scargle periodogram computation
 │   │   ├── circular_stats.py      # Rayleigh + Rao circular statistics
-│   │   ├── data_analyzer.py       # Intensity extraction + Lomb-Scargle
+│   │   ├── roi.py                 # ROI geometry and mask utilities
+│   │   ├── data_analyzer.py       # Intensity extraction helpers
 │   │   └── experiment_manager.py  # Session persistence (.nexp files)
 │   ├── ui/
 │   │   ├── main_window.py
-│   │   ├── image_viewer.py        # Image navigation + ROI drawing tools
+│   │   ├── workflow.py            # Guided workflow stepper + step gating
+│   │   ├── image_viewer.py        # Image navigation + ROI drawing + culling
 │   │   ├── neuron_detection_widget.py
 │   │   ├── roi_selection_dialog.py
 │   │   ├── alignment_dialog.py
 │   │   ├── rayleigh_plot.py
+│   │   ├── lomb_scargle_plot.py
 │   │   ├── roi_intensity_plot.py
 │   │   ├── neuron_trajectory_plot.py
 │   │   └── ...
 │   └── utils/
-│       └── file_handler.py        # TIF stack I/O
+│       ├── file_handler.py        # TIF stack I/O
+│       └── image_utils.py         # NumPy-to-QImage conversion
 ├── tests/                         # pytest test suite (75%+ coverage)
 ├── .github/workflows/             # CI (tests + coverage) + CD (macOS build)
 ├── pyproject.toml
@@ -95,12 +108,13 @@ neurolight-workbench/
 | Layer | Technology |
 |---|---|
 | UI framework | PySide6 (Qt for Python) |
-| Image processing | OpenCV |
+| Image processing | OpenCV, scikit-image |
 | Image alignment | PyStackReg |
-| Scientific computing | NumPy, SciPy |
+| Scientific computing | NumPy, SciPy, statsmodels |
 | Circular statistics | SciPy (custom wrappers in `circular_stats.py`) |
 | Periodogram | SciPy Lomb-Scargle |
 | Plotting | Matplotlib |
+| TIFF I/O | tifffile, Pillow |
 | Testing | pytest + Codecov |
 | Packaging | macOS code signing + notarization via GitHub Actions |
 

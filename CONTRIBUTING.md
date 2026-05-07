@@ -1,6 +1,6 @@
-# Contributing to NeuroLight
+# Contributing to Neurolight Workbench
 
-Thank you for your interest in contributing to NeuroLight! This document provides guidelines and instructions for contributing to the project.
+Thank you for your interest in contributing to Neurolight Workbench! This document provides guidelines and instructions for contributing to the project.
 
 ## Table of Contents
 
@@ -9,6 +9,7 @@ Thank you for your interest in contributing to NeuroLight! This document provide
 - [Development Setup](#development-setup)
 - [How to Contribute](#how-to-contribute)
 - [Coding Standards](#coding-standards)
+- [Linting and Formatting](#linting-and-formatting)
 - [Testing Guidelines](#testing-guidelines)
 - [Pull Request Process](#pull-request-process)
 - [Issue Guidelines](#issue-guidelines)
@@ -27,9 +28,9 @@ We are committed to providing a welcoming and inclusive environment for all cont
 
 Before you begin contributing:
 
-1. **Familiarize yourself with the project** - Read the [README.md](README.md) to understand NeuroLight's purpose and architecture
-2. **Check existing issues** - Browse [open issues](https://github.com/Neuro-Light/neurolight-prototype/issues) to see if your idea or bug has already been reported
-3. **Join the discussion** - Comment on issues you're interested in working on to avoid duplicate efforts
+1. **Familiarize yourself with the project** – Read the [README.md](README.md) to understand Neurolight Workbench's purpose and architecture
+2. **Check existing issues** – Browse [open issues](https://github.com/Neuro-Light/neurolight-workbench/issues) to see if your idea or bug has already been reported
+3. **Join the discussion** – Comment on issues you're interested in working on to avoid duplicate efforts
 
 ## Development Setup
 
@@ -44,18 +45,18 @@ Before you begin contributing:
 
 2. Clone your fork:
 ```bash
-git clone https://github.com/YOUR_USERNAME/neurolight-prototype.git
-cd neurolight-prototype
+git clone https://github.com/YOUR_USERNAME/neurolight-workbench.git
+cd neurolight-workbench
 ```
 
 3. Add the upstream repository:
 ```bash
-git remote add upstream https://github.com/Neuro-Light/neurolight-prototype.git
+git remote add upstream https://github.com/Neuro-Light/neurolight-workbench.git
 ```
 
-4. Install dependencies:
+4. Install all dependencies including test and dev extras:
 ```bash
-uv sync
+uv sync --all-extras
 ```
 
 5. Run the application to ensure everything works:
@@ -122,38 +123,48 @@ git push origin feature/your-feature-name
 
 - Follow [PEP 8](https://pep8.org/) style guidelines
 - Use meaningful variable and function names
-- Maximum line length: 100 characters
+- Maximum line length: **120 characters** (enforced by Ruff)
 - Use type hints where appropriate
 
 ### Code Organization
 
 - Keep functions focused and single-purpose
 - Add docstrings to all public functions and classes
-- Use descriptive comments for complex logic
+- Use descriptive comments for complex logic only; avoid narrating obvious code
 - Follow the existing project structure:
-  - `src/ui/` - UI components
-  - `src/core/` - Core functionality
-  - `src/utils/` - Utility functions
+  - `src/core/` – Pure domain logic and numerics (no Qt imports)
+    - `experiment_manager.py` – Experiment session state
+    - `image_processor.py` – Image processing and neuron detection
+    - `alignment_mp.py` – Multiprocessing-safe alignment workers
+    - `lomb_scargle.py` – Lomb-Scargle periodogram computation
+    - `circular_stats.py` – Rayleigh and Rao circular statistics
+    - `data_analyzer.py` – ROI intensity extraction helpers
+    - `roi.py` – ROI geometry and mask utilities
+    - `gif_generator.py` – Animated GIF export
+  - `src/ui/` – PySide6 UI components and workers
+  - `src/utils/` – Shared utilities
+    - `file_handler.py` – TIF stack I/O
+    - `image_utils.py` – NumPy-to-QImage conversion
 
 ### Example Function Documentation
 
 ```python
-def load_image_stack(path: str, validate: bool = True) -> ImageStack:
+def load_image_stack(path: str, validate: bool = True) -> ImageStackHandler:
     """
     Load a TIF image stack from the specified path.
-    
+
     Args:
         path: Absolute or relative path to the TIF file or directory
         validate: Whether to validate image dimensions and format
-        
+
     Returns:
-        ImageStack object containing the loaded images
-        
+        ImageStackHandler containing the discovered image list
+
     Raises:
         FileNotFoundError: If the path does not exist
         ValueError: If images fail validation
     """
-    pass
+    ...
 ```
 
 ### UI Guidelines
@@ -162,6 +173,37 @@ def load_image_stack(path: str, validate: bool = True) -> ImageStack:
 - Ensure all UI elements are accessible and clearly labeled
 - Use Qt signals/slots for event handling
 - Keep UI logic separate from business logic
+- Long-running operations must run in a `QThread` worker, not the main thread
+
+## Linting and Formatting
+
+This project uses [Ruff](https://docs.astral.sh/ruff/) for both linting and formatting.
+
+### Running Ruff locally
+
+```bash
+# Check for lint issues
+uv run ruff check .
+
+# Auto-fix lint issues
+uv run ruff check . --fix
+
+# Format code
+uv run ruff format .
+
+# Check formatting without changing files
+uv run ruff format --check .
+```
+
+### CI auto-fix behavior
+
+On every pull request, the CI lint job automatically runs `ruff check --fix` and `ruff format`, then commits any fixes back to your branch with the commit message `style: auto-fix ruff lint and format`. This means:
+
+- You do not need to have perfectly formatted code before pushing — CI will clean it up.
+- If CI pushes a fix commit, pull it down before making further changes (`git pull`).
+- The final `ruff check` and `ruff format --check` steps must still pass; auto-fix only handles automatically correctable issues.
+
+The configured rules are `F` (Pyflakes), `E` (pycodestyle errors), and `I` (isort).
 
 ## Testing Guidelines
 
@@ -171,8 +213,15 @@ We use `pytest` for testing. All contributions should include tests where applic
 
 ```bash
 uv sync --all-extras  # Install test dependencies
-pytest tests/
+uv run pytest tests/
 ```
+
+Run with coverage:
+```bash
+uv run pytest tests/ -v --cov=src --cov-branch --cov-report=xml
+```
+
+Qt widget tests run headlessly via `QT_QPA_PLATFORM=offscreen` (set automatically in CI).
 
 ### Writing Tests
 
@@ -181,6 +230,7 @@ pytest tests/
 - Name test functions as `test_*`
 - Use descriptive test names that explain what is being tested
 - Include both positive and negative test cases
+- For Qt widget tests, use the `QApplication` fixture from `conftest.py`
 
 Example:
 
@@ -192,10 +242,10 @@ def test_experiment_creation_with_valid_data():
         "name": "Test Experiment",
         "description": "Test description"
     }
-    
+
     # Act
     experiment = ExperimentManager.create_experiment(experiment_data)
-    
+
     # Assert
     assert experiment.name == "Test Experiment"
     assert experiment.description == "Test description"
@@ -216,7 +266,7 @@ def test_experiment_creation_with_valid_data():
    - Passes all existing tests
 
 2. **PR Title**: Use a clear, descriptive title
-   - `Feature: Add YOLOv8 detection integration`
+   - `Feature: Add Lomb-Scargle period export`
    - `Fix: Resolve image loading crash with corrupted TIFs`
    - `Docs: Update installation instructions`
 
@@ -261,7 +311,7 @@ If applicable, add screenshots.
 **Environment:**
  - OS: [e.g. Windows 11, macOS 14]
  - Python version: [e.g. 3.10]
- - NeuroLight version: [e.g. commit hash]
+ - Neurolight version: [e.g. commit hash or tag]
 ```
 
 **Feature Request:**
@@ -283,19 +333,19 @@ Add any other context or screenshots about the feature request.
 
 ### Issue Labels and What They Mean
 
-We label issues that would be good for a first time contributor as [**`good first issue`**](https://github.com/Neuro-Light/neurolight-prototype/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22). These usually do not require significant experience with Python, PySide6, or the NeuroLight codebase.
+We label issues that are good for first-time contributors as [**`good first issue`**](https://github.com/Neuro-Light/neurolight-workbench/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22). These usually do not require significant experience with the codebase.
 
-We label issues that we think are a good opportunity for subsequent contributions as [**`help wanted`**](https://github.com/Neuro-Light/neurolight-prototype/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22). These require varying levels of experience with Python and NeuroLight. Often, we want to accomplish these tasks but do not have the resources to do so ourselves.
+We label issues we think are good opportunities for subsequent contributions as [**`help wanted`**](https://github.com/Neuro-Light/neurolight-workbench/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22). These require varying levels of experience.
 
-**Please check in with us before starting work on an issue that has not been labeled as appropriate for community contribution.** We're happy to receive contributions for other issues, but it's important to make sure we have consensus on the solution to the problem first.
+**Please check in with us before starting work on an issue that has not been labeled as appropriate for community contribution.**
 
-Outside of issues with the labels above, issues labeled as [**`bug`**](https://github.com/Neuro-Light/neurolight-prototype/issues?q=is%3Aissue+is%3Aopen+label%3Abug) are the best candidates for contribution. In contrast, issues labeled with **`needs-decision`** or **`needs-design`** are not good candidates for contribution. Please do not open pull requests for issues with these labels.
+Outside of labeled issues, [**`bug`**](https://github.com/Neuro-Light/neurolight-workbench/issues?q=is%3Aissue+is%3Aopen+label%3Abug) issues are the best candidates for contribution. Issues labeled **`needs-decision`** or **`needs-design`** are not good candidates — please do not open pull requests for these without prior discussion.
 
-**Please do not open pull requests for new features without prior discussion.** While we appreciate exploration of new features, we will almost always close these pull requests immediately. Adding a new feature to NeuroLight creates a long-term maintenance burden and requires strong consensus from the NeuroLight team before it is appropriate to begin work on an implementation.
+**Please do not open pull requests for new features without prior discussion.** Adding a new feature to Neurolight Workbench creates a long-term maintenance burden and requires consensus from the team before implementation begins.
 
 ### Good First Issues
 
-Look for issues tagged with `good first issue` - these are great for newcomers and typically include:
+Look for issues tagged with `good first issue` — these are great for newcomers and typically include:
 
 - Documentation improvements
 - Adding code comments and docstrings
@@ -307,14 +357,14 @@ Look for issues tagged with `good first issue` - these are great for newcomers a
 
 If you have questions about contributing:
 
-- Open a discussion on GitHub Discussions
+- Open a discussion on [GitHub Discussions](https://github.com/Neuro-Light/neurolight-workbench/discussions)
 - Comment on relevant issues
 - Reach out to maintainers
 
 ## License
 
-By contributing to NeuroLight, you agree that your contributions will be licensed under the MIT License.
+By contributing to Neurolight Workbench, you agree that your contributions will be licensed under the MIT License and Apache 2.0 License.
 
 ---
 
-**Thank you for contributing to NeuroLight!** Your efforts help advance neuroscience research tools for scientists worldwide. 🧠✨
+Thank you for contributing to Neurolight Workbench! Your efforts help advance neuroscience research tools for scientists worldwide.
