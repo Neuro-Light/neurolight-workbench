@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import QDesktopServices
@@ -44,6 +44,20 @@ from ui.user_selection_dialog import UserAccountActionsDialog, UserSelectionDial
 OPTIONS_LABEL = "..."
 
 
+def _path_stem(path: str) -> str:
+    """Filename stem; Windows paths must use PureWindowsPath on POSIX (CI/Linux).
+
+    ``pathlib.Path`` on Linux does not treat ``\\`` as a separator, so stems of
+    ``C:\\...\\owner__Name.nexp`` would wrongly include the full path prefix.
+    """
+    path = path.strip()
+    if not path:
+        return ""
+    if "\\" in path or (len(path) > 1 and path[1] == ":"):
+        return PureWindowsPath(path).stem
+    return Path(path).stem
+
+
 def _public_recent_row_label(rec: dict, path: str) -> str:
     """Label for Public User recent rows: experiment name — by owner.
 
@@ -51,10 +65,10 @@ def _public_recent_row_label(rec: dict, path: str) -> str:
     ``owner`` field in recent JSON) — never normalized, so it matches the
     profile name users see elsewhere.
     """
-    name = (rec.get("name") or Path(path).stem if path else "").strip() or "Unnamed"
+    name = (rec.get("name") or _path_stem(path) if path else "").strip() or "Unnamed"
     owner = rec.get("owner")
     if not owner and path:
-        stem = Path(path).stem
+        stem = _path_stem(path)
         if "__" in stem:
             owner = stem.split("__", 1)[0]
     if owner:
