@@ -1,108 +1,29 @@
-# 🧠 NeuroLight Workbench
+# 🧠 Neurolight Workbench
 
 [![CI](https://github.com/Neuro-Light/neurolight-workbench/actions/workflows/ci.yml/badge.svg)](https://github.com/Neuro-Light/neurolight-workbench/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/Neuro-Light/neurolight-workbench/branch/main/graph/badge.svg)](https://codecov.io/gh/Neuro-Light/neurolight-workbench)
 [![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue)](LICENSE-MIT)
 [![Ruff](https://img.shields.io/badge/code%20style-ruff-261230?logo=ruff&logoColor=white)](https://docs.astral.sh/ruff/)
+[![codecov](https://codecov.io/gh/Neuro-Light/neurolight-workbench/branch/main/graph/badge.svg)](https://codecov.io/gh/Neuro-Light/neurolight-workbench)
 
-A PySide6 desktop application for automated circadian rhythm and neuron activity analysis. Built for neuroscience researchers, NeuroLight provides a reproducible, experiment-centric workflow for analyzing fluorescence image stacks of suprachiasmatic nucleus (SCN) tissue.
-
-Sponsored by Dr. Allen (OHSU) and Dr. Doerry (NAU). Developed by team NeuroNauts as a capstone project.
-
----
-
-## Key Features
-
-- **Dual SCN ROI Selection** — Define two independent regions of interest over SCN tissue for side-by-side circadian analysis
-- **Automated Neuron Detection** — Adaptive thresholding via OpenCV identifies active neurons without manual marking
-- **Image Alignment** — PyStackReg corrects for drift across image stacks before analysis
-- **Circadian Period Estimation** — Lomb-Scargle periodogram extracts period from non-uniformly sampled fluorescence data
-- **Rhythm Significance Testing** — Rayleigh and Rao circular statistics assess whether detected rhythms are statistically meaningful
-- **EXIF-Based Timestamps** — Automatically extracts capture times from image metadata for accurate time-axis labeling
-- **User Profiles** — Per-user login system for managing separate experiment sessions
-- **CSV Export** — Export neuron peak and trough data for downstream analysis
+A powerful PySide6 desktop application for processing and analyzing large TIF image stacks with scientific rigor. Built for neuroscientists and researchers who need reproducible, shareable experiment workflows.
 
 ---
 
-## Architecture
+## ✨ Features
 
-NeuroLight follows a **Model-View-Presenter (MVP)** pattern with an **EventBus** for decoupled communication between components. UI presenters publish and subscribe to events rather than calling each other directly, keeping the analysis pipeline and interface layers independent.
-
-### Analysis Pipeline
-
-```
-Load TIF Stack
-     |
-     v
-Image Alignment (PyStackReg)
-     |
-     v
-SCN ROI Selection (dual regions)
-     |
-     v
-Neuron Detection (OpenCV adaptive thresholding)
-     |
-     v
-Intensity Extraction per neuron per frame
-     |
-     v
-EXIF Timestamp Extraction → time axis
-     |
-     v
-Lomb-Scargle Periodogram → period estimate
-     |
-     v
-Rayleigh + Rao Circular Statistics → significance
-     |
-     v
-Plots + CSV Export
-```
-
-### Project Structure
-
-```
-neurolight-workbench/
-├── src/
-│   ├── main.py                    # Entry point
-│   ├── core/
-│   │   ├── event_bus.py           # Decoupled pub/sub event system
-│   │   ├── image_processor.py     # Alignment + neuron detection pipeline
-│   │   ├── circular_stats.py      # Rayleigh + Rao circular statistics
-│   │   ├── data_analyzer.py       # Intensity extraction + Lomb-Scargle
-│   │   └── experiment_manager.py  # Session persistence (.nexp files)
-│   ├── ui/
-│   │   ├── main_window.py
-│   │   ├── image_viewer.py        # Image navigation + ROI drawing tools
-│   │   ├── neuron_detection_widget.py
-│   │   ├── roi_selection_dialog.py
-│   │   ├── alignment_dialog.py
-│   │   ├── rayleigh_plot.py
-│   │   ├── roi_intensity_plot.py
-│   │   ├── neuron_trajectory_plot.py
-│   │   └── ...
-│   └── utils/
-│       └── file_handler.py        # TIF stack I/O
-├── tests/                         # pytest test suite (75%+ coverage)
-├── .github/workflows/             # CI (tests + coverage) + CD (macOS build)
-├── pyproject.toml
-└── uv.lock
-```
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| UI framework | PySide6 (Qt for Python) |
-| Image processing | OpenCV |
-| Image alignment | PyStackReg |
-| Scientific computing | NumPy, SciPy |
-| Circular statistics | SciPy (custom wrappers in `circular_stats.py`) |
-| Periodogram | SciPy Lomb-Scargle |
-| Plotting | Matplotlib |
-| Testing | pytest + Codecov |
-| Packaging | macOS code signing + notarization via GitHub Actions |
+- 🔬 **Guided 6-Step Workflow** – Step-gated pipeline (Load → Edit → Align → ROI → Detect → Analyze) prevents out-of-order analysis
+- 📸 **High-Volume Image Processing** – Handle 200+ TIF image stacks with LRU caching and folder/file drag-and-drop
+- ✂️ **Image Culling Interface** – Mark and exclude poor-quality frames before alignment
+- 🎨 **Contrast & Exposure Editing** – Per-frame brightness/contrast adjustment
+- 📐 **Image Alignment** – Rigid-body and affine alignment via pystackreg, with optional multiprocessing
+- 🎯 **Dual ROI Selection** – Draw and edit up to two polygon ROIs for side-by-side intensity comparison
+- 🔭 **Neuron Detection** – Peak-based detection operating on cropped ROI regions with trajectory extraction
+- 📊 **Rich Analysis Dashboard** – ROI Intensity, Neuron Trajectories, Lomb-Scargle Periodogram, and Rayleigh/Rao Circular Statistics
+- 📈 **Toggleable Peak/Trough Markers** – Visualize signal extrema across all plot types
+- 🕐 **Time-Unit X-Axis** – Display plots in frames or real-world minutes based on acquisition settings
+- 📤 **CSV Export** – Export peak/trough timing tables from trajectory and intensity plots
+- 💾 **Auto-Save** – Never lose your work with periodic session saving
+- 🤝 **Collaboration Ready** – Share experiments as portable `.nexp` JSON files
 
 ---
 
@@ -117,8 +38,6 @@ neurolight-workbench/
 
 1. **Install uv** (if not already installed)
 
-   **Option A: Using pip**
-
    ```bash
    # Windows
    pip install uv
@@ -127,7 +46,7 @@ neurolight-workbench/
    brew install uv
    ```
 
-   **Option B: Official installer**
+   Or via the official installer:
 
    ```bash
    # Windows (PowerShell)
@@ -156,40 +75,210 @@ neurolight-workbench/
    uv run python src/main.py
    ```
 
-   Or activate the virtual environment manually:
+   Or, after `uv pip install -e .`:
 
    ```bash
-   # macOS/Linux
-   source .venv/bin/activate
-   python src/main.py
-
-   # Windows
-   .venv\Scripts\activate
-   python src/main.py
+   uv run neurolight
    ```
 
----
-
-## 🧪 Testing with SCN Images
-
-The **[GETTING_STARTED/](GETTING_STARTED/)** folder contains 50 sample SCN fluorescence images and a walkthrough for exploring the full analysis pipeline — ROI selection, neuron detection, periodogram, and circular statistics.
+For a step-by-step walkthrough with sample data, see [GETTING_STARTED/GETTING_STARTED.md](GETTING_STARTED/GETTING_STARTED.md).
 
 ---
 
-## Contributing
+## 📁 Project Structure
 
-Contributions are welcome. Please open an issue before submitting a pull request for significant changes. See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+```
+neurolight-workbench/
+│
+├── src/
+│   ├── main.py                    # Application entry point
+│   ├── core/                      # Domain logic and numerics (no Qt)
+│   │   ├── experiment_manager.py  # Experiment session handling (.nexp files)
+│   │   ├── image_processor.py     # Image processing + neuron detection pipeline
+│   │   ├── alignment_mp.py        # Multiprocessing-safe alignment workers
+│   │   ├── lomb_scargle.py        # Lomb-Scargle periodogram computation
+│   │   ├── circular_stats.py      # Rayleigh + Rao circular uniformity tests
+│   │   ├── roi.py                 # ROI geometry and mask utilities
+│   │   ├── data_analyzer.py       # ROI intensity extraction helpers
+│   │   └── gif_generator.py       # Animated GIF export
+│   │
+│   ├── ui/                        # PySide6 UI components
+│   │   ├── main_window.py         # Main application window and orchestration
+│   │   ├── workflow.py            # Guided workflow stepper + step gating
+│   │   ├── image_viewer.py        # Image display, navigation, ROI tools, culling
+│   │   ├── analysis_panel.py      # Tabbed analysis panel container
+│   │   ├── roi_intensity_plot.py  # ROI mean intensity time series plot
+│   │   ├── neuron_trajectory_plot.py # Per-neuron intensity trajectory plots
+│   │   ├── lomb_scargle_plot.py   # Lomb-Scargle periodogram widget
+│   │   ├── rayleigh_plot.py       # Rayleigh/Rao circular statistics plot
+│   │   ├── neuron_detection_widget.py # Detection UI and results
+│   │   ├── alignment_worker.py    # QThread alignment worker
+│   │   ├── startup_dialog.py      # Experiment selection/creation screen
+│   │   ├── app_settings.py        # App settings persistence
+│   │   └── styles.py              # App theme + Matplotlib theme helpers
+│   │
+│   └── utils/
+│       ├── file_handler.py        # TIF stack I/O
+│       └── image_utils.py         # NumPy-to-QImage conversion
+│
+├── tests/                         # Pytest test suite
+├── .github/workflows/             # CI/CD (lint, test, build, release)
+├── neurolight.spec                # PyInstaller build spec
+└── build-macos-*.sh               # macOS packaging scripts
+```
+
+### 🔧 Key Module Responsibilities
+
+| Module | Purpose |
+| --- | --- |
+| **`experiment_manager.py`** | Create, load, save `.nexp` experiments; manage recent experiments list |
+| **`image_processor.py`** | Image preprocessing, ROI cropping/masking, neuron detection pipeline |
+| **`alignment_mp.py`** | Multiprocessing-safe pystackreg wrappers (isolated from Qt) |
+| **`lomb_scargle.py`** | Lomb-Scargle periodogram via scipy; handles unevenly-sampled data |
+| **`circular_stats.py`** | Rayleigh test and Rao spacing test for peak-time circular statistics |
+| **`roi.py`** | `ROI` geometry (polygon/ellipse), mask generation, handle types |
+| **`file_handler.py`** | Load/validate TIF stacks; frame access; EXIF timestamp extraction |
+| **`workflow.py`** | `WorkflowStepper` — 6-step pipeline UI with step gating and status |
+| **`analysis_panel.py`** | Tabs: Detection, ROI Intensity, Trajectories, Lomb-Scargle, Rayleigh/Rao |
 
 ---
 
-## License
+## 🔬 Experiment Workflow
 
-Dual-licensed under [MIT](LICENSE-MIT) and [Apache 2.0](LICENSE-APACHE). You may choose either license.
+### Guided 6-Step Pipeline
+
+| Step | Name | What happens |
+| --- | --- | --- |
+| 1 | **Load Image Stack** | Open TIF files or a folder via drag-and-drop or `File → Open Image Stack` |
+| 2 | **Edit Contrast & Exposure** | Adjust brightness/contrast and cull poor-quality frames |
+| 3 | **Align Images** | Run rigid-body or affine alignment; save aligned stack |
+| 4 | **Select ROI** | Draw one or two polygon ROIs on the aligned images |
+| 5 | **Detect Neurons** | Run peak-based neuron detection within the ROI |
+| 6 | **Analyze Graphs** | Explore ROI intensity, trajectories, Lomb-Scargle, and Rayleigh/Rao plots |
+
+### What is an Experiment?
+
+An **experiment** is a complete research session stored as a `.nexp` JSON file containing:
+
+- 📋 Metadata (name, description, principal investigator, acquisition start time and interval)
+- 🖼️ Image stack information (path, dimensions, bit depth)
+- ⚙️ Processing history (all operations and parameters)
+- 🎯 ROI definitions (up to two polygon ROIs)
+- 📈 Analysis results
+
+### Sharing Experiments
+
+1. Export the `.nexp` file from `users/<username>/experiments/`
+2. Include the referenced image stack folder
+3. Colleagues can load the experiment and reproduce your entire workflow
 
 ---
 
-## Acknowledgments
+## 📖 Usage Guide
 
-Sponsored by Dr. Allen (OHSU) and Dr. Doerry (NAU).
+### Starting the Application
 
-Built with [PySide6](https://doc.qt.io/qtforpython/), [OpenCV](https://opencv.org/), [PyStackReg](https://github.com/glichtner/pystackreg), [NumPy](https://numpy.org/), [SciPy](https://scipy.org/), and [Matplotlib](https://matplotlib.org/).
+1. Application opens to the **Startup Dialog**
+2. Choose your path:
+   - 🆕 **Start New Experiment** – Enter metadata and create a fresh session
+   - 📂 **Load Existing Experiment** – Browse for an existing `.nexp` file
+   - 🕒 **Recent Experiments** – Quick access to your last experiments
+
+### Main Application Window
+
+**Left panel** – Image Viewer: drag-and-drop TIF files/folders, navigate frames, draw ROIs, and cull poor-quality frames.
+
+**Right panel** – Analysis Dashboard:
+
+| Tab | Content |
+| --- | --- |
+| **Detection** | Neuron detection parameters, run detection, view results |
+| **ROI Intensity** | Mean intensity time series for ROI 1 and ROI 2 |
+| **Trajectories** | Per-neuron intensity traces with peak/trough markers and CSV export |
+| **Lomb–Scargle** | Periodogram for ROI intensity signals |
+| **Rayleigh/Rao** | Per-day circular polar plots with statistical test results |
+
+**Top bar** – Workflow Stepper: displays the 6 pipeline steps and locks downstream steps until prerequisites are complete.
+
+---
+
+## 🏗️ Architecture
+
+### Design Principles
+
+- **🧩 Modularity** – Independent, replaceable components
+- **🔌 Extensibility** – Clear interfaces for adding new features
+- **💼 Session Management** – All actions tied to experiment context
+- **⚡ Performance** – Lazy loading, background threads, LRU cache, ROI-cropped detection
+- **🛡️ Error Handling** – Graceful failures with user-friendly messages
+
+### Application Flow
+
+```
+Launch → Startup Dialog → Create/Load Experiment → Main Window
+  └─► WorkflowStepper gates each pipeline step
+       └─► Auto-Save Loop (configurable interval)
+```
+
+---
+
+## 🧪 Testing
+
+```bash
+uv sync --all-extras
+uv run pytest tests/
+```
+
+With coverage:
+
+```bash
+uv run pytest tests/ -v --cov=src --cov-branch --cov-report=xml
+```
+
+The suite covers core algorithms, UI widgets (headless via `QT_QPA_PLATFORM=offscreen`), alignment/detection workers, and experiment persistence.
+
+---
+
+## 🚧 Future Roadmap
+
+- 🔄 Experiment versioning and history
+- ☁️ Cloud storage integration
+- 📤 Export to standardized formats (HDF5, OME-TIFF)
+- 🤝 Multi-user experiment comparison tools
+- ⚙️ Batch processing across multiple experiments
+
+---
+
+## 🤝 Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, coding standards, and the pull request process.
+
+---
+
+## 📝 License
+
+Dual-licensed under [MIT](LICENSE-MIT) and [Apache 2.0](LICENSE-APACHE).
+
+---
+
+## 🙏 Acknowledgments
+
+Built with:
+
+- [PySide6](https://doc.qt.io/qtforpython/) – Qt for Python
+- [OpenCV](https://opencv.org/) – Computer vision
+- [NumPy](https://numpy.org/) / [SciPy](https://scipy.org/) – Scientific computing
+- [Matplotlib](https://matplotlib.org/) – Plotting and visualization
+- [pystackreg](https://github.com/glichtner/pystackreg) – Image stack alignment
+- [tifffile](https://github.com/cgohlke/tifffile) / [scikit-image](https://scikit-image.org/) – TIFF I/O and image utilities
+- [statsmodels](https://www.statsmodels.org/) / [imageio](https://imageio.readthedocs.io/) – Statistics and GIF export
+- [Pillow](https://python-pillow.org/) – Image format support
+- [uv](https://github.com/astral-sh/uv) – Package and environment management
+
+---
+
+<div align="center">
+
+**Made with 🧠 for neuroscience research**
+
+</div>
